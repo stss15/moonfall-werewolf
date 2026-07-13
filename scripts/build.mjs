@@ -47,6 +47,14 @@ const assetNames = [
 ];
 await Promise.all(assetNames.map(name => cp(join(assets, name), join(dist, 'assets', name))));
 
+// The narrator voice pack is generated (scripts/generate_voice_pack.py), not
+// committed; ship it whenever it exists so deploys gain the recorded voice.
+let voicePackShipped = false;
+try {
+  await cp(join(assets, 'voice'), join(dist, 'assets', 'voice'), {recursive: true});
+  voicePackShipped = true;
+} catch { /* No pack generated: the app falls back to on-device Web Speech. */ }
+
 let single = html;
 for (const name of assetNames) {
   const bytes = await readFile(join(assets, name));
@@ -106,4 +114,4 @@ await writeFile(join(dist, '_headers'), `/*
   Service-Worker-Allowed: /
 `);
 
-console.log(`Built Moonfall: ${Math.round(Buffer.byteLength(html) / 1024)} KiB shell, ${Math.round(Buffer.byteLength(single) / 1024)} KiB single-file edition.`);
+console.log(`Built Moonfall: ${Math.round(Buffer.byteLength(html) / 1024)} KiB shell, ${Math.round(Buffer.byteLength(single) / 1024)} KiB single-file edition, narrator voice pack ${voicePackShipped ? 'included' : 'not generated (on-device speech fallback)'}.`);

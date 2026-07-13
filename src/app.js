@@ -19,6 +19,7 @@ import {
 } from './engine.js';
 import {PHASE_META, PRESETS, ROLES, SPECIAL_ROLE_IDS, STORY_CUES} from './roles.js';
 import {narrate, narrationSupported, stopNarration} from './narrator.js';
+import {initVoicePack, playVoicePack, stopVoicePack, voicePackCovers, voicePackReady, warmVoicePack} from './voicepack.js';
 import qrFactory from 'qrcode-generator';
 
 const APP_ID = 'moonfall-steven-werewolf-v2-2026';
@@ -73,7 +74,7 @@ let audioContext = null;
 let noiseBuffer = null;
 let renderQueued = false;
 let soundEnabled = safeRead(SOUND_KEY, true) !== false;
-let voiceEnabled = narrationSupported() && safeRead(VOICE_KEY, true) !== false;
+let voiceEnabled = safeRead(VOICE_KEY, true) !== false;
 let ambienceEnabled = safeRead(AMBIENCE_KEY, true) !== false;
 let ambience = null;
 let phaseFxTimer = null;
@@ -201,8 +202,8 @@ function vibrate(pattern = 24) {
   try { navigator.vibrate?.(pattern); } catch { /* no-op */ }
 }
 
-function unlockAudio() {
-  if (!soundEnabled) return null;
+function unlockAudio(force = false) {
+  if (!soundEnabled && !force) return null;
   try {
     const AudioCtor = window.AudioContext || window.webkitAudioContext;
     if (!AudioCtor) return null;
@@ -493,6 +494,30 @@ function narrationFor(view) {
   return STORY_CUES[phase] || null;
 }
 
+function narrationIdsFor(view) {
+  const phase = view.phase;
+  const deathIds = deaths => {
+    const ids = [];
+    deaths.forEach((death, index) => {
+      if (index > 0) ids.push('another-death');
+      ids.push('reveal', `role-${death.role || 'villager'}`);
+    });
+    return ids;
+  };
+  if (phase === 'dawn') {
+    const deaths = view.lastDeaths || [];
+    return deaths.length ? ['dawn-death', ...deathIds(deaths)] : ['dawn-none'];
+  }
+  if (phase === 'day-result') {
+    if (view.lastVote?.leaders?.length > 1) return ['vote-tied'];
+    const deaths = view.lastDeaths || [];
+    return deaths.length ? ['vote-death', ...deathIds(deaths)] : ['vote-none'];
+  }
+  if (phase === 'game-over') return [`win-${view.winner?.team || 'none'}`];
+  if (phase === 'resolution') return null;
+  return STORY_CUES[phase] ? [`cue-${phase}`] : null;
+}
+
 function narrateTransition(view, previous) {
   if (!voiceEnabled || !view?.me?.storyteller || !previous) return;
   const text = narrationFor(view);
@@ -500,6 +525,19 @@ function narrateTransition(view, previous) {
   const enteringNight = (previous === 'role-reveal' || previous === 'day-result') && (view.phase.startsWith('setup-') || view.phase.startsWith('night-'));
   const prefix = enteringNight ? 'Night falls on the village. Everyone closes their eyes. ' : '';
   const delay = enteringNight ? 2400 : view.phase === 'dawn' ? 1300 : 600;
+  const ids = narrationIdsFor(view);
+  const fullIds = ids && enteringNight ? ['nightfall', ...ids] : ids;
+  if (fullIds && voicePackCovers(fullIds)) {
+    const context = unlockAudio(true);
+    if (context) {
+      stopNarration();
+      playVoicePack(context, fullIds, {delay}).then(played => {
+        if (!played) narrate(prefix + text, {delay: 200});
+      });
+      return;
+    }
+  }
+  stopVoicePack();
   narrate(prefix + text, {delay});
 }
 
@@ -709,6 +747,9 @@ function phaseChanged(view) {
   document.body.dataset.phase = view.phase;
   ui.phaseFresh = true;
   updateAmbience(view);
+  if (view.phase === 'role-reveal' && view.me?.storyteller && voiceEnabled && voicePackReady()) {
+    warmVoicePack(unlockAudio(true));
+  }
   if (previous) {
     transitionSound(view, previous);
     narrateTransition(view, previous);
@@ -1171,6 +1212,7 @@ function leaveToHome() {
   lastHostSignalAt = 0;
   releaseWakeLock();
   stopNarration();
+  stopVoicePack();
   stopAmbience();
   recentCommandIds.clear();
   ui.previousPhase = null;
@@ -1612,7 +1654,7 @@ function renderModal() {
   if (ui.modal === 'menu') {
     const appButton = isStandalone() ? '' : '<button class="btn secondary" data-action="install-app">Install Moonfall to home screen</button>';
     const fullButton = fullscreenAvailable() ? `<button class="btn secondary" data-action="toggle-fullscreen">${fullscreenElement() ? 'Exit fullscreen' : 'Enter fullscreen'}</button>` : '';
-    modalRoot.innerHTML = `<div class="modal-backdrop" data-action="close-modal"><div class="modal"><div class="modal-head"><h2>Moonfall</h2><button class="icon-btn" data-action="close-modal">×</button></div><div class="connection-health"><span class="health-orb ${connectionState === 'offline' ? 'offline' : ''}"></span><div><strong>${connectionState === 'connected' ? 'Village link healthy' : connectionState === 'connecting' ? 'Reconnecting to the village' : 'The host is currently away'}</strong><small>${wakeLock ? 'Screen-awake protection is active.' : 'Tap anywhere if your browser has paused screen-awake protection.'}</small></div></div><div class="button-stack" style="margin-top:14px">${appButton}${fullButton}<button class="btn secondary" data-action="show-rules">Role guide & classic rules</button><button class="btn secondary" data-action="toggle-sound">Sound effects: ${soundEnabled ? 'On' : 'Off'}</button>${narrationSupported() ? `<button class="btn secondary" data-action="toggle-voice">Storyteller voice-over: ${voiceEnabled ? 'On' : 'Off'}</button>` : ''}<button class="btn secondary" data-action="toggle-ambience">Night &amp; day ambience: ${ambienceEnabled ? 'On' : 'Off'}</button>${soundEnabled ? '<button class="btn ghost" data-action="preview-howl">Preview the nightfall howl</button>' : ''}<button class="btn ghost" data-action="copy-code">Copy room code ${esc(roomCode)}</button><button class="btn ghost" data-action="copy-diagnostics">Copy connection diagnostics</button>${currentView?.coordinator && currentView.phase !== 'lobby' && currentView.phase !== 'game-over' ? '<button class="btn danger" data-action="reset-game">Abandon this tale & reshuffle</button>' : ''}<button class="btn ghost" data-action="leave-game">Leave this screen</button></div><p class="footer-note">Every joined phone is kept awake. If the OS still suspends the web app, Moonfall restores the peer link and saved seat when the screen returns.</p><p class="footer-note">The Storyteller’s phone plays the room cues, spoken narration and ambience. Night actions on player phones stay silent. The voice-over uses your phone’s own free offline voices—no account or service.</p></div></div>`;
+    modalRoot.innerHTML = `<div class="modal-backdrop" data-action="close-modal"><div class="modal"><div class="modal-head"><h2>Moonfall</h2><button class="icon-btn" data-action="close-modal">×</button></div><div class="connection-health"><span class="health-orb ${connectionState === 'offline' ? 'offline' : ''}"></span><div><strong>${connectionState === 'connected' ? 'Village link healthy' : connectionState === 'connecting' ? 'Reconnecting to the village' : 'The host is currently away'}</strong><small>${wakeLock ? 'Screen-awake protection is active.' : 'Tap anywhere if your browser has paused screen-awake protection.'}</small></div></div><div class="button-stack" style="margin-top:14px">${appButton}${fullButton}<button class="btn secondary" data-action="show-rules">Role guide & classic rules</button><button class="btn secondary" data-action="toggle-sound">Sound effects: ${soundEnabled ? 'On' : 'Off'}</button>${narrationSupported() || voicePackReady() ? `<button class="btn secondary" data-action="toggle-voice">Storyteller voice-over: ${voiceEnabled ? 'On' : 'Off'}${voicePackReady() ? ' · cinematic' : ''}</button>` : ''}<button class="btn secondary" data-action="toggle-ambience">Night &amp; day ambience: ${ambienceEnabled ? 'On' : 'Off'}</button>${soundEnabled ? '<button class="btn ghost" data-action="preview-howl">Preview the nightfall howl</button>' : ''}<button class="btn ghost" data-action="copy-code">Copy room code ${esc(roomCode)}</button><button class="btn ghost" data-action="copy-diagnostics">Copy connection diagnostics</button>${currentView?.coordinator && currentView.phase !== 'lobby' && currentView.phase !== 'game-over' ? '<button class="btn danger" data-action="reset-game">Abandon this tale & reshuffle</button>' : ''}<button class="btn ghost" data-action="leave-game">Leave this screen</button></div><p class="footer-note">Every joined phone is kept awake. If the OS still suspends the web app, Moonfall restores the peer link and saved seat when the screen returns.</p><p class="footer-note">The Storyteller’s phone plays the room cues, ${voicePackReady() ? 'a pre-recorded cinematic narrator' : 'spoken narration from your phone’s own free offline voices'} and ambience. Night actions on player phones stay silent—no account or paid service is used.</p></div></div>`;
   }
 }
 
@@ -1808,8 +1850,14 @@ async function handleAction(action, element) {
   } else if (action === 'toggle-voice') {
     voiceEnabled = !voiceEnabled;
     safeWrite(VOICE_KEY, voiceEnabled);
-    if (voiceEnabled) narrate('The village sleeps, and the tale continues.', {delay: 120});
-    else stopNarration();
+    if (voiceEnabled) {
+      const context = unlockAudio(true);
+      if (context && voicePackCovers(['preview'])) playVoicePack(context, ['preview'], {delay: 120});
+      else narrate('The village sleeps, and the tale continues.', {delay: 120});
+    } else {
+      stopNarration();
+      stopVoicePack();
+    }
     renderModal();
   } else if (action === 'toggle-ambience') {
     sound('tap');
@@ -1862,4 +1910,10 @@ app.addEventListener('keydown', event => {
 window.addEventListener('beforeunload', persistHost);
 
 registerPwa();
+initVoicePack().then(ready => {
+  if (ready) {
+    diagnostic('voice-pack-ready');
+    if (ui.modal === 'menu') renderModal();
+  }
+});
 render();
