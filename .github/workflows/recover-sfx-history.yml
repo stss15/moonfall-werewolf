@@ -28,7 +28,7 @@ jobs:
           now_ms = int(time.time() * 1000)
           start_ms = now_ms - 6 * 60 * 60 * 1000
           payload = {'start_time': start_ms, 'end_time': now_ms, 'interval_seconds': 60}
-          result = {'start_time': start_ms, 'end_time': now_ms}
+          result = {'start_time': start_ms, 'end_time': now_ms, 'reason': 'final-role-sfx-check'}
           try:
               req = urllib.request.Request(
                   'https://api.elevenlabs.io/v1/workspace/analytics/query/usage-by-product-over-time',
