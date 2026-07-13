@@ -7,7 +7,8 @@ on:
     paths:
       - .github/workflows/sync-dist.yml
       - src/**
-      - assets/**
+      - assets/voice/**
+      - assets/ambience/**
       - scripts/build.mjs
       - package.json
       - package-lock.json
