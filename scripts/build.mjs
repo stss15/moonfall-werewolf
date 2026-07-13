@@ -10,8 +10,23 @@ const dist = join(root, 'dist');
 await rm(dist, {recursive: true, force: true});
 await mkdir(join(dist, 'assets'), {recursive: true});
 
+// Production room invites must always point at the canonical Pages site. The
+// app previously copied location.origin + location.pathname, so opening an old
+// deployment/staging URL caused every QR code and share link to reproduce it.
+const appSource = await readFile(join(src, 'app.js'), 'utf8');
+const canonicalAppSource = appSource.replace(
+  /function roomInviteUrl\(\) \{\s*return `\$\{location\.origin\}\$\{location\.pathname\}\?room=\$\{roomCode\}`;\s*\}/,
+  "function roomInviteUrl() {\n  const invite = new URL('https://stss15.github.io/moonfall-werewolf/');\n  invite.searchParams.set('room', roomCode);\n  return invite.toString();\n}"
+);
+if (canonicalAppSource === appSource) throw new Error('Could not patch the canonical Moonfall invite URL');
+
 const bundle = await build({
-  entryPoints: [join(src, 'app.js')],
+  stdin: {
+    contents: canonicalAppSource,
+    resolveDir: src,
+    sourcefile: 'app.js',
+    loader: 'js'
+  },
   bundle: true,
   format: 'iife',
   platform: 'browser',
