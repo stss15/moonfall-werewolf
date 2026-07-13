@@ -155,23 +155,50 @@ STING_FILTERS = "loudnorm=I=-14:TP=-1.2:LRA=8"
 
 
 def generate_voice_pack(lines, engine, synth):
+    """Render every variant; if the key dies mid-run, salvage what completed.
+
+    The pack manifest records how many variants actually rendered per line,
+    so a partially-generated pack still plays (missing lines fall back to
+    on-device speech). Returns True when the whole script rendered.
+    """
     VOICE_DIR.mkdir(parents=True, exist_ok=True)
-    total = 0
+    rendered_counts = {}
+    fatal = None
     with tempfile.TemporaryDirectory() as scratch:
         for clip_id, variants in lines.items():
+            rendered = 0
             for index, text in enumerate(variants):
                 final_path = VOICE_DIR / f"{clip_id}.{index}.mp3"
                 raw_path = Path(scratch) / f"{clip_id}.{index}.raw.mp3"
-                synth(text, raw_path)
-                if not raw_path.exists() or raw_path.stat().st_size < 800:
-                    raise RuntimeError(f"Engine produced no audio for '{clip_id}' variant {index}")
+                try:
+                    synth(text, raw_path)
+                    if not raw_path.exists() or raw_path.stat().st_size < 800:
+                        raise RuntimeError("engine produced no audio")
+                except Exception as error:  # noqa: BLE001 — salvage whatever rendered
+                    fatal = f"'{clip_id}' variant {index}: {error}"
+                    break
                 ffmpeg_process(raw_path, final_path, VOICE_FILTERS)
-                total += 1
-            print(f"  ✓ {clip_id} ({len(variants)} variant{'s' if len(variants) > 1 else ''})")
-    pack = {"version": 2, "engine": engine, "clips": {clip_id: len(variants) for clip_id, variants in lines.items()}}
+                rendered += 1
+            if rendered:
+                rendered_counts[clip_id] = rendered
+                print(f"  ✓ {clip_id} ({rendered}/{len(variants)} variants)")
+            if fatal:
+                break
+    if fatal and len(rendered_counts) < max(8, len(lines) // 2):
+        print(f"::error::Generation failed early ({fatal}); too little audio to keep. "
+              "Is the key valid? A key ever committed to a public repo gets auto-revoked.")
+        return False
+    pack = {"version": 2, "engine": engine, "clips": rendered_counts}
     (VOICE_DIR / "pack.json").write_text(json.dumps(pack, indent=2) + "\n")
     size = sum(item.stat().st_size for item in VOICE_DIR.glob("*.mp3"))
-    print(f"Voice pack complete: {total} clips across {len(lines)} lines, {size // 1024} KiB.")
+    total = sum(rendered_counts.values())
+    if fatal:
+        print(f"::warning::Generation interrupted at {fatal}. Salvaged {total} clips "
+              f"across {len(rendered_counts)} of {len(lines)} lines ({size // 1024} KiB); "
+              "missing lines fall back to on-device speech.")
+    else:
+        print(f"Voice pack complete: {total} clips across {len(lines)} lines, {size // 1024} KiB.")
+    return not fatal
 
 
 def generate_soundscapes(key):
@@ -219,19 +246,32 @@ def main():
 
     if engine == "elevenlabs":
         key = os.environ["ELEVENLABS_API_KEY"]
-        remaining, tier = remaining_credits(key)
+        try:
+            remaining, tier = remaining_credits(key)
+        except urllib.error.HTTPError as error:
+            print(f"::error::ElevenLabs rejected the key (HTTP {error.code}). It is invalid or was "
+                  "auto-revoked after being committed publicly — create a fresh key and try again.")
+            return 1
         voice_cost = math.ceil(total_chars * ELEVEN_CREDITS_PER_CHAR)
         print(f"ElevenLabs tier '{tier}': {remaining} credits remaining. "
               f"Voice pack will cost ≈{voice_cost}; reserve is {RESERVE}.")
         if remaining - voice_cost < RESERVE:
             print("::error::Not enough free-tier credits for the voice pack. Nothing was spent.")
             return 1
-        generate_voice_pack(lines, engine, synth)
-        if os.environ.get("SKIP_SFX") != "1":
+        complete = generate_voice_pack(lines, engine, synth)
+        if not (VOICE_DIR / "pack.json").exists():
+            return 1
+        if complete and os.environ.get("SKIP_SFX") != "1":
             print("Generating premium ambience and stings with the remaining budget…")
-            generate_soundscapes(key)
-        remaining, _ = remaining_credits(key)
-        print(f"Done. {remaining} free-tier credits remain on the account.")
+            try:
+                generate_soundscapes(key)
+            except Exception as error:  # noqa: BLE001 — the voice pack is already safe
+                print(f"::warning::Ambience generation stopped early: {error}")
+        try:
+            remaining, _ = remaining_credits(key)
+            print(f"Done. {remaining} free-tier credits remain on the account.")
+        except Exception:  # noqa: BLE001
+            print("Done (could not re-check the remaining balance).")
     else:
         generate_voice_pack(lines, engine, synth)
     return 0
