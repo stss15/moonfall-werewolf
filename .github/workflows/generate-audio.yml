@@ -1,14 +1,23 @@
 name: Generate premium audio (one-shot, commits results)
 
-# Run manually from the Actions tab after adding the ELEVENLABS_API_KEY
-# repository secret. Renders the full narrator voice pack (every phrasing
-# variant) plus looping ambience and hero stings, then commits the audio to
-# main so deploys reuse it forever — a single, budgeted free-tier spend.
-# The script refuses any call that would drop the account below its credit
-# reserve, so it can never exceed the free tier.
+# Renders the full narrator voice pack (every phrasing variant) plus looping
+# ambience and hero stings, then commits the audio to main so deploys reuse it
+# forever — a single, budgeted free-tier spend. The generator refuses any call
+# that would drop the ElevenLabs account below its credit reserve.
+#
+# The key is taken from the ELEVENLABS_API_KEY repository secret when set, or
+# from a committed ELEVENLABS_API_KEY file as a convenience fallback; that
+# file is deleted by this workflow in the same run. A key that has ever been
+# committed to a public repository is permanently exposed in git history and
+# must be revoked and regenerated at elevenlabs.io afterwards.
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ELEVENLABS_API_KEY
+      - .github/workflows/generate-audio.yml
 
 permissions:
   contents: write
@@ -25,23 +34,41 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Render voice pack, ambience loops and stings
+      - name: Resolve the API key (secret first, committed file as fallback)
         env:
-          ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+          SECRET_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
         run: |
+          if [ -n "$SECRET_KEY" ]; then
+            echo "ELEVENLABS_API_KEY=$SECRET_KEY" >> "$GITHUB_ENV"
+            echo "Using the repository secret."
+          elif [ -f ELEVENLABS_API_KEY ]; then
+            KEY="$(tr -d '[:space:]' < ELEVENLABS_API_KEY)"
+            echo "::add-mask::$KEY"
+            echo "ELEVENLABS_API_KEY=$KEY" >> "$GITHUB_ENV"
+            echo "Using the committed key file. It will be deleted after generation — revoke and regenerate this key afterwards; committed keys live on in git history."
+          else
+            echo "No API key available."
+          fi
+      - name: Render voice pack, ambience loops and stings
+        run: |
+          if [ -f assets/voice/pack.json ]; then
+            echo "Audio already committed; nothing to generate."
+            exit 0
+          fi
           if [ -z "$ELEVENLABS_API_KEY" ]; then
-            echo "::error::Add the ELEVENLABS_API_KEY repository secret first (Settings → Secrets and variables → Actions)."
-            exit 1
+            echo "::warning::No ELEVENLABS_API_KEY secret or file found; nothing to do."
+            exit 0
           fi
           python scripts/generate_voice_pack.py
-      - name: Commit generated audio
+      - name: Commit generated audio and remove the key file
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add assets/voice assets/ambience
+          git rm -q -f --ignore-unmatch ELEVENLABS_API_KEY
+          git add -A assets/voice assets/ambience 2>/dev/null || true
           if git diff --cached --quiet; then
-            echo "No audio changes to commit."
+            echo "No changes to commit."
           else
-            git commit -m "Add generated premium narrator and ambience audio"
+            git commit -m "Add generated premium narrator and ambience audio; remove committed key file"
             git push
           fi
