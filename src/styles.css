@@ -25,7 +25,9 @@
 html{background:var(--night);min-height:100%;overscroll-behavior:none}
 body{
   margin:0;min-height:100svh;color:var(--ink);font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
-  background:#080811;overflow-x:hidden;transition:background 1.2s ease;touch-action:manipulation;overscroll-behavior:none;
+  /* Transparent: html carries the base colour so the fixed scenery layers
+     (table art, fireflies, phase sky) painted at negative z-index show. */
+  background:transparent;overflow-x:hidden;touch-action:manipulation;overscroll-behavior:none;
   user-select:none;-webkit-user-select:none
 }
 input,textarea{user-select:text;-webkit-user-select:text}
@@ -136,7 +138,7 @@ h1,h2,h3,.display{font-family:Georgia,"Times New Roman",serif}
 .card-face{position:absolute;inset:0;backface-visibility:hidden;border-radius:22px;overflow:hidden;border:1px solid rgba(255,223,135,.58);background:#100b16}.card-face.back{transform:rotateY(0)}.card-face.front{transform:rotateY(180deg)}.card-face img{width:100%;height:100%;object-fit:cover}.card-face.front:after{content:"";position:absolute;inset:0;box-shadow:inset 0 0 30px rgba(0,0,0,.48);pointer-events:none}
 .card-title-overlay{position:absolute;left:9%;right:9%;bottom:7%;padding:14px 12px 12px;background:linear-gradient(180deg,rgba(13,9,18,.1),rgba(8,6,12,.94) 34%);border-top:1px solid rgba(223,183,85,.35);text-align:center}.card-title-overlay strong{font-family:Georgia,serif;font-size:26px;color:var(--gold-2);text-shadow:0 2px 8px #000}.card-title-overlay span{display:block;color:#e2d7e4;font-size:10px;line-height:1.35;margin-top:5px}
 .tap-hint{text-align:center;color:var(--gold-2);font-size:11px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;animation:hint 1.8s ease-in-out infinite}@keyframes hint{50%{opacity:.48}}
-.sleep-card{display:grid;place-items:center;text-align:center;min-height:58svh;padding:24px}.sleep-card img{width:min(54vw,230px);aspect-ratio:2/3;object-fit:cover;border-radius:18px;border:1px solid rgba(223,183,85,.38);box-shadow:0 18px 50px #000;transform:rotate(-1deg)}.sleep-card h2{font-size:30px;margin:22px 0 7px}.sleep-card p{color:var(--muted);max-width:350px;line-height:1.5}.sleep-card .eyes{font-size:28px;color:var(--violet);letter-spacing:.3em;margin-left:.3em}
+.sleep-card{display:grid;place-items:center;text-align:center;min-height:calc(100svh - 250px);padding:24px}.sleep-card img{width:min(54vw,230px);aspect-ratio:2/3;object-fit:cover;border-radius:18px;border:1px solid rgba(223,183,85,.38);box-shadow:0 18px 50px #000;transform:rotate(-1deg)}.sleep-card h2{font-size:30px;margin:22px 0 7px}.sleep-card p{color:var(--muted);max-width:350px;line-height:1.5}.sleep-card .eyes{font-size:28px;color:var(--violet);letter-spacing:.3em;margin-left:.3em}
 .progress-track{height:7px;border-radius:999px;background:rgba(0,0,0,.45);overflow:hidden;margin:12px 0}.progress-track i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#8653ad,#e9bd5b);box-shadow:0 0 12px rgba(194,154,239,.5);transition:width .4s ease}
 .cue{padding:18px 17px;border:1px solid rgba(223,183,85,.32);border-radius:18px;background:linear-gradient(145deg,rgba(65,39,76,.66),rgba(9,8,15,.74));font-family:Georgia,serif;font-size:18px;line-height:1.45;text-align:center;color:#f3e9d9}.cue:before,.cue:after{content:"✦";color:var(--gold);font-size:10px;display:block;margin:0 0 8px}.cue:after{margin:8px 0 0}
 .story-status{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin:12px 0}.stat{padding:12px;border:1px solid rgba(255,255,255,.08);border-radius:13px;background:rgba(4,4,9,.44)}.stat span{display:block;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.08em}.stat strong{display:block;color:var(--gold-2);font-family:Georgia,serif;font-size:18px;margin-top:4px}
@@ -158,7 +160,7 @@ h1,h2,h3,.display{font-family:Georgia,"Times New Roman",serif}
 .badge{display:inline-flex;align-items:center;gap:5px;border:1px solid rgba(223,183,85,.26);background:rgba(24,17,28,.7);border-radius:999px;padding:6px 9px;color:var(--gold-2);font-size:10px}.badge.green{border-color:rgba(110,207,155,.28);color:#b9f2d4}.badge.red{border-color:rgba(190,65,83,.38);color:#ffc1ca}
 .death-reveal{display:grid;gap:11px;margin:14px 0}.death-card{display:grid;grid-template-columns:74px 1fr;gap:13px;align-items:center;border:1px solid rgba(190,65,83,.3);border-radius:16px;background:rgba(31,9,16,.52);padding:8px}.death-card img{width:74px;aspect-ratio:2/3;object-fit:cover;border-radius:10px;filter:grayscale(.38) brightness(.7)}.death-card h3{font-size:20px;margin:0 0 4px;color:#f2d6d9}.death-card p{font-size:10px;color:var(--muted);margin:0;line-height:1.4}.death-card strong{color:var(--gold-2)}
 .no-deaths{padding:30px 16px;text-align:center}.no-deaths b{font-size:49px;display:block;margin-bottom:10px}.no-deaths h2{font-size:29px;margin-bottom:7px}.no-deaths p{color:var(--muted)}
-.look-up{text-align:center;min-height:48svh;display:grid;place-content:center;padding:28px}.look-up .sun{width:90px;height:90px;border-radius:50%;margin:0 auto 20px;background:radial-gradient(circle at 40% 35%,#fff4bd,#d69d42 48%,#70431c);box-shadow:0 0 35px rgba(231,176,73,.45);animation:sunrise 3s ease-in-out infinite}@keyframes sunrise{50%{box-shadow:0 0 55px rgba(231,176,73,.62);transform:translateY(-4px)}}.look-up h2{font-size:32px;margin-bottom:8px}.look-up p{color:var(--muted);line-height:1.5}
+.look-up{text-align:center;min-height:calc(100svh - 260px);display:grid;place-content:center;padding:28px}.look-up .sun{width:90px;height:90px;border-radius:50%;margin:0 auto 20px;background:radial-gradient(circle at 40% 35%,#fff4bd,#d69d42 48%,#70431c);box-shadow:0 0 35px rgba(231,176,73,.45);animation:sunrise 3s ease-in-out infinite}@keyframes sunrise{50%{box-shadow:0 0 55px rgba(231,176,73,.62);transform:translateY(-4px)}}.look-up h2{font-size:32px;margin-bottom:8px}.look-up p{color:var(--muted);line-height:1.5}
 .tally{display:grid;gap:10px;margin:15px 0}.tally-row{display:grid;grid-template-columns:minmax(80px,1fr) 2fr 27px;gap:8px;align-items:center;font-size:11px}.tally-row>span:first-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.tally-bar{height:8px;border-radius:999px;background:#08070d;overflow:hidden}.tally-bar i{display:block;height:100%;background:linear-gradient(90deg,#7e4ca6,#e1b958);border-radius:inherit}.tally-row b{color:var(--gold-2);text-align:right}
 .game-over-hero{text-align:center;padding:15px 8px 7px}.game-over-hero .victory-moon{font-size:72px;filter:drop-shadow(0 0 24px rgba(223,183,85,.36));margin:5px}.game-over-hero h1{font-size:clamp(38px,11vw,54px);line-height:.95;margin:9px 0;color:var(--gold-2)}.game-over-hero p{color:#d9ced8;font-family:Georgia,serif;font-size:16px;line-height:1.5}
 .final-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.final-card{position:relative;aspect-ratio:2/3;border-radius:12px;overflow:hidden;border:1px solid rgba(223,183,85,.28);background:#0a0810}.final-card img{width:100%;height:100%;object-fit:cover}.final-card.dead img{filter:grayscale(.8) brightness(.5)}.final-card .label{position:absolute;left:4px;right:4px;bottom:4px;background:rgba(5,4,8,.87);border-radius:8px;padding:6px 3px;text-align:center}.final-card .label strong{display:block;font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.final-card .label span{display:block;font-size:8px;color:var(--gold-2);margin-top:2px}
@@ -190,8 +192,6 @@ h1,h2,h3,.display{font-family:Georgia,"Times New Roman",serif}
   linear-gradient(#100b16,#100b16) padding-box,
   linear-gradient(145deg,#f4dc8d 0%,#8a6a24 22%,#ffe9a3 45%,#6e5318 68%,#e9c96f 100%) border-box;
   box-shadow:0 0 0 1px rgba(20,12,4,.9),0 10px 26px rgba(0,0,0,.5)}
-.flip-card.flipped .card-face.front{animation:gild-glow 3.2s ease-in-out infinite}
-@keyframes gild-glow{50%{box-shadow:0 0 0 1px rgba(20,12,4,.9),0 10px 26px rgba(0,0,0,.5),0 0 26px rgba(238,199,105,.34)}}
 .target-card-art{border:2px solid transparent;background:
   linear-gradient(#0d0913,#0d0913) padding-box,
   linear-gradient(150deg,#dcbd72,#6e551f 40%,#f0d68b 72%,#7a5c1d) border-box}
@@ -200,13 +200,23 @@ h1,h2,h3,.display{font-family:Georgia,"Times New Roman",serif}
   linear-gradient(150deg,#dcbd72,#6e551f 45%,#f0d68b) border-box}
 .mini-flip .card-face{border-width:2px}
 .panel.ornate:after{content:"✦";position:absolute;top:9px;right:13px;color:rgba(223,183,85,.5);font-size:11px;pointer-events:none}
-.room-code{position:relative;overflow:hidden;background:linear-gradient(100deg,#e8c568 20%,#fff3bd 38%,#e8c568 52%,#fff8d9 68%,#dfb755 82%);background-size:200% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:code-shine 5s linear infinite}
-@keyframes code-shine{to{background-position:-200% 0}}
+.room-code{background:linear-gradient(180deg,#fff3bd 15%,#e8c568 60%,#c9a552);-webkit-background-clip:text;background-clip:text;color:transparent}
 .phase-ribbon h1{background:linear-gradient(180deg,#fdf6e2,#e8cf92 78%,#c9a552);-webkit-background-clip:text;background-clip:text;color:transparent}
-.btn:not(.secondary):not(.ghost):not(.danger){position:relative;overflow:hidden}
-.btn:not(.secondary):not(.ghost):not(.danger):after{content:"";position:absolute;top:0;bottom:0;left:-70%;width:36%;background:linear-gradient(105deg,transparent,rgba(255,252,230,.5),transparent);transform:skewX(-18deg);animation:btn-sheen 4.6s ease-in-out infinite}
-@keyframes btn-sheen{0%,64%{left:-70%}88%,100%{left:135%}}
 .game-over-hero .victory-moon{animation:victory-float 3.4s ease-in-out infinite}
 @keyframes victory-float{50%{transform:translateY(-7px);filter:drop-shadow(0 0 34px rgba(223,183,85,.55))}}
 .avatar,.wolf-chip{box-shadow:inset 0 0 0 1px rgba(255,231,166,.14)}
+/* ── Phase sky: one moon, many moods ────────────────────────────────────── */
+#sky{position:fixed;left:50%;top:34px;width:170px;height:170px;margin-left:-85px;z-index:-1;pointer-events:none;opacity:0;transition:opacity 1.6s ease;filter:blur(1px)}
+#sky i{position:absolute;inset:22px;border-radius:50%;background:radial-gradient(circle at 38% 34%,#fdfaf0,#cfc9b0 55%,#8d8770);box-shadow:0 0 52px 14px rgba(230,228,200,.26);transition:background 1.6s ease,box-shadow 1.6s ease}
+body[data-phase="role-reveal"] #sky,body[data-phase^="setup-"] #sky,body[data-phase^="night-"] #sky,body[data-phase="resolution"] #sky,body[data-phase="dawn"] #sky,body[data-phase="sheriff-vote"] #sky,body[data-phase^="day-"] #sky{opacity:.9}
+body[data-phase="night-wolves"] #sky i,body[data-phase="resolution"] #sky i{background:radial-gradient(circle at 38% 34%,#ffd0b8,#c2402c 54%,#571209);box-shadow:0 0 68px 22px rgba(200,55,35,.44)}
+body[data-phase="setup-cupid"] #sky i,body[data-phase="setup-lovers"] #sky i{background:radial-gradient(circle at 38% 34%,#ffe9f0,#e08fb2 55%,#8a3a5f);box-shadow:0 0 58px 16px rgba(233,120,160,.32)}
+body[data-phase="night-seer"] #sky i{background:radial-gradient(circle at 38% 34%,#f3ecff,#a189dd 55%,#493180);box-shadow:0 0 58px 16px rgba(158,128,228,.34)}
+body[data-phase="night-witch"] #sky i{background:radial-gradient(circle at 38% 34%,#eefbe8,#87b47e 55%,#2c5136);box-shadow:0 0 58px 16px rgba(115,190,130,.3)}
+body[data-phase="dawn"] #sky i,body[data-phase="sheriff-vote"] #sky i,body[data-phase^="day-"] #sky i{background:radial-gradient(circle at 40% 35%,#fff6c9,#eab54c 55%,#9a601f);box-shadow:0 0 74px 24px rgba(238,180,80,.4)}
+/* Coloured night vignettes so the whole screen breathes with the phase. */
+body[data-phase="night-wolves"]:after,body[data-phase="resolution"]:after{background:radial-gradient(circle at 50% 6%,rgba(190,45,32,.24),transparent 44%),linear-gradient(180deg,transparent 52%,rgba(22,1,0,.64))}
+body[data-phase="setup-cupid"]:after,body[data-phase="setup-lovers"]:after{background:radial-gradient(circle at 50% 6%,rgba(226,100,150,.17),transparent 42%),linear-gradient(180deg,transparent 55%,rgba(0,0,0,.58))}
+body[data-phase="night-seer"]:after{background:radial-gradient(circle at 50% 6%,rgba(140,105,220,.19),transparent 42%),linear-gradient(180deg,transparent 55%,rgba(0,0,0,.58))}
+body[data-phase="night-witch"]:after{background:radial-gradient(circle at 50% 6%,rgba(90,180,120,.15),transparent 42%),linear-gradient(180deg,transparent 55%,rgba(0,0,0,.6))}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}

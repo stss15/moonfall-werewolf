@@ -27,7 +27,7 @@ const NAME_KEY = 'moonfall:last-name';
 const SOUND_KEY = 'moonfall:sound-enabled';
 const VOICE_KEY = 'moonfall:voice-enabled';
 const AMBIENCE_KEY = 'moonfall:ambience-enabled';
-const APP_VERSION = '2.5.0';
+const APP_VERSION = '2.5.1';
 const RELAY_REDUNDANCY = 7;
 const STALE_CONNECTION_MS = 25000;
 const RECONNECT_DELAY_MS = 180;
@@ -985,7 +985,8 @@ function updateHaptics(view) {
   }
   if (key === lastWakePulseKey) return;
   lastWakePulseKey = key;
-  vibrate([30, 80, 30]);
+  // Two firm pulses: enough to feel through a hand with eyes closed.
+  vibrate([70, 70, 70]);
 }
 
 function phaseChanged(view) {
@@ -1010,7 +1011,13 @@ function phaseChanged(view) {
     transitionSound(view, previous);
     const fx = phaseFxFor(view, previous);
     if (fx) playPhaseFx(fx);
-    vibrate(view.phase === 'resolution' ? [35, 45, 70] : 24);
+    // Haptics carry the turn structure for closed eyes: one soft pulse as the
+    // village falls asleep, a long daybreak pattern on every phone at dawn.
+    const enteringNight = (previous === 'role-reveal' || previous === 'day-result') && (view.phase.startsWith('setup-') || view.phase.startsWith('night-'));
+    if (view.phase === 'dawn') vibrate([50, 80, 50, 80, 160]);
+    else if (enteringNight) vibrate(35);
+    else if (view.phase === 'resolution') vibrate([35, 45, 70]);
+    else vibrate(20);
   }
   scheduleNarratorAutomation();
 }
@@ -1631,7 +1638,7 @@ function renderRoleReveal(view) {
     return;
   }
   app.innerHTML = `<section class="screen">${gameHeader(view)}${phaseHeader(view)}
-    <div class="sleep-card"><div><img src="assets/card-back.webp" alt="Face-down card"><h2>Your card is sealed</h2><p>Place your phone face-down. When every card is sealed, the narrator begins the first night automatically.</p><div class="progress-track"><i style="width:${Math.round(seenCount / total * 100)}%"></i></div><span class="badge green">${seenCount} of ${total} ready</span></div></div>
+    <div class="sleep-card"><div><img src="assets/card-back.webp" alt="Face-down card"><h2>Your card is sealed</h2><p>Hold your phone and close your eyes when night falls—it pulses whenever it is your turn to wake. The narrator begins once every card is sealed.</p><div class="progress-track"><i style="width:${Math.round(seenCount / total * 100)}%"></i></div><span class="badge green">${seenCount} of ${total} ready</span></div></div>
   </section>`;
 }
 
@@ -1644,7 +1651,7 @@ function sleepMessage(view, custom = null) {
     'night-wolves': 'The pack',
     'night-witch': 'The Witch'
   }[view.phase] || 'Another soul';
-  return `<section class="screen">${gameHeader(view)}${phaseHeader(view)}<div class="sleep-card"><div><img src="assets/card-back.webp" alt="Your face-down card"><h2>${esc(custom?.title || 'Keep your eyes closed')}</h2><p>${esc(custom?.text || `${phaseRole} is awake. Leave your phone face-down and listen to the narrator.`)}</p><div class="eyes">— ◡ —</div></div></div></section>`;
+  return `<section class="screen">${gameHeader(view)}${phaseHeader(view)}<div class="sleep-card"><div><img src="assets/card-back.webp" alt="Your face-down card"><h2>${esc(custom?.title || 'Keep your eyes closed')}</h2><p>${esc(custom?.text || `${phaseRole} is awake. Cradle your phone with your eyes closed—it pulses the moment the tale needs you.`)}</p><div class="eyes">— ◡ —</div></div></div></section>`;
 }
 
 function renderThief(view, action) {
