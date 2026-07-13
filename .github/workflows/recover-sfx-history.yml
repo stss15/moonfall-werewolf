@@ -18,55 +18,52 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Inspect actual credit usage by product without generating anything
+      - name: Summarize exact current credit usage without generating audio
         env:
           ELEVENLABS_API_KEY: ${{ secrets[format('ELEVEN{0}{1}', 'LABS_API_', 'KEY')] }}
         run: |
           python - <<'PY'
-          import json, os, time, urllib.error, urllib.request
+          import json, os, time, urllib.request
           key = os.environ.get('ELEVENLABS_API_KEY', '')
           now_ms = int(time.time() * 1000)
-          start_ms = now_ms - 6 * 60 * 60 * 1000
-          payload = {'start_time': start_ms, 'end_time': now_ms, 'interval_seconds': 60}
-          result = {'start_time': start_ms, 'end_time': now_ms, 'reason': 'final-role-sfx-check'}
-          try:
-              req = urllib.request.Request(
-                  'https://api.elevenlabs.io/v1/workspace/analytics/query/usage-by-product-over-time',
-                  data=json.dumps(payload).encode(),
-                  headers={'xi-api-key': key, 'content-type': 'application/json'},
-                  method='POST',
-              )
-              with urllib.request.urlopen(req, timeout=60) as response:
-                  result['usage'] = json.loads(response.read())
-          except urllib.error.HTTPError as error:
-              result['usage_http_error'] = error.code
-              result['usage_body'] = error.read().decode('utf-8', 'replace')[:1500]
-          try:
-              req = urllib.request.Request(
-                  'https://api.elevenlabs.io/v1/user/subscription',
-                  headers={'xi-api-key': key},
-              )
-              with urllib.request.urlopen(req, timeout=60) as response:
-                  sub = json.loads(response.read())
-              result['subscription'] = {
-                  'tier': sub.get('tier'),
-                  'character_count': sub.get('character_count'),
-                  'character_limit': sub.get('character_limit'),
-                  'max_credit_limit_extension': sub.get('max_credit_limit_extension'),
-                  'status': sub.get('status'),
-              }
-          except urllib.error.HTTPError as error:
-              result['subscription_http_error'] = error.code
-              result['subscription_body'] = error.read().decode('utf-8', 'replace')[:1500]
-          with open('elevenlabs-usage-diagnostic.json', 'w') as fh:
+          payload = {
+              'start_time': now_ms - 32 * 24 * 60 * 60 * 1000,
+              'end_time': now_ms,
+              'interval_seconds': 86400,
+          }
+          req = urllib.request.Request(
+              'https://api.elevenlabs.io/v1/workspace/analytics/query/usage-by-product-over-time',
+              data=json.dumps(payload).encode(),
+              headers={'xi-api-key': key, 'content-type': 'application/json'},
+              method='POST',
+          )
+          with urllib.request.urlopen(req, timeout=60) as response:
+              usage = json.loads(response.read())
+          columns = usage.get('columns', [])
+          usage_index = columns.index('total_usage')
+          used = sum(float(row[usage_index] or 0) for row in usage.get('rows', []))
+          req = urllib.request.Request('https://api.elevenlabs.io/v1/user/subscription', headers={'xi-api-key': key})
+          with urllib.request.urlopen(req, timeout=60) as response:
+              sub = json.loads(response.read())
+          limit = 10000 if sub.get('tier') == 'free' else sub.get('character_limit')
+          result = {
+              'checked_at_unix': int(time.time()),
+              'tier': sub.get('tier'),
+              'status': sub.get('status'),
+              'credits_used': used,
+              'credit_limit': limit,
+              'credits_remaining': max(0, float(limit or 0) - used),
+          }
+          with open('elevenlabs-credit-summary.json', 'w') as fh:
               json.dump(result, fh, indent=2)
               fh.write('\n')
+          print(json.dumps(result))
           PY
-      - name: Commit scrubbed usage diagnostic
+      - name: Commit scrubbed credit summary
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add elevenlabs-usage-diagnostic.json
-          git commit -m "Inspect exact ElevenLabs usage before SFX retry"
+          git add elevenlabs-credit-summary.json
+          git commit -m "Record exact ElevenLabs free credits remaining"
           git pull --rebase origin main
           git push
