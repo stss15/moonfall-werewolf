@@ -1,4 +1,4 @@
-name: Recover already-generated ElevenLabs SFX
+name: Inspect ElevenLabs usage before SFX recovery
 
 on:
   workflow_dispatch:
@@ -18,45 +18,55 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Inspect recent generated-audio history without generating anything
+      - name: Inspect actual credit usage by product without generating anything
         env:
           ELEVENLABS_API_KEY: ${{ secrets[format('ELEVEN{0}{1}', 'LABS_API_', 'KEY')] }}
         run: |
           python - <<'PY'
-          import json, os, time, urllib.error, urllib.parse, urllib.request
+          import json, os, time, urllib.error, urllib.request
           key = os.environ.get('ELEVENLABS_API_KEY', '')
-          result = {'checked_at_unix': int(time.time()), 'items': []}
+          now_ms = int(time.time() * 1000)
+          start_ms = now_ms - 6 * 60 * 60 * 1000
+          payload = {'start_time': start_ms, 'end_time': now_ms, 'interval_seconds': 60}
+          result = {'start_time': start_ms, 'end_time': now_ms}
           try:
-              query = urllib.parse.urlencode({'page_size': 300, 'date_after_unix': int(time.time()) - 10800})
               req = urllib.request.Request(
-                  'https://api.elevenlabs.io/v1/history?' + query,
+                  'https://api.elevenlabs.io/v1/workspace/analytics/query/usage-by-product-over-time',
+                  data=json.dumps(payload).encode(),
+                  headers={'xi-api-key': key, 'content-type': 'application/json'},
+                  method='POST',
+              )
+              with urllib.request.urlopen(req, timeout=60) as response:
+                  result['usage'] = json.loads(response.read())
+          except urllib.error.HTTPError as error:
+              result['usage_http_error'] = error.code
+              result['usage_body'] = error.read().decode('utf-8', 'replace')[:1500]
+          try:
+              req = urllib.request.Request(
+                  'https://api.elevenlabs.io/v1/user/subscription',
                   headers={'xi-api-key': key},
               )
               with urllib.request.urlopen(req, timeout=60) as response:
-                  data = json.loads(response.read())
-              for item in data.get('history', []):
-                  result['items'].append({
-                      'history_item_id': item.get('history_item_id'),
-                      'date_unix': item.get('date_unix'),
-                      'source': item.get('source'),
-                      'model_id': item.get('model_id'),
-                      'content_type': item.get('content_type'),
-                      'text': item.get('text'),
-                      'request_id': item.get('request_id'),
-                  })
-              result['has_more'] = data.get('has_more')
+                  sub = json.loads(response.read())
+              result['subscription'] = {
+                  'tier': sub.get('tier'),
+                  'character_count': sub.get('character_count'),
+                  'character_limit': sub.get('character_limit'),
+                  'max_credit_limit_extension': sub.get('max_credit_limit_extension'),
+                  'status': sub.get('status'),
+              }
           except urllib.error.HTTPError as error:
-              result['http_error'] = error.code
-              result['body'] = error.read().decode('utf-8', 'replace')[:1000]
-          with open('sfx-history-diagnostic.json', 'w') as fh:
+              result['subscription_http_error'] = error.code
+              result['subscription_body'] = error.read().decode('utf-8', 'replace')[:1500]
+          with open('elevenlabs-usage-diagnostic.json', 'w') as fh:
               json.dump(result, fh, indent=2)
               fh.write('\n')
           PY
-      - name: Commit scrubbed history diagnostic
+      - name: Commit scrubbed usage diagnostic
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add sfx-history-diagnostic.json
-          git commit -m "Inspect recent ElevenLabs audio history for SFX recovery"
+          git add elevenlabs-usage-diagnostic.json
+          git commit -m "Inspect exact ElevenLabs usage before SFX retry"
           git pull --rebase origin main
           git push
