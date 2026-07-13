@@ -41,6 +41,33 @@ jobs:
             exit 2
           fi
           set +e
+          python - <<'PY' 2>&1 | tee /tmp/moonfall-auth.log
+          import json, os, sys, urllib.error, urllib.request
+          req = urllib.request.Request(
+              "https://api.elevenlabs.io/v1/user/subscription",
+              headers={"xi-api-key": os.environ["ELEVENLABS_API_KEY"]},
+          )
+          try:
+              with urllib.request.urlopen(req, timeout=60) as response:
+                  data = json.loads(response.read())
+              remaining = data.get("character_limit", 0) - data.get("character_count", 0)
+              print(f"ElevenLabs authentication OK; reported remaining allowance: {remaining}")
+          except urllib.error.HTTPError as error:
+              body = error.read().decode("utf-8", "replace")
+              print(f"ElevenLabs authentication failed: HTTP {error.code}")
+              print(body)
+              sys.exit(11)
+          PY
+          auth_status=${PIPESTATUS[0]}
+          if [ "$auth_status" != "0" ]; then
+            {
+              echo "Moonfall ElevenLabs authentication failed with exit status $auth_status."
+              echo
+              tail -n 100 /tmp/moonfall-auth.log
+            } | sed -E 's/sk_[A-Za-z0-9_-]+/[REDACTED_API_KEY]/g' > audio-generation-error.txt
+            exit "$auth_status"
+          fi
+
           python scripts/generate_voice_pack.py 2>&1 | tee /tmp/moonfall-audio.log
           status=${PIPESTATUS[0]}
           set -e
