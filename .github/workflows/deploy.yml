@@ -40,6 +40,8 @@ jobs:
             || echo "::warning::Voice pack generation failed; the game will fall back to on-device speech."
       - run: npm run build
       - uses: actions/configure-pages@v5
+        with:
+          enablement: true
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
