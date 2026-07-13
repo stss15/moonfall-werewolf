@@ -1,15 +1,13 @@
 name: Generate premium audio (one-shot, commits results)
 
-# Renders the full narrator voice pack (every phrasing variant) plus looping
-# ambience and hero stings, then commits the audio to main so deploys reuse it
-# forever — a single, budgeted free-tier spend. The generator refuses any call
-# that would drop the ElevenLabs account below its credit reserve.
+# Renders the narrator pack plus ambience/stings, then commits the generated
+# audio to main so future deploys reuse it. The free-tier guard deliberately
+# leaves a reserve and checks the live subscription balance before spending.
 #
-# The key is taken from the ELEVENLABS_API_KEY repository secret when set, or
-# from a committed ELEVENLABS_API_KEY file as a convenience fallback; that
-# file is deleted by this workflow in the same run. A key that has ever been
-# committed to a public repository is permanently exposed in git history and
-# must be revoked and regenerated at elevenlabs.io afterwards.
+# Preferred key source: repository secret ELEVENLABS_API_KEY.
+# Convenience fallback: a temporary ELEVENLABS_API_KEY file. Whitespace is
+# removed before use and the file is deleted in the same run. A key committed
+# to a public repo is exposed in git history and must be revoked afterwards.
 
 on:
   workflow_dispatch:
@@ -29,12 +27,17 @@ concurrency:
 jobs:
   generate:
     runs-on: ubuntu-latest
+    env:
+      ELEVENLABS_MODEL_ID: eleven_flash_v2_5
+      ELEVENLABS_CREDITS_PER_CHAR: "0.5"
+      ELEVENLABS_RESERVE: "1600"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Resolve the API key (secret first, committed file as fallback)
+
+      - name: Resolve the API key (secret first, temporary file as fallback)
         env:
           SECRET_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
         run: |
@@ -45,35 +48,83 @@ jobs:
             KEY="$(tr -d '[:space:]' < ELEVENLABS_API_KEY)"
             echo "::add-mask::$KEY"
             echo "ELEVENLABS_API_KEY=$KEY" >> "$GITHUB_ENV"
-            echo "Using the committed key file. It will be deleted after generation — revoke and regenerate this key afterwards; committed keys live on in git history."
+            echo "Using the temporary key file after removing whitespace."
           else
             echo "No API key available (secret unset; key file missing or still the placeholder)."
           fi
+
+      - name: Preflight ElevenLabs access and model
+        run: |
+          if [ -z "$ELEVENLABS_API_KEY" ]; then
+            echo "No key supplied; nothing to generate."
+            exit 0
+          fi
+          python - <<'PY'
+          import json, os, urllib.request
+          key = os.environ["ELEVENLABS_API_KEY"]
+          headers = {"xi-api-key": key}
+
+          def get(path):
+              req = urllib.request.Request("https://api.elevenlabs.io" + path, headers=headers)
+              with urllib.request.urlopen(req, timeout=60) as response:
+                  return json.loads(response.read())
+
+          subscription = get("/v1/user/subscription")
+          remaining = subscription.get("character_limit", 0) - subscription.get("character_count", 0)
+          model_id = os.environ["ELEVENLABS_MODEL_ID"]
+          models = get("/v1/models")
+          model = next((m for m in models if m.get("model_id") == model_id), None)
+          if not model:
+              raise SystemExit(f"Configured model {model_id!r} is not available to this account")
+          if not model.get("can_do_text_to_speech", False):
+              raise SystemExit(f"Configured model {model_id!r} cannot do text to speech")
+          print(f"Preflight OK: model={model_id}; reported remaining credits/characters={remaining}; reserve={os.environ['ELEVENLABS_RESERVE']}")
+          PY
+
       - name: Render voice pack, ambience loops and stings
         run: |
           if [ -f assets/voice/pack.json ]; then
             echo "Audio already committed; nothing to generate."
+            echo "RENDER_STATUS=0" >> "$GITHUB_ENV"
             exit 0
           fi
           if [ -z "$ELEVENLABS_API_KEY" ]; then
             echo "::warning::No ELEVENLABS_API_KEY secret or file found; nothing to do."
+            echo "RENDER_STATUS=0" >> "$GITHUB_ENV"
             exit 0
           fi
-          python scripts/generate_voice_pack.py
-      - name: Commit generated audio and remove the key file
+          status=0
+          python scripts/generate_voice_pack.py || status=$?
+          echo "RENDER_STATUS=$status" >> "$GITHUB_ENV"
+          echo "Generator exit status: $status"
+
+      - name: Commit generated audio and remove temporary key file
         if: always()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          # Remove a real key file even when generation failed (the key is
-          # burned either way), but keep the paste-here placeholder in place.
+
           if [ -f ELEVENLABS_API_KEY ] && ! grep -q "PASTE" ELEVENLABS_API_KEY; then
             git rm -q -f ELEVENLABS_API_KEY
           fi
+
           git add -A assets/voice assets/ambience 2>/dev/null || true
           if git diff --cached --quiet; then
-            echo "No changes to commit."
+            echo "No generated audio changes to commit."
           else
-            git commit -m "Add generated premium narrator and ambience audio; remove committed key file"
+            if [ -f assets/voice/pack.json ]; then
+              git commit -m "Add generated premium narrator and ambience audio"
+            else
+              git commit -m "Clean temporary ElevenLabs key after failed audio generation"
+            fi
             git push
+          fi
+
+      - name: Surface generator failure after cleanup
+        if: always()
+        run: |
+          status="${RENDER_STATUS:-0}"
+          if [ "$status" != "0" ]; then
+            echo "::error::Audio generation failed with exit status $status. The temporary key was still cleaned up safely."
+            exit "$status"
           fi
