@@ -55,6 +55,9 @@ try {
   await cp(join(assets, 'voice'), join(dist, 'assets', 'voice'), {recursive: true});
   voicePackShipped = true;
 } catch { /* No pack generated: the app falls back to on-device Web Speech. */ }
+try {
+  await cp(join(assets, 'ambience'), join(dist, 'assets', 'ambience'), {recursive: true});
+} catch { /* No generated ambience: the procedural soundscape is used. */ }
 
 let single = html;
 for (const name of assetNames) {

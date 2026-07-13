@@ -1,0 +1,47 @@
+name: Generate premium audio (one-shot, commits results)
+
+# Run manually from the Actions tab after adding the ELEVENLABS_API_KEY
+# repository secret. Renders the full narrator voice pack (every phrasing
+# variant) plus looping ambience and hero stings, then commits the audio to
+# main so deploys reuse it forever — a single, budgeted free-tier spend.
+# The script refuses any call that would drop the account below its credit
+# reserve, so it can never exceed the free tier.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: generate-audio
+  cancel-in-progress: false
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Render voice pack, ambience loops and stings
+        env:
+          ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+        run: |
+          if [ -z "$ELEVENLABS_API_KEY" ]; then
+            echo "::error::Add the ELEVENLABS_API_KEY repository secret first (Settings → Secrets and variables → Actions)."
+            exit 1
+          fi
+          python scripts/generate_voice_pack.py
+      - name: Commit generated audio
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add assets/voice assets/ambience
+          if git diff --cached --quiet; then
+            echo "No audio changes to commit."
+          else
+            git commit -m "Add generated premium narrator and ambience audio"
+            git push
+          fi

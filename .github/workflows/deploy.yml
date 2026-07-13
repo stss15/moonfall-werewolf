@@ -31,13 +31,19 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Generate narrator voice pack (free neural TTS)
-        env:
-          ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+      # The premium voice/ambience pack is generated once by the manual
+      # "Generate premium audio" workflow and committed to the repo, so deploys
+      # never spend ElevenLabs credits. This fallback only runs when no pack
+      # has been committed yet, using the free keyless Edge voices.
+      - name: Generate fallback voice pack (only when none is committed)
         run: |
-          pip install --quiet edge-tts
-          python scripts/generate_voice_pack.py \
-            || echo "::warning::Voice pack generation failed; the game will fall back to on-device speech."
+          if [ -f assets/voice/pack.json ]; then
+            echo "Committed voice pack found; skipping generation."
+          else
+            pip install --quiet edge-tts
+            python scripts/generate_voice_pack.py \
+              || echo "::warning::Voice pack generation failed; the game will fall back to on-device speech."
+          fi
       - run: npm run build
       # Pages was first enabled with a branch source, which makes GitHub race
       # a Jekyll README build against this workflow on every push. Switch the

@@ -1,4 +1,4 @@
-const CACHE = 'moonfall-v7-auto-narrator';
+const CACHE = 'moonfall-v8-gilded';
 const SHELL = [
   './',
   './index.html',

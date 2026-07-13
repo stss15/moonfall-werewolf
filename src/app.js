@@ -15,7 +15,7 @@ import {
 } from './engine.js';
 import {PHASE_META, PRESETS, ROLES, SPECIAL_ROLE_IDS, STORY_CUES} from './roles.js';
 import {narrate, narrationSupported, stopNarration} from './narrator.js';
-import {initVoicePack, playVoicePack, stopVoicePack, voicePackCovers, voicePackReady, warmVoicePack} from './voicepack.js';
+import {initVoicePack, playVoicePack, stopVoicePack, voicePackCovers, voicePackEngine, voicePackReady, warmVoicePack} from './voicepack.js';
 import qrFactory from 'qrcode-generator';
 
 const APP_ID = 'moonfall-steven-werewolf-v2-2026';
@@ -27,7 +27,7 @@ const NAME_KEY = 'moonfall:last-name';
 const SOUND_KEY = 'moonfall:sound-enabled';
 const VOICE_KEY = 'moonfall:voice-enabled';
 const AMBIENCE_KEY = 'moonfall:ambience-enabled';
-const APP_VERSION = '2.4.0';
+const APP_VERSION = '2.5.0';
 const RELAY_REDUNDANCY = 7;
 const STALE_CONNECTION_MS = 25000;
 const RECONNECT_DELAY_MS = 180;
@@ -77,6 +77,11 @@ const SFX_FILES = {
   glass: 'assets/sfx/impactGlass_medium_003.ogg',
   bell: 'assets/sfx/impactBell_heavy_001.ogg'
 };
+// Optional generated audio (assets/ambience/pack.json): looping night/day
+// beds plus hero stings. Everything degrades to the procedural soundscape.
+const premiumLoops = {};
+const premiumStings = {};
+let loverPulseTimers = [];
 let renderQueued = false;
 let soundEnabled = safeRead(SOUND_KEY, true) !== false;
 let voiceEnabled = safeRead(VOICE_KEY, true) !== false;
@@ -271,6 +276,8 @@ function ensureNoiseBuffer(context) {
   return noiseBuffer;
 }
 
+const sfxReady = new Map();
+
 function sfxSampleBuffer(context, id) {
   if (sfxSamples.has(id)) return sfxSamples.get(id);
   const url = SFX_FILES[id];
@@ -278,6 +285,10 @@ function sfxSampleBuffer(context, id) {
   const pending = fetch(url)
     .then(response => response.ok ? response.arrayBuffer() : Promise.reject(new Error(`missing SFX ${id}`)))
     .then(bytes => context.decodeAudioData(bytes))
+    .then(buffer => {
+      sfxReady.set(id, buffer);
+      return buffer;
+    })
     .catch(() => null);
   sfxSamples.set(id, pending);
   return pending;
@@ -286,6 +297,24 @@ function sfxSampleBuffer(context, id) {
 function warmSfxSamples(context) {
   if (!context) return;
   for (const id of Object.keys(SFX_FILES)) sfxSampleBuffer(context, id);
+}
+
+async function initPremiumAudio() {
+  try {
+    const response = await fetch('assets/ambience/pack.json', {cache: 'no-cache'});
+    if (!response.ok) return;
+    const data = await response.json();
+    for (const [slot, file] of Object.entries(data?.loops || {})) {
+      SFX_FILES[`loop-${slot}`] = `assets/ambience/${file}`;
+      premiumLoops[slot] = `loop-${slot}`;
+    }
+    for (const [slot, file] of Object.entries(data?.stings || {})) {
+      SFX_FILES[`sting-${slot}`] = `assets/ambience/${file}`;
+      premiumStings[slot] = `sting-${slot}`;
+    }
+    diagnostic('premium-audio-ready', {loops: Object.keys(premiumLoops), stings: Object.keys(premiumStings)});
+    if (audioContext) warmSfxSamples(audioContext);
+  } catch { /* Procedural soundscape remains the fallback. */ }
 }
 
 function sample(context, id, {at = context.currentTime, volume = .18, rate = 1} = {}) {
@@ -331,6 +360,12 @@ function sound(kind = 'tap', delay = 0) {
   if (!context) return;
   const at = context.currentTime + Math.max(0, delay);
   try {
+    // Generated hero effects replace the procedural versions when present.
+    const sting = {howl: ['howl', .5], kill: ['kill', .55], heal: ['heal', .42], victory: ['victory', .5]}[kind];
+    if (sting && sfxReady.get(premiumStings[sting[0]])) {
+      sample(context, premiumStings[sting[0]], {at, volume: sting[1]});
+      return;
+    }
     if (kind === 'tap') {
       tone(context, {at, frequency: 310, endFrequency: 190, duration: .055, volume: .025, type: 'triangle', attack: .006});
     } else if (kind === 'flip') {
@@ -490,10 +525,9 @@ function stopAmbience() {
     current.gain.gain.setValueAtTime(Math.max(.0001, current.gain.gain.value), now);
     current.gain.gain.exponentialRampToValueAtTime(.0001, now + 1.1);
     setTimeout(() => {
-      try { current.wind.stop(); } catch { /* no-op */ }
-      try { current.lfo.stop(); } catch { /* no-op */ }
-      try { current.drone.stop(); } catch { /* no-op */ }
-      try { current.droneLfo.stop(); } catch { /* no-op */ }
+      for (const node of current.stoppables || []) {
+        try { node?.stop(); } catch { /* no-op */ }
+      }
       try { current.gain.disconnect(); } catch { /* no-op */ }
     }, 1300);
   } catch { /* Ambience teardown must never interrupt play. */ }
@@ -505,6 +539,24 @@ function startAmbience(kind) {
   if (!kind || !soundEnabled || !ambienceEnabled) return;
   const context = unlockAudio();
   if (!context) return;
+  // A generated ambience loop replaces the whole procedural bed when present.
+  const loopBuffer = sfxReady.get(premiumLoops[kind]);
+  if (loopBuffer) {
+    try {
+      const gain = context.createGain();
+      const now = context.currentTime;
+      gain.gain.setValueAtTime(.0001, now);
+      gain.gain.exponentialRampToValueAtTime(kind === 'night' ? .5 : .38, now + 2.5);
+      gain.connect(sfxOutput(context));
+      const loop = context.createBufferSource();
+      loop.buffer = loopBuffer;
+      loop.loop = true;
+      loop.connect(gain);
+      loop.start();
+      ambience = {kind, gain, timer: null, stoppables: [loop]};
+      return;
+    } catch { /* Fall through to the procedural bed. */ }
+  }
   try {
     const gain = context.createGain();
     const now = context.currentTime;
@@ -552,7 +604,7 @@ function startAmbience(kind) {
     lfo.start();
     drone.start();
     droneLfo.start();
-    const state = {kind, gain, wind, lfo, drone, droneLfo, timer: null};
+    const state = {kind, gain, timer: null, stoppables: [wind, lfo, drone, droneLfo]};
     const schedule = () => {
       if (ambience !== state) return;
       const at = context.currentTime + .05;
@@ -904,6 +956,37 @@ window.addEventListener('online', () => {
 document.addEventListener('pointerdown', () => {
   if (mode && !wakeLock) holdWakeLock();
 }, {passive: true});
+
+let lastWakePulseKey = null;
+
+function stopLoverPulse() {
+  loverPulseTimers.forEach(clearTimeout);
+  loverPulseTimers = [];
+}
+
+// Cupid's silent tap on the shoulder: when a night action opens on this phone,
+// a soft haptic tells its owner to wake without a sound or a lifted screen.
+// Lovers get a repeating heartbeat so both chosen players notice discreetly.
+function updateHaptics(view) {
+  const action = view?.privateAction;
+  const awake = Boolean(action?.type) && !action.done && view.phaseReady !== false;
+  if (!awake) {
+    if (loverPulseTimers.length) stopLoverPulse();
+    return;
+  }
+  const key = `${view.phaseSerial}:${action.type}`;
+  if (action.type === 'lover') {
+    if (!loverPulseTimers.length) {
+      [0, 1900, 3800, 5700].forEach(offset => {
+        loverPulseTimers.push(setTimeout(() => vibrate([28, 70, 28]), offset));
+      });
+    }
+    return;
+  }
+  if (key === lastWakePulseKey) return;
+  lastWakePulseKey = key;
+  vibrate([30, 80, 30]);
+}
 
 function phaseChanged(view) {
   if (!view || ui.previousPhase === view.phase) return;
@@ -1386,6 +1469,8 @@ function leaveToHome() {
   stopNarration();
   stopVoicePack();
   stopAmbience();
+  stopLoverPulse();
+  lastWakePulseKey = null;
   narratorAutomationGeneration += 1;
   narratorAutomationKey = null;
   recentCommandIds.clear();
@@ -1764,7 +1849,7 @@ function renderModal() {
   if (ui.modal === 'settings') {
     const install = isStandalone() ? '' : '<button class="btn secondary" data-action="install-app">Install Moonfall</button>';
     const fullscreen = fullscreenAvailable() ? `<button class="btn secondary" data-action="toggle-fullscreen">${fullscreenElement() ? 'Exit fullscreen' : 'Enter fullscreen'}</button>` : '';
-    modalRoot.innerHTML = `<div class="modal-backdrop" data-action="close-modal"><div class="modal"><div class="modal-head"><h2>Settings</h2><button class="icon-btn" data-action="close-modal">×</button></div><div class="setting-list"><button data-action="toggle-sound"><span>Sound effects</span><b>${soundEnabled ? 'On' : 'Off'}</b></button><button data-action="toggle-voice"><span>Automatic narrator</span><b>${voiceEnabled ? 'On' : 'Off'}</b></button><button data-action="toggle-ambience"><span>Night & day ambience</span><b>${ambienceEnabled ? 'On' : 'Off'}</b></button></div><div class="sfx-previews"><button data-action="preview-howl">Howl</button><button data-action="preview-kill">Kill</button><button data-action="preview-heal">Heal</button></div><div class="button-stack">${fullscreen}${install}<button class="btn ghost" data-action="show-rules">Read the rules</button><button class="btn ghost" data-action="start-agent-test">Run a practice game</button></div><p class="footer-note">All audio is bundled or generated on-device. There are no paid APIs, accounts or streaming costs.</p></div></div>`;
+    modalRoot.innerHTML = `<div class="modal-backdrop" data-action="close-modal"><div class="modal"><div class="modal-head"><h2>Settings</h2><button class="icon-btn" data-action="close-modal">×</button></div><div class="setting-list"><button data-action="toggle-sound"><span>Sound effects</span><b>${soundEnabled ? 'On' : 'Off'}</b></button><button data-action="toggle-voice"><span>Automatic narrator</span><b>${voiceEnabled ? 'On' : 'Off'}</b></button><button data-action="toggle-ambience"><span>Night & day ambience</span><b>${ambienceEnabled ? 'On' : 'Off'}</b></button></div><div class="sfx-previews"><button data-action="preview-howl">Howl</button><button data-action="preview-kill">Kill</button><button data-action="preview-heal">Heal</button></div><div class="button-stack">${fullscreen}${install}<button class="btn ghost" data-action="show-rules">Read the rules</button><button class="btn ghost" data-action="start-agent-test">Run a practice game</button></div><p class="footer-note">All audio is bundled or generated on-device—no accounts or streaming costs.${voicePackEngine() === 'elevenlabs' ? ' Narration and ambience audio by elevenlabs.io.' : ''}</p></div></div>`;
     return;
   }
   if (ui.modal === 'install') {
@@ -1782,6 +1867,7 @@ function renderModal() {
 
 function render() {
   try {
+    updateHaptics(mode ? currentView : null);
     if (!mode) renderHome();
     else if (mode === 'guest' && !currentView) renderConnecting();
     else renderGame();
@@ -2034,8 +2120,9 @@ window.addEventListener('beforeunload', persistHost);
 registerPwa();
 initVoicePack().then(ready => {
   if (ready) {
-    diagnostic('voice-pack-ready');
+    diagnostic('voice-pack-ready', {engine: voicePackEngine()});
     if (ui.modal === 'menu') renderModal();
   }
 });
+initPremiumAudio();
 render();

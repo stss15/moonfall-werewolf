@@ -8,11 +8,13 @@ The game has no looping music track. Its Web Audio soundscape combines generated
 
 ### The narrator voice pack
 
-The narration script is fixed, so it is pre-recorded once into short composable clips that the game sequences at runtime — `wake-village` + `dawn-death` + `reveal` + `role-werewolf` becomes a complete spoken passage. Deploys generate the pack automatically; without it the game falls back to the phone's own offline Web Speech voices.
+The narration script is fixed, so it is pre-recorded once into short composable clips that the game sequences at runtime — `wake-village` + `dawn-death` + `reveal` + `role-werewolf` becomes a complete spoken passage. Every line has several phrasing variants and the game picks one at random per playback, so no two rounds sound identical. Without a pack the game falls back to the phone's own offline Web Speech voices.
 
-Generate or regenerate the pack with `python3 scripts/generate_voice_pack.py`. Three free engines are supported:
+**Premium audio (one-shot, free tier):** add an `ELEVENLABS_API_KEY` repository secret, then run the **Generate premium audio** workflow from the Actions tab. It renders the whole variant script with an expressive storyteller voice, plus looping night/day ambience and hero stings (howl, kill, heal, victory) via ElevenLabs sound generation, and commits the audio to the repo. Deploys reuse the committed files and never spend credits again; the script checks the account quota before every call and refuses to drop below its reserve, so it cannot exceed the free tier. ElevenLabs' free tier requires attribution (shown in the in-game settings) and is non-commercial.
 
-- **ElevenLabs** (best quality, spooky delivery): set `ELEVENLABS_API_KEY` — as a repository secret for automatic deploys, or in your shell locally. The free tier's monthly credits cover the whole script several times over; pick any voice from their library with `ELEVENLABS_VOICE_ID` (default is Daniel, a deep British narrator). Note the free tier requires attribution and is non-commercial.
+Local/manual generation uses `python3 scripts/generate_voice_pack.py` with three free engines:
+
+- **ElevenLabs** (best quality, most intonation): set `ELEVENLABS_API_KEY`; pick any voice with `ELEVENLABS_VOICE_ID` (default is George, an expressive British storyteller).
 - **Microsoft Edge neural voices** (default, no account): `pip install edge-tts`. Uses `en-GB-RyanNeural`, slowed and pitched down.
 - **Kokoro** (fully local, Apache-2.0 open weights): `pip install kokoro-onnx`, place the model files next to the script, and run with `VOICE_ENGINE=kokoro`.
 
