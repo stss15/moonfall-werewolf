@@ -1,4 +1,4 @@
-const CACHE = 'moonfall-v6-premium';
+const CACHE = 'moonfall-v7-auto-narrator';
 const SHELL = [
   './',
   './index.html',
@@ -8,7 +8,11 @@ const SHELL = [
   './assets/icon-192.png',
   './assets/icon-512.png',
   './assets/icon-maskable-512.png',
-  './assets/apple-touch-icon.png'
+  './assets/apple-touch-icon.png',
+  './assets/sfx/impactSoft_medium_002.ogg',
+  './assets/sfx/impactPunch_heavy_000.ogg',
+  './assets/sfx/impactGlass_medium_003.ogg',
+  './assets/sfx/impactBell_heavy_001.ogg'
 ];
 
 self.addEventListener('install', event => {

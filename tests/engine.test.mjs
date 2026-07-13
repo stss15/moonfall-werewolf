@@ -7,10 +7,12 @@ import {
   checkWinner,
   closeDayVote,
   makeState,
+  narratorUnlock,
   resolvePending,
   startGame,
   storytellerAdvance,
-  viewFor
+  viewFor,
+  wolvesHaveConsensus
 } from '../src/engine.js';
 
 function fixture(names = ['Story', 'Wolf', 'Ada', 'Ben', 'Cleo', 'Drew']) {
@@ -42,27 +44,33 @@ test('Thief adds two physical spare cards before the deal', () => {
   assert.equal(deck.dealt.length + deck.extras.length, 12);
 });
 
-test('game start removes absent lobby seats and chooses Storyteller randomly', () => {
+test('game start removes absent lobby seats and gives every gathered player a character card', () => {
   const state = fixture(['Host', 'A', 'B', 'C', 'D', 'E', 'Absent']);
   state.players.absent.connected = false;
   state.settings.roles = ['seer'];
   const result = startGame(state, () => 0);
   assert.equal(result.ok, true);
-  assert.equal(state.storytellerId, 'story');
+  assert.equal(state.storytellerId, null);
   assert.equal(state.players.absent, undefined);
   assert.equal(state.phase, 'role-reveal');
-  assert.equal(Object.values(state.players).filter(player => player.role === 'storyteller').length, 1);
+  assert.equal(state.phaseReady, false);
+  assert.equal(Object.values(state.players).filter(player => player.role === 'storyteller').length, 0);
+  assert.equal(Object.values(state.players).every(player => player.role), true);
 });
 
-test('ordinary views never leak living roles; Storyteller receives the ledger', () => {
+test('ordinary and coordinator views never leak living roles', () => {
   const state = fixture();
+  state.storytellerId = null;
+  state.players.story.role = 'villager';
   state.players.wolf.role = 'werewolf';
   state.phase = 'night-wolves';
   const ordinary = viewFor(state, 'ada');
-  const story = viewFor(state, 'story');
+  const coordinator = viewFor(state, 'story', {coordinator: true});
   assert.equal(ordinary.players.wolf.role, null);
   assert.equal(ordinary.storyteller, null);
-  assert.equal(story.storyteller.roles.wolf, 'werewolf');
+  assert.ok(coordinator.narrator);
+  assert.equal('roles' in coordinator.narrator, false);
+  assert.equal(coordinator.players.wolf.role, null);
 });
 
 test('lovers can never vote against one another', () => {
@@ -139,6 +147,52 @@ test('full-game roles are revealed to everyone only after victory', () => {
   assert.equal(view.players.ben.role, 'villager');
 });
 
+test('a private turn stays locked until the automatic narrator finishes its cue', () => {
+  const state = fixture();
+  state.players.wolf.role = 'werewolf';
+  state.phase = 'night-wolves';
+  state.phaseReady = false;
+  const early = applyPlayerCommand(state, 'wolf', 'wolf-vote', {target: 'ada'});
+  assert.equal(early.ok, false);
+  assert.match(early.error, /narrator/i);
+  assert.equal(narratorUnlock(state).ok, true);
+  assert.equal(applyPlayerCommand(state, 'wolf', 'wolf-vote', {target: 'ada'}).ok, true);
+});
+
+test('Werewolves may unanimously choose no victim, but split choices do not advance', () => {
+  const state = fixture();
+  state.players.wolf.role = 'werewolf';
+  state.players.ada.role = 'werewolf';
+  state.phase = 'night-wolves';
+  state.phaseReady = true;
+  applyPlayerCommand(state, 'wolf', 'wolf-vote', {target: null});
+  applyPlayerCommand(state, 'ada', 'wolf-vote', {target: 'ben'});
+  assert.equal(wolvesHaveConsensus(state), false);
+  applyPlayerCommand(state, 'ada', 'wolf-vote', {target: null});
+  assert.equal(wolvesHaveConsensus(state), true);
+  assert.equal(storytellerAdvance(state).ok, true);
+  assert.equal(state.actions.wolfVictim, null);
+});
+
+test('day debate and ballots advance only after every living player acts', () => {
+  const state = fixture();
+  state.players.wolf.role = 'werewolf';
+  state.phase = 'day-discussion';
+  state.phaseReady = true;
+  const living = ['wolf', 'ada', 'ben', 'cleo', 'drew'];
+  for (const id of living.slice(0, -1)) applyPlayerCommand(state, id, 'day-ready', {ready: true});
+  assert.equal(state.phase, 'day-discussion');
+  applyPlayerCommand(state, living.at(-1), 'day-ready', {ready: true});
+  assert.equal(state.phase, 'day-vote');
+  assert.equal(state.phaseReady, false);
+  narratorUnlock(state);
+  for (const id of living.slice(0, -1)) applyPlayerCommand(state, id, 'cast-vote', {target: 'ben'});
+  assert.equal(state.phase, 'day-vote');
+  applyPlayerCommand(state, living.at(-1), 'cast-vote', {target: 'ben'});
+  assert.notEqual(state.phase, 'day-vote');
+  assert.equal(state.players.ben.alive, false);
+});
+
 test('complete first night follows Thief → Cupid → lovers → Seer → Wolves → Witch → dawn', () => {
   const state = fixture(['Story', 'Thief', 'Cupid', 'Seer', 'Wolf', 'Witch', 'Girl', 'Villager']);
   Object.assign(state.players.thief, {role: 'thief'});
@@ -155,23 +209,29 @@ test('complete first night follows Thief → Cupid → lovers → Seer → Wolve
   for (const id of Object.keys(state.players)) assert.equal(applyPlayerCommand(state, id, 'seen-role').ok, true);
   assert.equal(storytellerAdvance(state).ok, true);
   assert.equal(state.phase, 'setup-thief');
+  narratorUnlock(state);
   applyPlayerCommand(state, 'thief', 'thief-choice', {choice: 'keep'});
   storytellerAdvance(state);
   assert.equal(state.phase, 'setup-cupid');
+  narratorUnlock(state);
   applyPlayerCommand(state, 'cupid', 'cupid-choose', {choices: ['cupid', 'wolf']});
   storytellerAdvance(state);
   assert.equal(state.phase, 'setup-lovers');
+  narratorUnlock(state);
   applyPlayerCommand(state, 'cupid', 'lovers-seen');
   applyPlayerCommand(state, 'wolf', 'lovers-seen');
   storytellerAdvance(state);
   assert.equal(state.phase, 'night-seer');
+  narratorUnlock(state);
   applyPlayerCommand(state, 'seer', 'seer-choose', {target: 'wolf'});
   applyPlayerCommand(state, 'seer', 'seer-done');
   storytellerAdvance(state);
   assert.equal(state.phase, 'night-wolves');
+  narratorUnlock(state);
   applyPlayerCommand(state, 'wolf', 'wolf-vote', {target: 'villager'});
   storytellerAdvance(state);
   assert.equal(state.phase, 'night-witch');
+  narratorUnlock(state);
   applyPlayerCommand(state, 'witch', 'witch-submit', {heal: false, poisonTarget: null});
   storytellerAdvance(state);
   assert.equal(state.phase, 'dawn');

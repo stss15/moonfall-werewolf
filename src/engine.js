@@ -24,11 +24,13 @@ export function suggestedWolfCount(characterCount) {
 export function makeState({roomCode, coordinatorId, coordinatorName = 'Host'}) {
   const now = Date.now();
   return {
-    schema: 2,
+    schema: 3,
     roomCode,
     coordinatorId,
     storytellerId: null,
     phase: 'lobby',
+    phaseReady: true,
+    phaseSerial: 0,
     revision: 0,
     night: 0,
     day: 0,
@@ -83,7 +85,8 @@ export function freshActions() {
     littleGirlCaught: false,
     witchDraft: {heal: false, poisonTarget: null},
     witchDone: false,
-    votes: {}
+    votes: {},
+    dayReady: {}
   };
 }
 
@@ -106,6 +109,20 @@ function touch(state) {
 function log(state, text, kind = 'event') {
   state.log.push({text, kind, at: Date.now(), day: state.day, night: state.night});
   state.log = state.log.slice(-80);
+}
+
+function enterPhase(state, phase, {ready = false} = {}) {
+  state.phase = phase;
+  state.phaseReady = ready;
+  state.phaseSerial = Number(state.phaseSerial || 0) + 1;
+}
+
+export function narratorUnlock(state) {
+  if (['lobby', 'game-over'].includes(state.phase)) return {ok: false, error: 'There is no turn to open.'};
+  if (state.phaseReady) return {ok: true};
+  state.phaseReady = true;
+  touch(state);
+  return {ok: true};
 }
 
 export function setPreset(state, presetId) {
@@ -159,13 +176,15 @@ export function startGame(state, rng = Math.random) {
   if (state.phase !== 'lobby') return {ok: false, error: 'This game has already begun.'};
   const connected = allSeatIds(state).filter(id => state.players[id].connected !== false);
   if (connected.length < 6) {
-    return {ok: false, error: 'Moonfall needs at least six people: five characters and one Storyteller. Eight or more characters gives the classic balance.'};
+    return {ok: false, error: 'Moonfall needs at least six players. Eight or more gives the classic balance.'};
   }
   for (const id of allSeatIds(state)) {
     if (!connected.includes(id)) delete state.players[id];
   }
-  state.storytellerId = connected[randomIndex(connected.length, rng)];
-  const characters = connected.filter(id => id !== state.storytellerId);
+  // The narrator is automated on the coordinator phone. Nobody loses their
+  // character card or has to operate a separate Storyteller seat.
+  state.storytellerId = null;
+  const characters = connected;
   let deck;
   try {
     deck = buildDeck(characters.length, state.settings, rng);
@@ -177,11 +196,10 @@ export function startGame(state, rng = Math.random) {
   seats.forEach((id, index) => {
     Object.assign(state.players[id], {role: deck.dealt[index], alive: true, ready: false});
   });
-  Object.assign(state.players[state.storytellerId], {role: 'storyteller', alive: true, ready: false});
   state.extraCards = deck.extras;
   state.night = 1;
   state.day = 0;
-  state.phase = 'role-reveal';
+  enterPhase(state, 'role-reveal');
   state.actions = freshActions();
   state.lovers = [];
   state.sheriffId = null;
@@ -190,7 +208,7 @@ export function startGame(state, rng = Math.random) {
   state.lastDeaths = [];
   state.lastVote = null;
   state.winner = null;
-  log(state, `${state.players[state.storytellerId].name} was chosen by fate as the Storyteller.`, 'story');
+  log(state, 'The Moonfall narrator took its place. Every gathered player received a character card.', 'story');
   touch(state);
   return {ok: true};
 }
@@ -228,7 +246,7 @@ function resetNightActions(state) {
 function beginNight(state) {
   state.night += 1;
   resetNightActions(state);
-  state.phase = phaseHasLivingRole(state, 'seer') ? 'night-seer' : 'night-wolves';
+  enterPhase(state, phaseHasLivingRole(state, 'seer') ? 'night-seer' : 'night-wolves');
   log(state, `Night ${state.night} fell over the village.`, 'moon');
   touch(state);
 }
@@ -257,17 +275,17 @@ export function storytellerAdvance(state) {
   if (!canAdvance(state)) return {ok: false, error: 'The active player has not finished yet.'};
   const current = state.phase;
   if (current === 'role-reveal') {
-    state.phase = nextSetupOrNight(state, current);
+    enterPhase(state, nextSetupOrNight(state, current));
   } else if (['setup-thief', 'setup-cupid', 'setup-lovers'].includes(current)) {
-    state.phase = nextSetupOrNight(state, current);
+    enterPhase(state, nextSetupOrNight(state, current));
   } else if (current === 'night-seer') {
-    state.phase = 'night-wolves';
+    enterPhase(state, 'night-wolves');
   } else if (current === 'night-wolves') {
     const votes = Object.values(state.actions.wolfVotes);
-    state.actions.wolfVictim = votes[0] || null;
-    state.phase = phaseHasLivingRole(state, 'witch') ? 'night-witch' : 'resolve-night';
+    state.actions.wolfVictim = votes[0] ?? null;
+    enterPhase(state, phaseHasLivingRole(state, 'witch') ? 'night-witch' : 'resolve-night');
   } else if (current === 'night-witch') {
-    state.phase = 'resolve-night';
+    enterPhase(state, 'resolve-night');
   }
   if (state.phase === 'resolve-night') resolveNight(state);
   touch(state);
@@ -277,7 +295,7 @@ export function storytellerAdvance(state) {
 export function storytellerForceNoKill(state) {
   if (state.phase !== 'night-wolves') return {ok: false, error: 'The pack is not awake.'};
   state.actions.wolfVictim = null;
-  state.phase = phaseHasLivingRole(state, 'witch') ? 'night-witch' : 'resolve-night';
+  enterPhase(state, phaseHasLivingRole(state, 'witch') ? 'night-witch' : 'resolve-night');
   log(state, 'The pack failed to agree. No victim was chosen.', 'night');
   if (state.phase === 'resolve-night') resolveNight(state);
   touch(state);
@@ -320,7 +338,7 @@ function markDead(state, item) {
 }
 
 export function beginResolution(state, deaths, source) {
-  state.phase = 'resolution';
+  enterPhase(state, 'resolution');
   state.resolution = {
     source,
     queue: unique(deaths.map(item => item.id)).map(id => deaths.find(item => item.id === id)),
@@ -339,6 +357,7 @@ export function continueResolution(state) {
   }
   if (state.resolution.triggers.length) {
     state.resolution.pending = state.resolution.triggers.shift();
+    enterPhase(state, 'resolution');
     touch(state);
     return;
   }
@@ -356,9 +375,9 @@ export function continueResolution(state) {
   }
   if (source === 'night') {
     state.day += 1;
-    state.phase = 'dawn';
+    enterPhase(state, 'dawn');
   } else {
-    state.phase = 'day-result';
+    enterPhase(state, 'day-result');
   }
   touch(state);
 }
@@ -386,11 +405,12 @@ export function resolvePending(state, actorId, targetId = null, storytellerProxy
 export function advanceFromDawn(state) {
   if (state.phase !== 'dawn') return {ok: false, error: 'The village has not reached dawn.'};
   if (state.settings.sheriff && !state.sheriffId && state.day === 1) {
-    state.phase = 'sheriff-vote';
+    enterPhase(state, 'sheriff-vote');
     state.electionCandidates = aliveIds(state);
     state.actions.votes = {};
   } else {
-    state.phase = 'day-discussion';
+    enterPhase(state, 'day-discussion');
+    state.actions.dayReady = {};
   }
   touch(state);
   return {ok: true};
@@ -398,7 +418,7 @@ export function advanceFromDawn(state) {
 
 export function startDayVote(state) {
   if (state.phase !== 'day-discussion') return {ok: false, error: 'The village is not ready to vote.'};
-  state.phase = 'day-vote';
+  enterPhase(state, 'day-vote');
   state.actions.votes = {};
   state.lastVote = null;
   touch(state);
@@ -416,6 +436,8 @@ export function castVote(state, actorId, targetId) {
     return {ok: false, error: 'That player is not in this ballot.'};
   }
   state.actions.votes[actorId] = targetId;
+  const allCast = aliveIds(state).every(id => state.actions.votes[id] !== undefined);
+  if (allCast) return state.phase === 'sheriff-vote' ? closeElection(state) : closeDayVote(state);
   touch(state);
   return {ok: true};
 }
@@ -439,6 +461,7 @@ export function closeElection(state) {
   if (leaders.length > 1) {
     state.electionCandidates = leaders;
     state.actions.votes = {};
+    enterPhase(state, 'sheriff-vote');
     log(state, `The Sheriff election was tied. ${leaders.map(id => state.players[id].name).join(' and ')} face a new ballot.`, 'sheriff');
     touch(state);
     return {ok: true, runoff: true};
@@ -446,7 +469,8 @@ export function closeElection(state) {
   state.sheriffId = leaders[0];
   state.electionCandidates = [];
   state.actions.votes = {};
-  state.phase = 'day-discussion';
+  state.actions.dayReady = {};
+  enterPhase(state, 'day-discussion');
   log(state, `${state.players[state.sheriffId].name} was elected Sheriff.`, 'sheriff');
   touch(state);
   return {ok: true, elected: leaders[0]};
@@ -463,7 +487,7 @@ export function closeDayVote(state) {
     beginResolution(state, [{id: leaders[0], cause: 'the village vote'}], 'day');
   } else {
     state.lastDeaths = [];
-    state.phase = 'day-result';
+    enterPhase(state, 'day-result');
     log(state, leaders.length ? 'The village vote ended in a tie. Nobody was eliminated.' : 'No judgement was cast. Nobody was eliminated.', 'vote');
     touch(state);
   }
@@ -495,13 +519,14 @@ export function checkWinner(state) {
 
 function finishGame(state, winner) {
   state.winner = winner;
-  state.phase = 'game-over';
+  enterPhase(state, 'game-over', {ready: true});
   log(state, winner.title, 'victory');
   touch(state);
 }
 
 export function resetToLobby(state) {
-  state.phase = 'lobby';
+  enterPhase(state, 'lobby', {ready: true});
+  state.schema = 3;
   state.storytellerId = null;
   state.night = 0;
   state.day = 0;
@@ -526,6 +551,7 @@ function commandRoleGuard(state, actorId, roleId, phase) {
 }
 
 export function applyPlayerCommand(state, actorId, type, payload = {}) {
+  if (!state.phaseReady) return {ok: false, error: 'Listen to the narrator. This turn has not opened yet.'};
   let error;
   if (type === 'seen-role') {
     if (state.phase !== 'role-reveal') return {ok: false, error: 'The card reveal has ended.'};
@@ -575,7 +601,7 @@ export function applyPlayerCommand(state, actorId, type, payload = {}) {
     error = commandRoleGuard(state, actorId, 'werewolf', 'night-wolves');
     if (error) return {ok: false, error};
     const target = payload.target;
-    if (!state.players[target]?.alive || state.players[target].role === 'werewolf' || target === state.storytellerId) return {ok: false, error: 'The pack must choose a living non-Werewolf.'};
+    if (target !== null && (!state.players[target]?.alive || state.players[target].role === 'werewolf' || target === state.storytellerId)) return {ok: false, error: 'The pack must choose a living non-Werewolf or unanimously spare the village.'};
     state.actions.wolfVotes[actorId] = target;
   } else if (type === 'little-girl-caught') {
     error = commandRoleGuard(state, actorId, 'werewolf', 'night-wolves');
@@ -595,6 +621,10 @@ export function applyPlayerCommand(state, actorId, type, payload = {}) {
     state.actions.witchDone = true;
   } else if (type === 'cast-vote') {
     return castVote(state, actorId, payload.target);
+  } else if (type === 'day-ready') {
+    if (state.phase !== 'day-discussion' || !state.players[actorId]?.alive) return {ok: false, error: 'The village is not debating.'};
+    state.actions.dayReady[actorId] = payload.ready !== false;
+    if (aliveIds(state).every(id => state.actions.dayReady[id])) return startDayVote(state);
   } else if (type === 'resolve-pending') {
     return resolvePending(state, actorId, payload.target || null, false);
   } else {
@@ -608,6 +638,7 @@ function privateAction(state, seatId) {
   const player = state.players[seatId];
   const action = {type: null};
   if (!player) return action;
+  if (!state.phaseReady) return action;
   if (state.resolution?.pending?.actorId === seatId) {
     return {type: state.resolution.pending.type, candidates: aliveIds(state)};
   }
@@ -653,36 +684,28 @@ function privateAction(state, seatId) {
         choice: state.actions.votes[seatId] || null
       };
       break;
+    case 'day-discussion':
+      if (player.alive) return {
+        type: 'discussion',
+        ready: Boolean(state.actions.dayReady[seatId]),
+        readyCount: aliveIds(state).filter(id => state.actions.dayReady[id]).length,
+        total: aliveIds(state).length
+      };
+      break;
   }
   return action;
 }
 
-function storytellerPanel(state) {
+function narratorPanel(state) {
   const alive = aliveIds(state);
   const voteCount = Object.keys(state.actions.votes || {}).filter(id => state.players[id]?.alive).length;
-  const panel = {
+  return {
     cue: STORY_CUES[state.phase] || '',
+    phaseReady: Boolean(state.phaseReady),
     canAdvance: canAdvance(state),
-    waitingFor: [],
-    roles: Object.fromEntries(characterIds(state).map(id => [id, state.players[id].role])),
-    extraCards: [...state.extraCards],
     voteProgress: {cast: voteCount, total: alive.length},
-    wolfVictim: state.actions.wolfVictim,
-    wolfConsensus: wolvesHaveConsensus(state),
-    littleGirlCaught: state.actions.littleGirlCaught,
-    witchDraft: clone(state.actions.witchDraft),
-    seerTarget: state.actions.seerTarget,
     pending: clone(state.resolution?.pending || null)
   };
-  if (state.phase === 'role-reveal') panel.waitingFor = allSeatIds(state).filter(id => !state.actions.seen[id]);
-  if (state.phase === 'setup-lovers') panel.waitingFor = state.lovers.filter(id => !state.actions.loversSeen[id]);
-  if (['setup-thief', 'setup-cupid', 'night-seer', 'night-witch'].includes(state.phase) && !panel.canAdvance) {
-    const roleByPhase = {'setup-thief': 'thief', 'setup-cupid': 'cupid', 'night-seer': 'seer', 'night-witch': 'witch'};
-    const actor = playerByRole(state, roleByPhase[state.phase], true);
-    if (actor) panel.waitingFor = [actor];
-  }
-  if (state.phase === 'night-wolves' && !panel.canAdvance) panel.waitingFor = roleIds(state, 'werewolf', true).filter(id => state.actions.wolfVotes[id] === undefined);
-  return panel;
 }
 
 export function viewFor(state, seatId, {coordinator = false} = {}) {
@@ -707,6 +730,8 @@ export function viewFor(state, seatId, {coordinator = false} = {}) {
     roomCode: state.roomCode,
     revision: state.revision,
     phase: state.phase,
+    phaseReady: Boolean(state.phaseReady),
+    phaseSerial: Number(state.phaseSerial || 0),
     night: state.night,
     day: state.day,
     settings: clone(state.settings),
@@ -720,11 +745,13 @@ export function viewFor(state, seatId, {coordinator = false} = {}) {
       role: state.phase === 'lobby' ? null : own.role,
       seenRole: Boolean(state.actions.seen[seatId]),
       loverId,
-      storyteller: seatId === state.storytellerId,
+      storyteller: false,
+      tableVoice: coordinator,
       sheriff: seatId === state.sheriffId
     } : null,
     privateAction: privateAction(state, seatId),
-    storyteller: seatId === state.storytellerId ? storytellerPanel(state) : null,
+    narrator: coordinator ? narratorPanel(state) : null,
+    storyteller: null,
     coordinator,
     lobbyDeck: state.phase === 'lobby' ? lobbyDeckView(state) : null,
     lastDeaths: clone(state.lastDeaths),
@@ -735,7 +762,7 @@ export function viewFor(state, seatId, {coordinator = false} = {}) {
 }
 
 export function lobbyDeckView(state) {
-  const characterCount = Math.max(0, allSeatIds(state).length - 1);
+  const characterCount = allSeatIds(state).length;
   const wolves = state.settings.wolves === 'auto' ? suggestedWolfCount(characterCount) : Number(state.settings.wolves);
   const specials = [...state.settings.roles];
   return {
@@ -744,6 +771,6 @@ export function lobbyDeckView(state) {
     wolves,
     specials,
     villagers: Math.max(0, characterCount - wolves - specials.length),
-    valid: allSeatIds(state).length >= 6 && wolves + specials.length <= characterCount
+    valid: characterCount >= 6 && wolves + specials.length <= characterCount
   };
 }

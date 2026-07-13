@@ -4,6 +4,16 @@
 const QUALITY_NAMES = /daniel|oliver|arthur|serena|stephanie|kate|aaron|evan|alex\b/;
 
 let pendingTimer = null;
+let watchdogTimer = null;
+let pendingResolve = null;
+
+function settleNarration(duration = 0) {
+  clearTimeout(watchdogTimer);
+  watchdogTimer = null;
+  const resolve = pendingResolve;
+  pendingResolve = null;
+  if (resolve) resolve(duration);
+}
 
 export function narrationSupported() {
   return typeof speechSynthesis !== 'undefined' && typeof SpeechSynthesisUtterance !== 'undefined';
@@ -33,31 +43,44 @@ export function pickNarratorVoice() {
 }
 
 export function narrate(text, {delay = 0, rate = .92, pitch = .82, volume = 1} = {}) {
-  if (!narrationSupported() || !text) return;
+  if (!narrationSupported() || !text) return Promise.resolve(0);
   stopNarration();
-  pendingTimer = setTimeout(() => {
-    pendingTimer = null;
-    try {
-      const utterance = new SpeechSynthesisUtterance(text);
-      const voice = pickNarratorVoice();
-      if (voice) {
-        utterance.voice = voice;
-        utterance.lang = voice.lang;
+  const queuedAt = Date.now();
+  return new Promise(resolve => {
+    pendingResolve = resolve;
+    pendingTimer = setTimeout(() => {
+      pendingTimer = null;
+      try {
+        const utterance = new SpeechSynthesisUtterance(text);
+        const voice = pickNarratorVoice();
+        if (voice) {
+          utterance.voice = voice;
+          utterance.lang = voice.lang;
+        }
+        utterance.rate = rate;
+        utterance.pitch = pitch;
+        utterance.volume = volume;
+        utterance.onend = () => settleNarration(Date.now() - queuedAt);
+        utterance.onerror = () => settleNarration(Date.now() - queuedAt);
+        speechSynthesis.cancel();
+        speechSynthesis.speak(utterance);
+        const estimated = Math.max(1800, text.trim().split(/\s+/).length * 560 / Math.max(.5, rate));
+        watchdogTimer = setTimeout(() => settleNarration(Date.now() - queuedAt), estimated + 2500);
+      } catch {
+        settleNarration(Date.now() - queuedAt);
       }
-      utterance.rate = rate;
-      utterance.pitch = pitch;
-      utterance.volume = volume;
-      speechSynthesis.cancel();
-      speechSynthesis.speak(utterance);
-    } catch { /* Narration is decorative and must never interrupt play. */ }
-  }, Math.max(0, delay));
+    }, Math.max(0, delay));
+  });
 }
 
 export function stopNarration() {
   clearTimeout(pendingTimer);
+  clearTimeout(watchdogTimer);
   pendingTimer = null;
+  watchdogTimer = null;
   if (!narrationSupported()) return;
   try { speechSynthesis.cancel(); } catch { /* no-op */ }
+  settleNarration(0);
 }
 
 // Some engines (notably Chrome) load voices asynchronously; warming the list

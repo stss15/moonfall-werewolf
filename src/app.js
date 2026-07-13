@@ -2,18 +2,14 @@ import {joinRoom, selfId} from 'trystero';
 import {
   advanceFromDawn,
   applyPlayerCommand,
-  closeDayVote,
-  closeElection,
   isCoordinator,
-  isStoryteller,
   makeState,
   nextNight,
+  narratorUnlock,
   resetToLobby,
   setPreset,
-  startDayVote,
   startGame,
   storytellerAdvance,
-  storytellerForceNoKill,
   updateSettings,
   viewFor
 } from './engine.js';
@@ -31,7 +27,7 @@ const NAME_KEY = 'moonfall:last-name';
 const SOUND_KEY = 'moonfall:sound-enabled';
 const VOICE_KEY = 'moonfall:voice-enabled';
 const AMBIENCE_KEY = 'moonfall:ambience-enabled';
-const APP_VERSION = '2.3.0';
+const APP_VERSION = '2.4.0';
 const RELAY_REDUNDANCY = 7;
 const STALE_CONNECTION_MS = 25000;
 const RECONNECT_DELAY_MS = 180;
@@ -72,12 +68,23 @@ let agentTimer = null;
 const agentActionKeys = new Map();
 let audioContext = null;
 let noiseBuffer = null;
+let sfxBus = null;
+let sfxCompressor = null;
+const sfxSamples = new Map();
+const SFX_FILES = {
+  soft: 'assets/sfx/impactSoft_medium_002.ogg',
+  punch: 'assets/sfx/impactPunch_heavy_000.ogg',
+  glass: 'assets/sfx/impactGlass_medium_003.ogg',
+  bell: 'assets/sfx/impactBell_heavy_001.ogg'
+};
 let renderQueued = false;
 let soundEnabled = safeRead(SOUND_KEY, true) !== false;
 let voiceEnabled = safeRead(VOICE_KEY, true) !== false;
 let ambienceEnabled = safeRead(AMBIENCE_KEY, true) !== false;
 let ambience = null;
 let phaseFxTimer = null;
+let narratorAutomationKey = null;
+let narratorAutomationGeneration = 0;
 const recentCommandIds = new Map();
 const diagnosticEvents = [];
 
@@ -91,6 +98,7 @@ const ui = {
   witchPoisonTarget: null,
   poisonOpen: false,
   previousPhase: null,
+  transitionFrom: null,
   phaseFresh: false,
   modal: null,
   busy: false
@@ -208,9 +216,25 @@ function unlockAudio(force = false) {
     const AudioCtor = window.AudioContext || window.webkitAudioContext;
     if (!AudioCtor) return null;
     audioContext ||= new AudioCtor();
+    if (!sfxBus) {
+      sfxBus = audioContext.createGain();
+      sfxCompressor = audioContext.createDynamicsCompressor();
+      sfxBus.gain.value = 1.55;
+      sfxCompressor.threshold.value = -20;
+      sfxCompressor.knee.value = 14;
+      sfxCompressor.ratio.value = 5;
+      sfxCompressor.attack.value = .004;
+      sfxCompressor.release.value = .24;
+      sfxBus.connect(sfxCompressor).connect(audioContext.destination);
+      warmSfxSamples(audioContext);
+    }
     if (audioContext.state === 'suspended') audioContext.resume().catch(() => {});
     return audioContext;
   } catch { return null; }
+}
+
+function sfxOutput(context) {
+  return context === audioContext && sfxBus ? sfxBus : context.destination;
 }
 
 function master(context, at, duration, volume = .12) {
@@ -218,7 +242,7 @@ function master(context, at, duration, volume = .12) {
   gain.gain.setValueAtTime(.0001, at);
   gain.gain.exponentialRampToValueAtTime(Math.max(.0002, volume), at + Math.min(.04, duration * .12));
   gain.gain.exponentialRampToValueAtTime(.0001, at + duration);
-  gain.connect(context.destination);
+  gain.connect(sfxOutput(context));
   return gain;
 }
 
@@ -232,7 +256,7 @@ function tone(context, {at, frequency, endFrequency = frequency, duration = .2, 
   gain.gain.setValueAtTime(.0001, at);
   gain.gain.exponentialRampToValueAtTime(Math.max(.0002, volume), at + Math.min(attack, duration * .4));
   gain.gain.exponentialRampToValueAtTime(.0001, at + duration);
-  oscillator.connect(gain).connect(destination || context.destination);
+  oscillator.connect(gain).connect(destination || sfxOutput(context));
   oscillator.start(at);
   oscillator.stop(at + duration + .05);
   return oscillator;
@@ -245,6 +269,36 @@ function ensureNoiseBuffer(context) {
     for (let index = 0; index < data.length; index += 1) data[index] = Math.random() * 2 - 1;
   }
   return noiseBuffer;
+}
+
+function sfxSampleBuffer(context, id) {
+  if (sfxSamples.has(id)) return sfxSamples.get(id);
+  const url = SFX_FILES[id];
+  if (!url) return Promise.resolve(null);
+  const pending = fetch(url)
+    .then(response => response.ok ? response.arrayBuffer() : Promise.reject(new Error(`missing SFX ${id}`)))
+    .then(bytes => context.decodeAudioData(bytes))
+    .catch(() => null);
+  sfxSamples.set(id, pending);
+  return pending;
+}
+
+function warmSfxSamples(context) {
+  if (!context) return;
+  for (const id of Object.keys(SFX_FILES)) sfxSampleBuffer(context, id);
+}
+
+function sample(context, id, {at = context.currentTime, volume = .18, rate = 1} = {}) {
+  sfxSampleBuffer(context, id).then(buffer => {
+    if (!buffer || context.state === 'closed') return;
+    const source = context.createBufferSource();
+    const gain = context.createGain();
+    source.buffer = buffer;
+    source.playbackRate.value = rate;
+    gain.gain.value = volume;
+    source.connect(gain).connect(sfxOutput(context));
+    source.start(Math.max(context.currentTime, at));
+  });
 }
 
 function noise(context, {at, duration = .2, volume = .05, filterType = 'bandpass', frequency = 1200, endFrequency = frequency, q = 1.2, destination = null}) {
@@ -260,15 +314,15 @@ function noise(context, {at, duration = .2, volume = .05, filterType = 'bandpass
   gain.gain.setValueAtTime(.0001, at);
   gain.gain.exponentialRampToValueAtTime(volume, at + Math.min(.025, duration * .2));
   gain.gain.exponentialRampToValueAtTime(.0001, at + duration);
-  source.connect(filter).connect(gain).connect(destination || context.destination);
+  source.connect(filter).connect(gain).connect(destination || sfxOutput(context));
   source.start(at);
   source.stop(at + duration + .03);
 }
 
-function bell(context, at, frequency, volume = .07, duration = 1) {
-  tone(context, {at, frequency, duration, volume, type: 'sine'});
-  tone(context, {at, frequency: frequency * 2.01, duration: duration * .72, volume: volume * .32, type: 'sine'});
-  tone(context, {at, frequency: frequency * 3.98, duration: duration * .42, volume: volume * .13, type: 'sine'});
+function bell(context, at, frequency, volume = .07, duration = 1, destination = null) {
+  tone(context, {at, frequency, duration, volume, type: 'sine', destination});
+  tone(context, {at, frequency: frequency * 2.01, duration: duration * .72, volume: volume * .32, type: 'sine', destination});
+  tone(context, {at, frequency: frequency * 3.98, duration: duration * .42, volume: volume * .13, type: 'sine', destination});
 }
 
 function sound(kind = 'tap', delay = 0) {
@@ -286,6 +340,7 @@ function sound(kind = 'tap', delay = 0) {
       for (let index = 0; index < 7; index += 1) noise(context, {at: at + index * .075, duration: .09, volume: .025, frequency: 1600 + index * 90, endFrequency: 520, q: .8});
       tone(context, {at: at + .58, frequency: 240, endFrequency: 135, duration: .12, volume: .04, type: 'triangle'});
     } else if (kind === 'decision') {
+      sample(context, 'bell', {at, volume: .08, rate: 1.18});
       bell(context, at, 392, .055, .75);
       bell(context, at + .18, 587.3, .05, .9);
     } else if (kind === 'keys') {
@@ -332,13 +387,32 @@ function sound(kind = 'tap', delay = 0) {
       tone(context, {at: at + .05, frequency: 78, endFrequency: 108, duration: 2.65, volume: .045, type: 'sine', attack: .35, destination: filter});
       noise(context, {at, duration: 3, volume: .018, filterType: 'lowpass', frequency: 520, endFrequency: 170, q: .7, destination: filter});
     } else if (kind === 'kill') {
-      noise(context, {at, duration: .18, volume: .11, frequency: 3900, endFrequency: 290, q: .55});
-      tone(context, {at: at + .03, frequency: 118, endFrequency: 38, duration: .72, volume: .13, type: 'sine', attack: .008});
-      tone(context, {at: at + .06, frequency: 67, endFrequency: 34, duration: 1.05, volume: .08, type: 'sawtooth', attack: .018});
+      // Two heartbeats, a close slash and a cinematic sub drop. The layered
+      // transient survives small phone speakers while the low tail adds weight.
+      tone(context, {at, frequency: 68, endFrequency: 54, duration: .16, volume: .17, type: 'sine', attack: .006});
+      tone(context, {at: at + .24, frequency: 72, endFrequency: 52, duration: .2, volume: .2, type: 'sine', attack: .006});
+      noise(context, {at: at + .5, duration: .16, volume: .2, filterType: 'highpass', frequency: 1450, endFrequency: 6900, q: .45});
+      tone(context, {at: at + .52, frequency: 132, endFrequency: 34, duration: .9, volume: .21, type: 'sine', attack: .006});
+      tone(context, {at: at + .55, frequency: 83, endFrequency: 38, duration: 1.15, volume: .11, type: 'sawtooth', attack: .012});
+      noise(context, {at: at + .68, duration: .82, volume: .055, filterType: 'lowpass', frequency: 680, endFrequency: 120, q: .7});
+      sample(context, 'punch', {at: at + .5, volume: .42, rate: .82});
+      sample(context, 'glass', {at: at + .54, volume: .14, rate: .66});
+    } else if (kind === 'select') {
+      noise(context, {at, duration: .13, volume: .075, frequency: 1700, endFrequency: 420, q: .8});
+      tone(context, {at: at + .015, frequency: 215, endFrequency: 112, duration: .2, volume: .1, type: 'triangle', attack: .004});
+      tone(context, {at: at + .08, frequency: 71, endFrequency: 54, duration: .28, volume: .07, type: 'sine', attack: .006});
+      sample(context, 'soft', {at, volume: .24, rate: .82});
+    } else if (kind === 'heal') {
+      [523.3, 659.3, 784, 1046.5].forEach((frequency, index) => bell(context, at + index * .13, frequency, .065 - index * .007, 1.05));
+      noise(context, {at: at + .08, duration: .72, volume: .026, filterType: 'highpass', frequency: 2200, endFrequency: 7600, q: .45});
+      tone(context, {at: at + .5, frequency: 196, endFrequency: 392, duration: .8, volume: .055, type: 'sine', attack: .08});
+      sample(context, 'bell', {at: at + .08, volume: .22, rate: 1.14});
     } else if (kind === 'hunter') {
       noise(context, {at, duration: .12, volume: .18, filterType: 'highpass', frequency: 1100, endFrequency: 4800, q: .4});
       tone(context, {at, frequency: 92, endFrequency: 36, duration: .8, volume: .12, type: 'square', attack: .004});
       noise(context, {at: at + .16, duration: .72, volume: .035, filterType: 'lowpass', frequency: 780, endFrequency: 140, q: .6});
+      sample(context, 'punch', {at, volume: .5, rate: .72});
+      sample(context, 'glass', {at: at + .04, volume: .12, rate: .9});
     } else if (kind === 'dawn') {
       [392, 493.9, 587.3, 784].forEach((frequency, index) => bell(context, at + index * .2, frequency, .052, 1.25));
       tone(context, {at: at + .25, frequency: 196, endFrequency: 392, duration: 1.4, volume: .035, type: 'sine', attack: .22});
@@ -357,8 +431,12 @@ function sound(kind = 'tap', delay = 0) {
   } catch { /* Sound effects are decorative and must never interrupt play. */ }
 }
 
+function isTableVoice(view) {
+  return Boolean(view?.me?.tableVoice || view?.coordinator || view?.me?.storyteller);
+}
+
 function transitionSound(view, previous) {
-  if (!previous || !view?.me?.storyteller || !soundEnabled) return;
+  if (!previous || !isTableVoice(view) || !soundEnabled) return;
   const next = view.phase;
   const enteringNight = (previous === 'role-reveal' || previous === 'day-result') && (next.startsWith('setup-') || next.startsWith('night-'));
   if (enteringNight) return sound('howl');
@@ -368,10 +446,11 @@ function transitionSound(view, previous) {
   if (next === 'night-seer') return sound('seer');
   if (next === 'night-wolves') return sound('wolf-cue');
   if (next === 'night-witch') return sound('witch');
-  if (next === 'resolution') return sound(view.storyteller?.pending?.type === 'hunter' ? 'hunter' : 'kill');
+  if (next === 'resolution') return sound(view.narrator?.pending?.type === 'hunter' ? 'hunter' : 'kill');
   if (next === 'dawn') {
-    if (previous === 'night-witch') sound('kill');
-    return sound('dawn', previous === 'night-witch' ? .78 : 0);
+    const deathAtDawn = Boolean(view.lastDeaths?.length);
+    if (deathAtDawn) sound('kill');
+    return sound('dawn', deathAtDawn ? .95 : 0);
   }
   if (next === 'sheriff-vote') return sound('sheriff');
   if (next === 'day-vote') return sound('vote');
@@ -413,6 +492,8 @@ function stopAmbience() {
     setTimeout(() => {
       try { current.wind.stop(); } catch { /* no-op */ }
       try { current.lfo.stop(); } catch { /* no-op */ }
+      try { current.drone.stop(); } catch { /* no-op */ }
+      try { current.droneLfo.stop(); } catch { /* no-op */ }
       try { current.gain.disconnect(); } catch { /* no-op */ }
     }, 1300);
   } catch { /* Ambience teardown must never interrupt play. */ }
@@ -439,26 +520,47 @@ function startAmbience(kind) {
     windFilter.frequency.value = kind === 'night' ? 240 : 420;
     windFilter.Q.value = .4;
     const windGain = context.createGain();
-    windGain.gain.value = kind === 'night' ? .016 : .01;
+    windGain.gain.value = kind === 'night' ? .038 : .022;
     const lfo = context.createOscillator();
     const lfoDepth = context.createGain();
     lfo.frequency.value = .07;
     lfoDepth.gain.value = kind === 'night' ? 90 : 150;
     lfo.connect(lfoDepth).connect(windFilter.frequency);
     wind.connect(windFilter).connect(windGain).connect(gain);
+    const airFilter = context.createBiquadFilter();
+    const airGain = context.createGain();
+    airFilter.type = 'bandpass';
+    airFilter.frequency.value = kind === 'night' ? 920 : 1350;
+    airFilter.Q.value = .55;
+    airGain.gain.value = kind === 'night' ? .009 : .006;
+    wind.connect(airFilter).connect(airGain).connect(gain);
+    const drone = context.createOscillator();
+    const droneGain = context.createGain();
+    const droneLfo = context.createOscillator();
+    const droneDepth = context.createGain();
+    drone.type = kind === 'night' ? 'sine' : 'triangle';
+    drone.frequency.value = kind === 'night' ? 112 : 147;
+    droneGain.gain.value = kind === 'night' ? .009 : .0045;
+    droneLfo.frequency.value = .045;
+    droneDepth.gain.value = kind === 'night' ? 8 : 4;
+    droneLfo.connect(droneDepth).connect(drone.detune);
+    drone.connect(droneGain).connect(gain);
     wind.start();
     lfo.start();
-    const state = {kind, gain, wind, lfo, timer: null};
+    drone.start();
+    droneLfo.start();
+    const state = {kind, gain, wind, lfo, drone, droneLfo, timer: null};
     const schedule = () => {
       if (ambience !== state) return;
       const at = context.currentTime + .05;
       if (kind === 'night') {
-        if (Math.random() < .7) cricketChirp(context, at, gain);
-        if (Math.random() < .06) owlHoot(context, at, gain);
+        if (Math.random() < .42) cricketChirp(context, at, gain);
+        if (Math.random() < .1) owlHoot(context, at, gain);
+        if (Math.random() < .045) bell(context, at + .3, 392, .008, 2.2);
       } else if (Math.random() < .8) {
         birdChirp(context, at, gain);
       }
-      state.timer = setTimeout(schedule, kind === 'night' ? 700 + Math.random() * 1900 : 900 + Math.random() * 2600);
+      state.timer = setTimeout(schedule, kind === 'night' ? 1000 + Math.random() * 2300 : 900 + Math.random() * 2600);
     };
     state.timer = setTimeout(schedule, 1500);
     ambience = state;
@@ -468,7 +570,7 @@ function startAmbience(kind) {
 }
 
 function updateAmbience(view) {
-  if (!view || !view.me?.storyteller || !soundEnabled || !ambienceEnabled) return stopAmbience();
+  if (!view || !isTableVoice(view) || !soundEnabled || !ambienceEnabled) return stopAmbience();
   const phase = view.phase;
   const kind = ['lobby', 'game-over'].includes(phase) ? null
     : ['dawn', 'sheriff-vote', 'day-discussion', 'day-vote', 'day-result'].includes(phase) ? 'day' : 'night';
@@ -518,27 +620,94 @@ function narrationIdsFor(view) {
   return STORY_CUES[phase] ? [`cue-${phase}`] : null;
 }
 
-function narrateTransition(view, previous) {
-  if (!voiceEnabled || !view?.me?.storyteller || !previous) return;
-  const text = narrationFor(view);
-  if (!text) return;
-  const enteringNight = (previous === 'role-reveal' || previous === 'day-result') && (view.phase.startsWith('setup-') || view.phase.startsWith('night-'));
-  const prefix = enteringNight ? 'Night falls on the village. Everyone closes their eyes. ' : '';
-  const delay = enteringNight ? 2400 : view.phase === 'dawn' ? 1300 : 600;
-  const ids = narrationIdsFor(view);
-  const fullIds = ids && enteringNight ? ['nightfall', ...ids] : ids;
-  if (fullIds && voicePackCovers(fullIds)) {
-    const context = unlockAudio(true);
-    if (context) {
-      stopNarration();
-      playVoicePack(context, fullIds, {delay}).then(played => {
-        if (!played) narrate(prefix + text, {delay: 200});
-      });
+const SLEEP_CUES = {
+  'setup-thief': ['sleep-setup-thief', 'The Thief falls back asleep.'],
+  'setup-cupid': ['sleep-setup-cupid', 'Cupid falls back asleep.'],
+  'setup-lovers': ['sleep-setup-lovers', 'The lovers close their eyes.'],
+  'night-seer': ['sleep-night-seer', 'The Seer closes their eyes.'],
+  'night-wolves': ['sleep-night-wolves', 'The Werewolves close their eyes.'],
+  'night-witch': ['sleep-night-witch', 'The Witch closes their eyes.']
+};
+
+function openingNarration(view) {
+  if (view.phase === 'resolution') {
+    const pending = view.narrator?.pending;
+    if (pending?.type === 'hunter') return {ids: ['cue-hunter-shot'], text: 'The Hunter has fallen, but one final shot remains. Hunter, open your eyes and choose.'};
+    if (pending?.type === 'sheriff-successor') return {ids: ['cue-sheriff-successor'], text: 'The Sheriff has fallen. Sheriff, open your eyes and pass the badge to a living soul.'};
+    return {ids: [], text: ''};
+  }
+  const enteringNight = (ui.transitionFrom === 'role-reveal' || ui.transitionFrom === 'day-result')
+    && (view.phase.startsWith('setup-') || view.phase.startsWith('night-'));
+  let ids = narrationIdsFor(view) || [];
+  let text = narrationFor(view) || '';
+  if (view.phase === 'dawn') {
+    ids = ['wake-village', ...ids];
+    text = `Everyone, open your eyes. ${text}`;
+  }
+  if (enteringNight) {
+    ids = ['nightfall', ...ids];
+    text = `Night falls on the village. Everyone, close your eyes. ${text}`;
+  }
+  return {ids, text};
+}
+
+async function playNarratorSequence(ids, text, {delay = 350} = {}) {
+  const fallbackMs = Math.max(900, String(text || '').trim().split(/\s+/).filter(Boolean).length * 510);
+  if (!voiceEnabled || (!ids?.length && !text)) {
+    await sleep(Math.min(900, fallbackMs));
+    return;
+  }
+  const context = unlockAudio(true);
+  if (context && ids?.length && voicePackCovers(ids)) {
+    stopNarration();
+    const duration = await playVoicePack(context, ids, {delay, gap: .24, volume: 1});
+    if (duration) {
+      await sleep(duration + 180);
       return;
     }
   }
   stopVoicePack();
-  narrate(prefix + text, {delay});
+  const duration = await narrate(text, {delay, volume: 1});
+  if (!duration) await sleep(Math.min(900, delay + fallbackMs));
+}
+
+function narratorAutomationStage(view) {
+  if (!view || mode !== 'coordinator' || !view.coordinator || view.phase === 'lobby') return null;
+  if (view.phase === 'game-over') return 'opening';
+  if (!view.phaseReady) return 'opening';
+  if (['role-reveal', 'setup-thief', 'setup-cupid', 'setup-lovers', 'night-seer', 'night-wolves', 'night-witch'].includes(view.phase)
+      && view.narrator?.canAdvance) return 'closing';
+  return null;
+}
+
+function scheduleNarratorAutomation() {
+  const view = currentView;
+  const stage = narratorAutomationStage(view);
+  if (!stage) return;
+  const key = `${view.phaseSerial}:${view.phase}:${stage}`;
+  if (narratorAutomationKey === key) return;
+  narratorAutomationKey = key;
+  const generation = ++narratorAutomationGeneration;
+  const phaseSerial = view.phaseSerial;
+  const phase = view.phase;
+  void (async () => {
+    if (stage === 'opening') {
+      const opening = openingNarration(view);
+      const delay = opening.ids?.[0] === 'nightfall' ? 2300 : phase === 'dawn' ? 650 : 350;
+      await playNarratorSequence(opening.ids, opening.text, {delay});
+      if (phase === 'dawn' || phase === 'day-result') await sleep(phase === 'day-result' ? 1600 : 900);
+    } else {
+      const [id, text] = SLEEP_CUES[phase] || [null, ''];
+      if (id) await playNarratorSequence([id], text, {delay: 180});
+      else await sleep(500);
+    }
+    if (generation !== narratorAutomationGeneration || currentView?.phaseSerial !== phaseSerial || currentView?.phase !== phase) return;
+    if (stage === 'closing') return sendOwnCommand('auto:advance');
+    if (phase === 'dawn') return sendOwnCommand('auto:dawn');
+    if (phase === 'day-result') return sendOwnCommand('auto:next-night');
+    if (phase === 'game-over') return;
+    sendOwnCommand('auto:unlock');
+  })();
 }
 
 function playPhaseFx(kind) {
@@ -736,6 +905,7 @@ document.addEventListener('pointerdown', () => {
 function phaseChanged(view) {
   if (!view || ui.previousPhase === view.phase) return;
   const previous = ui.previousPhase;
+  ui.transitionFrom = previous;
   ui.previousPhase = view.phase;
   ui.roleFaceUp = false;
   ui.thiefRevealed = false;
@@ -747,16 +917,16 @@ function phaseChanged(view) {
   document.body.dataset.phase = view.phase;
   ui.phaseFresh = true;
   updateAmbience(view);
-  if (view.phase === 'role-reveal' && view.me?.storyteller && voiceEnabled && voicePackReady()) {
+  if (view.phase === 'role-reveal' && isTableVoice(view) && voiceEnabled && voicePackReady()) {
     warmVoicePack(unlockAudio(true));
   }
   if (previous) {
     transitionSound(view, previous);
-    narrateTransition(view, previous);
     const fx = phaseFxFor(view, previous);
     if (fx) playPhaseFx(fx);
     vibrate(view.phase === 'resolution' ? [35, 45, 70] : 24);
   }
+  scheduleNarratorAutomation();
 }
 
 function queueRender() {
@@ -991,24 +1161,15 @@ function handleRemoteCommand(data, peerId) {
 
 function processCommand(actorId, type, payload = {}) {
   let result = {ok: false, error: 'That action is not available.'};
-  const storyteller = isStoryteller(serverState, actorId);
   const coordinator = isCoordinator(serverState, actorId);
   if (type.startsWith('player:')) {
     result = applyPlayerCommand(serverState, actorId, type.slice(7), payload);
-  } else if (storyteller) {
-    if (type === 'story:advance') result = storytellerAdvance(serverState);
-    if (type === 'story:no-kill') result = storytellerForceNoKill(serverState);
-    if (type === 'story:dawn') result = advanceFromDawn(serverState);
-    if (type === 'story:start-vote') result = startDayVote(serverState);
-    if (type === 'story:close-election') result = closeElection(serverState);
-    if (type === 'story:close-vote') result = closeDayVote(serverState);
-    if (type === 'story:next-night') result = nextNight(serverState);
-    if (type === 'story:proxy-final') {
-      const pendingActor = serverState.resolution?.pending?.actorId;
-      result = applyPlayerCommand(serverState, pendingActor, 'resolve-pending', {target: payload.target || null});
-    }
   }
   if (coordinator) {
+    if (type === 'auto:unlock') result = narratorUnlock(serverState);
+    if (type === 'auto:advance') result = storytellerAdvance(serverState);
+    if (type === 'auto:dawn') result = advanceFromDawn(serverState);
+    if (type === 'auto:next-night') result = nextNight(serverState);
     if (type === 'host:settings') result = updateSettings(serverState, payload);
     if (type === 'host:preset') result = setPreset(serverState, payload.preset) ? {ok: true} : result;
     if (type === 'host:start') result = startGame(serverState, agentTest ? () => 0 : Math.random);
@@ -1053,6 +1214,7 @@ function persistAndBroadcast() {
   persistHost();
   currentView = viewFor(serverState, identity.seatId, {coordinator: true});
   phaseChanged(currentView);
+  scheduleNarratorAutomation();
   if (!agentTest && net) {
     for (const [seatId, peerId] of seatToPeer.entries()) {
       if (serverState.players[seatId]?.connected) net.sendView(viewFor(serverState, seatId), peerId);
@@ -1083,7 +1245,7 @@ function runTestAgents() {
   for (const botId of botIds) {
     const view = viewFor(serverState, botId);
     const action = view.privateAction || {};
-    const actionKey = JSON.stringify([view.phase, view.me.seenRole, action]);
+    const actionKey = JSON.stringify([view.phaseSerial, view.phaseReady, view.phase, view.me.seenRole, action]);
     if (agentActionKeys.get(botId) === actionKey) continue;
     agentActionKeys.set(botId, actionKey);
     const candidates = Object.values(view.players).filter(player => player.alive && !player.storyteller && player.id !== botId).map(player => player.id);
@@ -1100,6 +1262,7 @@ function runTestAgents() {
       const target = Object.values(view.players).find(player => player.alive && !player.storyteller && !blocked.has(player.id))?.id;
       if (target) { command = 'player:wolf-vote'; payload = {target}; }
     } else if (action.type === 'witch') { command = 'player:witch-submit'; payload = {heal: false, poisonTarget: null}; }
+    else if (action.type === 'discussion' && !action.ready) { command = 'player:day-ready'; payload = {ready: true}; }
     else if (action.type === 'vote') { command = 'player:cast-vote'; payload = {target: action.candidates.find(id => id !== botId)}; }
     else if (action.type === 'hunter' || action.type === 'sheriff-successor') { command = 'player:resolve-pending'; payload = {target: action.candidates.find(id => id !== botId) || null}; }
     if (command) {
@@ -1147,6 +1310,7 @@ function startAgentTest(name) {
   history.replaceState(null, '', location.pathname);
   diagnostic('agent-test-started');
   phaseChanged(currentView);
+  scheduleNarratorAutomation();
   queueRender();
 }
 
@@ -1170,6 +1334,11 @@ function resumeVillage(code) {
     safeRemove(LAST_HOST_KEY);
     return toast('That saved village could not be restored.', 'error');
   }
+  const upgradedFromStoryteller = Number(restored.schema || 0) < 3;
+  if (upgradedFromStoryteller) resetToLobby(restored);
+  restored.actions.dayReady ||= {};
+  restored.phaseReady = typeof restored.phaseReady === 'boolean' ? restored.phaseReady : restored.phase === 'lobby';
+  restored.phaseSerial = Number(restored.phaseSerial || 0);
   mode = 'coordinator';
   serverState = restored;
   roomCode = restored.roomCode;
@@ -1186,7 +1355,7 @@ function resumeVillage(code) {
   holdWakeLock();
   persistAndBroadcast();
   history.replaceState(null, '', `${location.pathname}?room=${roomCode}`);
-  toast('The village has been restored. Other players can reconnect.', 'success');
+  toast(upgradedFromStoryteller ? 'Moonfall was upgraded. Everyone now plays; gather the village and deal again.' : 'The village has been restored. Other players can reconnect.', 'success');
 }
 
 function leaveToHome() {
@@ -1214,8 +1383,11 @@ function leaveToHome() {
   stopNarration();
   stopVoicePack();
   stopAmbience();
+  narratorAutomationGeneration += 1;
+  narratorAutomationKey = null;
   recentCommandIds.clear();
   ui.previousPhase = null;
+  ui.transitionFrom = null;
   document.body.dataset.phase = 'home';
   history.replaceState(null, '', location.pathname);
   queueRender();
@@ -1282,13 +1454,13 @@ function playerList(view, {kickable = false, reveal = false} = {}) {
 
 function choiceGrid(view, ids, {action, selected = [], disabled = [], note = null} = {}) {
   const disabledSet = new Set(disabled);
-  return `<div class="choice-grid">${ids.map(id => {
+  return `<div class="choice-grid target-table">${ids.map(id => {
     const player = view.players[id];
     if (!player) return '';
     const chosen = selected.includes(id);
     const sub = note ? note(player, id) : player.sheriff ? 'Sheriff · double vote' : id === view.me.id ? 'You' : 'Living character';
-    return `<button class="choice ${chosen ? 'selected' : ''}" data-action="${esc(action)}" data-id="${esc(id)}" ${disabledSet.has(id) ? 'disabled' : ''}>
-      <span class="avatar">${esc(initials(player.name))}</span><span class="copy"><strong>${esc(player.name)}</strong><span>${esc(sub)}</span></span>${chosen ? '<span>✓</span>' : ''}
+    return `<button class="choice target-card ${chosen ? 'selected' : ''}" data-action="${esc(action)}" data-id="${esc(id)}" ${disabledSet.has(id) ? 'disabled' : ''}>
+      <span class="target-card-art"><img src="assets/card-back.webp" alt="Face-down card for ${esc(player.name)}"><b>${chosen ? '✓' : esc(initials(player.name))}</b></span><span class="copy"><strong>${esc(player.name)}</strong><span>${esc(sub)}</span></span>
     </button>`;
   }).join('')}</div>`;
 }
@@ -1308,23 +1480,21 @@ function renderHome() {
   const lastName = safeRead(NAME_KEY, '');
   const lastHost = safeRead(LAST_HOST_KEY);
   const restorable = lastHost?.code && safeRead(`${HOST_STATE_PREFIX}${lastHost.code}`);
-  app.innerHTML = `<section class="screen home">
-    <div class="brand-lockup"><img src="assets/logo.webp" alt="Moonfall"><p>A night of secrets around one table</p></div>
+  app.innerHTML = `<section class="screen home home-clean">
+    <nav class="home-tools" aria-label="Moonfall help and settings"><button class="home-tool" data-action="show-rules" aria-label="Read the rules"><span>?</span><small>Rules</small></button><button class="home-tool" data-action="show-settings" aria-label="Open settings"><span>⚙</span><small>Settings</small></button></nav>
+    <div class="brand-lockup"><img src="assets/logo.webp" alt="Moonfall"><p>Everyone plays. The narrator runs the night.</p></div>
     <div>
       ${restorable ? `<div class="resume-banner"><div><strong>Village ${esc(lastHost.code)} is sleeping</strong><span class="small muted">Resume the ${esc(String(lastHost.phase).replaceAll('-', ' '))}.</span></div><button class="btn mini secondary" data-action="resume-room" data-code="${esc(lastHost.code)}">Resume</button></div>` : ''}
       <div class="panel ornate">
         <div class="tabs"><button class="tab ${ui.homeTab === 'create' ? 'active' : ''}" data-action="home-tab" data-tab="create">Create village</button><button class="tab ${ui.homeTab === 'join' ? 'active' : ''}" data-action="home-tab" data-tab="join">Join with code</button></div>
-        ${ui.homeTab === 'create' ? `<div class="eyebrow">Your phone holds the room</div><h2>Call the village</h2><p class="muted">You play too. When the cards are dealt, the Storyteller is chosen randomly from everyone present.</p>
+        ${ui.homeTab === 'create' ? `<div class="eyebrow">Your phone holds the room</div><h2>Call the village</h2>
           <div class="field"><label for="create-name">Your name</label><input class="input" id="create-name" maxlength="24" autocomplete="nickname" placeholder="Steven" value="${esc(lastName)}"></div>
           <button class="btn wide" data-action="create-room">Create a new game</button>` : `<div class="eyebrow">Enter the moonlit room</div><h2>Join the tale</h2><p class="muted">Use the six-character code shown on the host phone.</p>
           <div class="field"><label for="join-name">Your name</label><input class="input" id="join-name" maxlength="24" autocomplete="nickname" placeholder="Your name" value="${esc(lastName)}"></div>
           <div class="field"><label for="join-code">Village code</label><input class="input code-input" id="join-code" maxlength="6" autocapitalize="characters" autocomplete="off" placeholder="MOON42" value="${esc(queryCode)}"></div>
           <button class="btn wide" data-action="join-room">Enter the village</button>`}
       </div>
-      <button class="app-install-card agent-test-card" data-action="start-agent-test"><span>✦</span><span><strong>Play with 5 test agents</strong><small>Open a complete private game now to test cards, sounds, roles and every phase.</small></span><b>›</b></button>
-      ${!isStandalone() && isMobileDevice() ? '<button class="app-install-card" data-action="install-app"><span>▣</span><span><strong>Use Moonfall like an app</strong><small>Install to the home screen for a fullscreen, more reliable game.</small></span><b>›</b></button>' : ''}
-      <div class="home-note"><strong>✦</strong><span>No accounts, adverts or database. Phones connect directly, every joined screen is kept awake, and suspended phones reconnect to their saved seat automatically.</span></div>
-      <div class="footer-note">Inspired by the classic social-deduction rules of Werewolves of Miller’s Hollow. Moonfall uses original artwork and implementation.</div>
+      <div class="home-quick"><button data-action="start-agent-test"><span>✦</span><strong>Practice</strong></button>${!isStandalone() && isMobileDevice() ? '<button data-action="install-app"><span>▣</span><strong>Install app</strong></button>' : ''}</div>
     </div>
   </section>`;
 }
@@ -1351,9 +1521,9 @@ function renderLobby(view) {
       <p class="muted small">${esc(PRESETS[pack]?.description || 'Your own role collection.')}</p>
       <div class="role-toggles">${SPECIAL_ROLE_IDS.map(id => `<button class="role-toggle ${selectedRoles.includes(id) ? 'active' : ''}" data-action="toggle-role" data-role="${id}"><img src="${ROLES[id].image}" alt=""><span>${esc(ROLES[id].name)}</span></button>`).join('')}</div>
       <div class="button-row"><label class="field" style="margin:0"><span class="tiny muted">Werewolves</span><select class="input" id="wolf-setting"><option value="auto" ${view.settings.wolves === 'auto' ? 'selected' : ''}>Auto balance</option>${[1,2,3,4].map(n => `<option value="${n}" ${Number(view.settings.wolves) === n ? 'selected' : ''}>${n}</option>`).join('')}</select></label><label class="field" style="margin:0"><span class="tiny muted">Sheriff office</span><select class="input" id="sheriff-setting"><option value="true" ${view.settings.sheriff ? 'selected' : ''}>Included</option><option value="false" ${!view.settings.sheriff ? 'selected' : ''}>Not used</option></select></label></div>
-      <div class="deck-line ${deck.valid ? '' : 'error'}">${deck.valid ? deckParts.join(' · ') : Object.keys(view.players).length < 6 ? 'At least six people are needed: five characters and one random Storyteller.' : 'Too many special roles for this village. Remove a role or invite more players.'}</div>
+      <div class="deck-line ${deck.valid ? '' : 'error'}">${deck.valid ? deckParts.join(' · ') : Object.keys(view.players).length < 6 ? 'At least six players are needed. Every person receives a character card.' : 'Too many special roles for this village. Remove a role or invite more players.'}</div>
     </div>` : `<div class="panel center"><div class="moon-loader"><span></span></div><h2 style="margin-top:18px">The deck is being prepared</h2><p class="muted">The host is choosing tonight’s roles. Keep this page open.</p></div>`}
-    ${isHost ? dock(`<button class="btn" data-action="start-game" ${deck.valid ? '' : 'disabled'}>Shuffle, deal & choose Storyteller</button>`) : ''}
+    ${isHost ? dock(`<button class="btn" data-action="start-game" ${deck.valid ? '' : 'disabled'}>Shuffle, deal & begin</button>`) : ''}
   </section>`;
 }
 
@@ -1361,7 +1531,10 @@ function renderRoleReveal(view) {
   const role = ROLES[view.me.role] || ROLES.villager;
   const seenCount = Object.values(view.players).filter(player => player.ready).length;
   const total = Object.keys(view.players).length;
-  const allSeen = seenCount === total;
+  if (!view.phaseReady) {
+    app.innerHTML = `<section class="screen centered">${gameHeader(view)}<div class="narrator-stage"><div class="narrator-orb"><i></i><i></i><i></i></div><div class="eyebrow">The automatic narrator</div><h1>Listen to the tale</h1><p>The cards will unlock when the spoken introduction has finished.</p></div></section>`;
+    return;
+  }
   if (!view.me.seenRole) {
     app.innerHTML = `<section class="screen ${ui.roleFaceUp ? 'has-dock' : ''}">${gameHeader(view)}${phaseHeader(view)}<div class="flip-layout">
       ${roleCard(view.me.role, ui.roleFaceUp)}
@@ -1369,10 +1542,8 @@ function renderRoleReveal(view) {
     </div>${ui.roleFaceUp ? dock('<button class="btn" data-action="seal-role">I know my role · turn it face-down</button>') : ''}</section>`;
     return;
   }
-  const story = view.me.storyteller && view.storyteller;
-  app.innerHTML = `<section class="screen ${story ? 'has-dock' : ''}">${gameHeader(view)}${phaseHeader(view)}
-    <div class="sleep-card"><div><img src="assets/card-back.webp" alt="Face-down card"><h2>Your card is sealed</h2><p>Place your phone on the table. ${story ? 'When every card is sealed, begin the first night.' : 'The Storyteller will call the night when everyone is ready.'}</p><div class="progress-track"><i style="width:${Math.round(seenCount / total * 100)}%"></i></div><span class="badge green">${seenCount} of ${total} ready</span></div></div>
-    ${story ? dock(`<button class="btn" data-action="story-advance" ${allSeen ? '' : 'disabled'}>${allSeen ? 'Night falls · begin the tale' : `Waiting for ${total - seenCount} card${total - seenCount === 1 ? '' : 's'}`}</button>`) : ''}
+  app.innerHTML = `<section class="screen">${gameHeader(view)}${phaseHeader(view)}
+    <div class="sleep-card"><div><img src="assets/card-back.webp" alt="Face-down card"><h2>Your card is sealed</h2><p>Place your phone face-down. When every card is sealed, the narrator begins the first night automatically.</p><div class="progress-track"><i style="width:${Math.round(seenCount / total * 100)}%"></i></div><span class="badge green">${seenCount} of ${total} ready</span></div></div>
   </section>`;
 }
 
@@ -1385,7 +1556,7 @@ function sleepMessage(view, custom = null) {
     'night-wolves': 'The pack',
     'night-witch': 'The Witch'
   }[view.phase] || 'Another soul';
-  return `<section class="screen">${gameHeader(view)}${phaseHeader(view)}<div class="sleep-card"><div><img src="assets/card-back.webp" alt="Your face-down card"><h2>${esc(custom?.title || 'Keep your eyes closed')}</h2><p>${esc(custom?.text || `${phaseRole} is awake. Leave your phone face-down and listen for the Storyteller.`)}</p><div class="eyes">— ◡ —</div></div></div></section>`;
+  return `<section class="screen">${gameHeader(view)}${phaseHeader(view)}<div class="sleep-card"><div><img src="assets/card-back.webp" alt="Your face-down card"><h2>${esc(custom?.title || 'Keep your eyes closed')}</h2><p>${esc(custom?.text || `${phaseRole} is awake. Leave your phone face-down and listen to the narrator.`)}</p><div class="eyes">— ◡ —</div></div></div></section>`;
 }
 
 function renderThief(view, action) {
@@ -1435,13 +1606,15 @@ function renderWolves(view, action) {
   const wolves = [view.me.id, ...action.teammates];
   const candidates = Object.values(view.players).filter(player => player.alive && !player.storyteller && !wolves.includes(player.id)).map(player => player.id);
   const myChoice = action.votes[view.me.id];
+  const hasChoice = Object.prototype.hasOwnProperty.call(action.votes, view.me.id);
   const teammateLines = wolves.map(id => {
     const target = action.votes[id];
-    return `${view.players[id]?.name || 'Wolf'} → ${target ? view.players[target]?.name : 'choosing…'}`;
+    return `${view.players[id]?.name || 'Wolf'} → ${target === null ? 'spare the village' : target ? view.players[target]?.name : 'choosing…'}`;
   });
   app.innerHTML = `<section class="screen awake-screen awake-wolves">${gameHeader(view)}${phaseHeader(view)}
     <div class="panel compact center"><div class="eyebrow">Your pack</div><div class="wolf-pack">${wolves.map(id => `<span class="wolf-chip">🐺 ${esc(view.players[id]?.name || 'Werewolf')}</span>`).join('')}</div><p class="muted small">Agree on the same victim. If the pack cannot agree, nobody dies tonight.</p></div>
     ${choiceGrid(view, candidates, {action: 'wolf-vote', selected: myChoice ? [myChoice] : [], note: (player, id) => Object.values(action.votes).filter(target => target === id).length ? `${Object.values(action.votes).filter(target => target === id).length} pack choice` : 'Possible victim'})}
+    <button class="choice no-kill-choice ${hasChoice && myChoice === null ? 'selected' : ''}" data-action="wolf-no-kill"><span class="no-kill-moon">☾</span><span class="copy"><strong>Spare the village</strong><span>Every living Werewolf must choose this</span></span>${hasChoice && myChoice === null ? '<b>✓</b>' : ''}</button>
     <div class="panel compact"><div class="eyebrow">Silent consensus</div>${teammateLines.map(line => `<div class="small muted" style="padding:3px 0">${esc(line)}</div>`).join('')}${action.consensus ? '<div class="badge green" style="margin-top:8px">✓ The pack agrees</div>' : ''}</div>
     ${action.littleGirlInPlay ? `<button class="btn danger wide" data-action="little-girl-caught" ${action.littleGirlCaught ? 'disabled' : ''}>${action.littleGirlCaught ? 'The Little Girl was caught' : 'I caught the Little Girl peeking'}</button>` : ''}
   </section>`;
@@ -1468,10 +1641,10 @@ function renderVote(view, action) {
   const ids = action.candidates.filter(id => view.players[id]?.alive && !view.players[id].storyteller);
   const disabled = action.election ? [] : view.me.loverId ? [view.me.loverId] : [];
   const title = action.election ? 'Choose the Sheriff' : 'Cast your judgement';
-  const subtitle = action.election ? 'The winner’s village votes count twice. You may nominate yourself.' : 'Your choice stays sealed until the Storyteller closes the vote.';
+  const subtitle = action.election ? 'The winner’s village votes count twice. You may nominate yourself.' : 'Your choice stays sealed. The ballot closes automatically when every living player has voted.';
   app.innerHTML = `<section class="screen">${gameHeader(view)}${phaseHeader(view, {title, subtitle})}
     ${choiceGrid(view, ids, {action: 'cast-vote', selected: action.choice ? [action.choice] : [], disabled, note: (player, id) => disabled.includes(id) ? 'Your lover · forbidden' : id === view.me.id ? 'Vote for yourself' : player.sheriff ? 'Current Sheriff' : 'Tap to choose'})}
-    ${action.choice ? `<div class="panel compact center"><span class="badge green">✓ Vote sealed for ${esc(view.players[action.choice].name)}</span><p class="muted tiny" style="margin:9px 0 0">Tap another name to change it before the ballot closes.</p></div>` : '<div class="tap-hint">Choose one name</div>'}
+    ${action.choice ? `<div class="panel compact center"><span class="badge green">✓ Vote sealed for ${esc(view.players[action.choice].name)}</span><p class="muted tiny" style="margin:9px 0 0">Waiting for the remaining living players.</p></div>` : '<div class="tap-hint">Choose one face-down card</div>'}
   </section>`;
 }
 
@@ -1488,7 +1661,7 @@ function renderPending(view, action) {
 function renderPrivateAction(view) {
   const action = view.privateAction || {};
   if (action.done && action.type !== 'vote') {
-    app.innerHTML = sleepMessage(view, {title: 'Your choice is sealed', text: 'Return the phone face-down. The Storyteller will continue when the village is ready.'});
+    app.innerHTML = sleepMessage(view, {title: 'Your choice is sealed', text: 'Return the phone face-down. The narrator continues automatically.'});
     return true;
   }
   if (action.type === 'thief') return renderThief(view, action);
@@ -1519,91 +1692,25 @@ function tallyMarkup(view) {
   return `<div class="tally">${rows.map(([id, count]) => `<div class="tally-row"><span>${esc(view.players[id]?.name || 'Unknown')}</span><span class="tally-bar"><i style="width:${Math.round(count / max * 100)}%"></i></span><b>${count}</b></div>`).join('')}</div>`;
 }
 
-function storytellerDock(view) {
-  const panel = view.storyteller;
-  if (!panel) return '';
-  const configs = {
-    'setup-thief': ['story-advance', 'Call Cupid', 'Waiting for the Thief'],
-    'setup-cupid': ['story-advance', 'Wake the lovers', 'Waiting for Cupid'],
-    'setup-lovers': ['story-advance', 'Call the Seer', 'Waiting for the lovers'],
-    'night-seer': ['story-advance', 'Let the Seer sleep', 'Waiting for the Seer'],
-    'night-wolves': ['story-advance', 'Let the pack sleep', 'Waiting for one victim'],
-    'night-witch': ['story-advance', 'Seal the night’s fate', 'Waiting for the Witch'],
-    dawn: ['story-dawn', view.settings.sheriff && !view.sheriffId && view.day === 1 ? 'Hold the Sheriff election' : 'Open the village debate', ''],
-    'sheriff-vote': ['story-close-election', 'Seal the Sheriff ballot', 'Waiting for votes'],
-    'day-discussion': ['story-start-vote', 'Open the village vote', ''],
-    'day-vote': ['story-close-vote', 'Seal the village vote', 'Waiting for votes'],
-    'day-result': ['story-next-night', 'Night falls once more', '']
-  };
-  const config = configs[view.phase];
-  if (!config) return '';
-  const needsAdvance = ['setup-thief','setup-cupid','setup-lovers','night-seer','night-wolves','night-witch'].includes(view.phase);
-  const disabled = needsAdvance && !panel.canAdvance;
-  const voteDisabled = ['sheriff-vote','day-vote'].includes(view.phase) && panel.voteProgress.cast === 0;
-  const main = `<button class="btn" data-action="${config[0]}" ${disabled || voteDisabled ? 'disabled' : ''}>${disabled || voteDisabled ? config[2] : config[1]}</button>`;
-  const noKill = view.phase === 'night-wolves' && !panel.canAdvance ? '<button class="btn ghost" data-action="story-no-kill">The pack cannot agree · no victim</button>' : '';
-  return dock(`<div class="button-stack">${noKill}${main}</div>`);
-}
-
-function renderStoryteller(view) {
-  const panel = view.storyteller;
-  const waiting = (panel.waitingFor || []).map(id => view.players[id]?.name).filter(Boolean);
-  const alive = Object.values(view.players).filter(player => player.alive && !player.storyteller).length;
-  let secret = '';
-  if (view.phase === 'night-wolves') {
-    const victim = panel.wolfVictim ? view.players[panel.wolfVictim]?.name : null;
-    secret = `<div class="story-status"><div class="stat"><span>Pack decision</span><strong>${panel.wolfConsensus ? esc(victim || 'Agreed') : 'Not agreed'}</strong></div><div class="stat"><span>Little Girl</span><strong>${panel.littleGirlCaught ? 'Caught' : 'Safe so far'}</strong></div></div>`;
-  }
-  if (view.phase === 'night-witch') {
-    const victimId = panel.littleGirlCaught ? Object.keys(panel.roles).find(id => panel.roles[id] === 'little-girl' && view.players[id]?.alive) : panel.wolfVictim;
-    secret = `<div class="story-status"><div class="stat"><span>Pack victim</span><strong>${esc(view.players[victimId]?.name || 'None')}</strong></div><div class="stat"><span>Witch choice</span><strong>${panel.witchDraft.heal ? 'Heal ' : ''}${panel.witchDraft.poisonTarget ? '+ poison' : panel.witchDraft.heal ? '' : 'Waiting'}</strong></div></div>`;
-  }
-  if (view.phase === 'night-seer' && panel.seerTarget) secret = `<div class="panel compact center"><span class="badge">The Seer viewed ${esc(view.players[panel.seerTarget]?.name || 'a player')}</span></div>`;
-  if (['sheriff-vote','day-vote'].includes(view.phase)) {
-    secret = `<div class="panel compact"><div class="eyebrow">Ballot progress</div><div class="progress-track"><i style="width:${Math.round(panel.voteProgress.cast / Math.max(1, panel.voteProgress.total) * 100)}%"></i></div><p class="muted small" style="margin:0">${panel.voteProgress.cast} of ${panel.voteProgress.total} living characters have voted. Choices stay hidden until sealed.</p></div>`;
-  }
-  let phaseContent = '';
-  if (view.phase === 'dawn') phaseContent = deathsMarkup(view);
-  if (view.phase === 'day-result') phaseContent = `${tallyMarkup(view)}${deathsMarkup(view)}`;
-  if (view.phase === 'day-discussion') phaseContent = '<div class="look-up"><div><div class="sun"></div><h2>Put the phone down</h2><p>Guide the accusation around the table. Open the ballot only when the village has truly argued its case.</p></div></div>';
-  if (view.phase === 'resolution') {
-    const pending = panel.pending;
-    const actor = pending ? view.players[pending.actorId] : null;
-    const connected = actor?.connected;
-    phaseContent = `<div class="panel ornate center"><div class="eyebrow">A final act is waiting</div><h2>${pending?.type === 'hunter' ? `${esc(actor?.name)} must take a final shot` : pending?.type === 'sheriff-successor' ? `${esc(actor?.name)} must name a new Sheriff` : 'Fate is resolving'}</h2><p class="muted">${connected ? 'The choice is open on their phone.' : 'That phone is disconnected. You may resolve the choice on their behalf.'}</p></div>`;
-    if (pending && !connected) {
-      const ids = Object.values(view.players).filter(player => player.alive && !player.storyteller).map(player => player.id);
-      phaseContent += choiceGrid(view, ids, {action: 'story-proxy-final'});
-      if (pending.type === 'hunter') phaseContent += '<button class="btn ghost wide" data-action="story-proxy-final" data-id="">Let the final shot pass</button>';
-    }
-  }
-  const showLedger = !['dawn','day-result','day-discussion','resolution'].includes(view.phase);
-  app.innerHTML = `<section class="screen ${view.phase === 'resolution' ? '' : 'has-dock'}">${gameHeader(view)}${phaseHeader(view)}
-    <div class="cue">${esc(panel.cue || 'Hold the silence. Let the village feel the turn of the moon.')}</div>
-    ${waiting.length ? `<div class="panel compact center"><span class="badge">Waiting for ${esc(waiting.join(', '))}</span></div>` : ''}
-    ${secret}${phaseContent}
-    ${showLedger ? `<details class="ledger panel compact"><summary>Open the Storyteller’s secret ledger</summary><div class="ledger-grid">${Object.entries(panel.roles).map(([id, roleId]) => `<div class="ledger-card ${view.players[id]?.alive ? '' : 'dead'}"><img src="${ROLES[roleId]?.image || ROLES.villager.image}" alt=""><span>${esc(view.players[id]?.name)}<br>${esc(ROLES[roleId]?.name || roleId)}</span></div>`).join('')}</div></details>` : ''}
-    <div class="panel compact"><div class="story-status"><div class="stat"><span>Living</span><strong>${alive}</strong></div><div class="stat"><span>Time</span><strong>${view.phase.startsWith('night') || view.phase.startsWith('setup') ? `Night ${view.night}` : `Day ${view.day}`}</strong></div></div></div>
-    ${storytellerDock(view)}
-  </section>`;
-}
-
 function renderDead(view) {
   const role = ROLES[view.me.role] || ROLES.villager;
   app.innerHTML = `<section class="screen">${gameHeader(view)}${phaseHeader(view)}<div class="panel ornate center"><img src="${role.image}" alt="${esc(role.name)}" style="width:min(48vw,190px);aspect-ratio:2/3;object-fit:cover;border-radius:16px;margin:0 auto 18px;filter:grayscale(.72) brightness(.58)"><div class="eyebrow">You are a silent spirit</div><h2>${esc(role.name)}</h2><p class="muted">Watch the tale, but do not speak, signal or vote. Your team can still win.</p></div></section>`;
 }
 
 function renderDawn(view) {
-  app.innerHTML = `<section class="screen">${gameHeader(view)}${phaseHeader(view)}${deathsMarkup(view)}<div class="panel compact center"><p class="muted small" style="margin:0">Listen as the Storyteller opens the village square.</p></div></section>`;
+  app.innerHTML = `<section class="screen">${gameHeader(view)}${phaseHeader(view)}${deathsMarkup(view)}<div class="panel compact center"><p class="muted small" style="margin:0">Listen as the automatic narrator opens the village square.</p></div></section>`;
 }
 
 function renderDiscussion(view) {
-  app.innerHTML = `<section class="screen">${gameHeader(view)}${phaseHeader(view)}<div class="look-up"><div><div class="sun"></div><h2>Look up from your phone</h2><p>Accuse. Defend. Bluff. Watch every face around the table. The Storyteller will open the ballot when debate ends.</p></div></div>${playerList(view)}</section>`;
+  const action = view.privateAction?.type === 'discussion' ? view.privateAction : null;
+  app.innerHTML = `<section class="screen ${action ? 'has-dock' : ''}">${gameHeader(view)}${phaseHeader(view)}<div class="look-up"><div><div class="sun"></div><h2>Look up from your phone</h2><p>Accuse. Defend. Bluff. Watch every face around the table. When the debate feels complete, every living player marks themselves ready.</p></div></div>
+    ${action ? `<div class="ready-ring"><strong>${action.readyCount}</strong><span>of ${action.total} ready for judgement</span></div>${dock(`<button class="btn ${action.ready ? 'secondary' : ''}" data-action="day-ready" data-ready="${action.ready ? 'false' : 'true'}">${action.ready ? '✓ Ready · tap to keep debating' : 'I am ready to vote'}</button>`)}` : ''}
+  </section>`;
 }
 
 function renderDayResult(view) {
   const tied = view.lastVote?.leaders?.length > 1;
-  app.innerHTML = `<section class="screen">${gameHeader(view)}${phaseHeader(view, {title: tied ? 'The vote is tied' : 'The village has spoken', subtitle: tied ? 'By the classic rule, nobody is eliminated.' : 'The sealed tally is now revealed.'})}<div class="panel">${tallyMarkup(view)}</div>${deathsMarkup(view)}<div class="panel compact center"><p class="muted small" style="margin:0">Night will fall when the Storyteller is ready.</p></div></section>`;
+  app.innerHTML = `<section class="screen">${gameHeader(view)}${phaseHeader(view, {title: tied ? 'The vote is tied' : 'The village has spoken', subtitle: tied ? 'By the classic rule, nobody is eliminated.' : 'The sealed tally is now revealed.'})}<div class="panel">${tallyMarkup(view)}</div>${deathsMarkup(view)}<div class="panel compact center"><p class="muted small" style="margin:0">Listen. Night falls automatically when the judgement is complete.</p></div></section>`;
 }
 
 function renderGameOver(view) {
@@ -1615,9 +1722,14 @@ function renderGameOver(view) {
       const role = ROLES[roleId] || ROLES.villager;
       return `<div class="final-card ${player.alive ? '' : 'dead'}"><img src="${role.image}" alt="${esc(role.name)}"><div class="label"><strong>${esc(player.name)}</strong><span>${esc(role.name)}${player.sheriff ? ' · Sheriff' : ''}</span></div></div>`;
     }).join('')}</div>
-    <div class="panel compact center" style="margin-top:16px"><p class="muted small" style="margin:0">No score is kept. A new game reshuffles every role and chooses a new random Storyteller.</p></div>
+    <div class="panel compact center" style="margin-top:16px"><p class="muted small" style="margin:0">No score is kept. A new game reshuffles every character card.</p></div>
     ${view.coordinator ? dock('<button class="btn" data-action="reset-game">Gather the cards · play again</button>') : ''}
   </section>`;
+}
+
+function renderNarratorWait(view) {
+  const [title] = PHASE_META[view.phase] || ['The tale continues'];
+  app.innerHTML = `<section class="screen centered">${gameHeader(view)}<div class="narrator-stage"><div class="narrator-orb"><i></i><i></i><i></i></div><div class="eyebrow">Automatic narrator</div><h1>${esc(title)}</h1><p>Listen. The active controls appear only after the spoken cue has finished.</p><span class="narrator-live">● Narrating now</span></div></section>`;
 }
 
 function renderGame() {
@@ -1626,8 +1738,9 @@ function renderGame() {
   if (view.phase === 'lobby') return renderLobby(view);
   if (view.phase === 'role-reveal') return renderRoleReveal(view);
   if (view.phase === 'game-over') return renderGameOver(view);
+  const gated = view.phase.startsWith('setup-') || view.phase.startsWith('night-') || ['sheriff-vote', 'day-vote', 'resolution'].includes(view.phase);
+  if (!view.phaseReady && gated) return renderNarratorWait(view);
   if (renderPrivateAction(view) !== false) return;
-  if (view.me.storyteller) return renderStoryteller(view);
   if (!view.me.alive) return renderDead(view);
   if (view.phase === 'dawn') return renderDawn(view);
   if (view.phase === 'day-discussion') return renderDiscussion(view);
@@ -1642,7 +1755,13 @@ function renderGame() {
 function renderModal() {
   if (!ui.modal) { modalRoot.innerHTML = ''; return; }
   if (ui.modal === 'rules') {
-    modalRoot.innerHTML = `<div class="modal-backdrop" data-action="close-modal"><div class="modal"><div class="modal-head"><h2>The Moonfall deck</h2><button class="icon-btn" data-action="close-modal">×</button></div><p class="muted small">The app follows the original base-game role powers and turn order, adapted for private phone actions.</p><div class="rule-list">${['werewolf','villager','seer','witch','hunter','cupid','little-girl','thief','sheriff','storyteller'].map(id => `<div class="rule-item"><img src="${ROLES[id].image}" alt=""><div><h3>${esc(ROLES[id].name)}</h3><p>${esc(ROLES[id].rule)}</p></div></div>`).join('')}</div><p class="footer-note"><a href="https://www.zygomatic-games.com/en/game/the-werewolves-of-millers-hollow/" target="_blank" rel="noreferrer">Read the publisher’s classic rulebook</a></p></div></div>`;
+    modalRoot.innerHTML = `<div class="modal-backdrop" data-action="close-modal"><div class="modal"><div class="modal-head"><h2>The Moonfall deck</h2><button class="icon-btn" data-action="close-modal">×</button></div><div class="auto-narrator-note"><span>◉</span><div><strong>No player sits out</strong><p>The automatic narrator speaks every wake and sleep cue, then opens each private action on the correct phones.</p></div></div><div class="rule-list">${['werewolf','villager','seer','witch','hunter','cupid','little-girl','thief','sheriff'].map(id => `<div class="rule-item"><img src="${ROLES[id].image}" alt=""><div><h3>${esc(ROLES[id].name)}</h3><p>${esc(ROLES[id].rule)}</p></div></div>`).join('')}</div><p class="footer-note"><a href="https://www.zygomatic-games.com/en/game/the-werewolves-of-millers-hollow/" target="_blank" rel="noreferrer">Read the publisher’s classic rulebook</a></p></div></div>`;
+    return;
+  }
+  if (ui.modal === 'settings') {
+    const install = isStandalone() ? '' : '<button class="btn secondary" data-action="install-app">Install Moonfall</button>';
+    const fullscreen = fullscreenAvailable() ? `<button class="btn secondary" data-action="toggle-fullscreen">${fullscreenElement() ? 'Exit fullscreen' : 'Enter fullscreen'}</button>` : '';
+    modalRoot.innerHTML = `<div class="modal-backdrop" data-action="close-modal"><div class="modal"><div class="modal-head"><h2>Settings</h2><button class="icon-btn" data-action="close-modal">×</button></div><div class="setting-list"><button data-action="toggle-sound"><span>Sound effects</span><b>${soundEnabled ? 'On' : 'Off'}</b></button><button data-action="toggle-voice"><span>Automatic narrator</span><b>${voiceEnabled ? 'On' : 'Off'}</b></button><button data-action="toggle-ambience"><span>Night & day ambience</span><b>${ambienceEnabled ? 'On' : 'Off'}</b></button></div><div class="sfx-previews"><button data-action="preview-howl">Howl</button><button data-action="preview-kill">Kill</button><button data-action="preview-heal">Heal</button></div><div class="button-stack">${fullscreen}${install}<button class="btn ghost" data-action="show-rules">Read the rules</button><button class="btn ghost" data-action="start-agent-test">Run a practice game</button></div><p class="footer-note">All audio is bundled or generated on-device. There are no paid APIs, accounts or streaming costs.</p></div></div>`;
     return;
   }
   if (ui.modal === 'install') {
@@ -1654,7 +1773,7 @@ function renderModal() {
   if (ui.modal === 'menu') {
     const appButton = isStandalone() ? '' : '<button class="btn secondary" data-action="install-app">Install Moonfall to home screen</button>';
     const fullButton = fullscreenAvailable() ? `<button class="btn secondary" data-action="toggle-fullscreen">${fullscreenElement() ? 'Exit fullscreen' : 'Enter fullscreen'}</button>` : '';
-    modalRoot.innerHTML = `<div class="modal-backdrop" data-action="close-modal"><div class="modal"><div class="modal-head"><h2>Moonfall</h2><button class="icon-btn" data-action="close-modal">×</button></div><div class="connection-health"><span class="health-orb ${connectionState === 'offline' ? 'offline' : ''}"></span><div><strong>${connectionState === 'connected' ? 'Village link healthy' : connectionState === 'connecting' ? 'Reconnecting to the village' : 'The host is currently away'}</strong><small>${wakeLock ? 'Screen-awake protection is active.' : 'Tap anywhere if your browser has paused screen-awake protection.'}</small></div></div><div class="button-stack" style="margin-top:14px">${appButton}${fullButton}<button class="btn secondary" data-action="show-rules">Role guide & classic rules</button><button class="btn secondary" data-action="toggle-sound">Sound effects: ${soundEnabled ? 'On' : 'Off'}</button>${narrationSupported() || voicePackReady() ? `<button class="btn secondary" data-action="toggle-voice">Storyteller voice-over: ${voiceEnabled ? 'On' : 'Off'}${voicePackReady() ? ' · cinematic' : ''}</button>` : ''}<button class="btn secondary" data-action="toggle-ambience">Night &amp; day ambience: ${ambienceEnabled ? 'On' : 'Off'}</button>${soundEnabled ? '<button class="btn ghost" data-action="preview-howl">Preview the nightfall howl</button>' : ''}<button class="btn ghost" data-action="copy-code">Copy room code ${esc(roomCode)}</button><button class="btn ghost" data-action="copy-diagnostics">Copy connection diagnostics</button>${currentView?.coordinator && currentView.phase !== 'lobby' && currentView.phase !== 'game-over' ? '<button class="btn danger" data-action="reset-game">Abandon this tale & reshuffle</button>' : ''}<button class="btn ghost" data-action="leave-game">Leave this screen</button></div><p class="footer-note">Every joined phone is kept awake. If the OS still suspends the web app, Moonfall restores the peer link and saved seat when the screen returns.</p><p class="footer-note">The Storyteller’s phone plays the room cues, ${voicePackReady() ? 'a pre-recorded cinematic narrator' : 'spoken narration from your phone’s own free offline voices'} and ambience. Night actions on player phones stay silent—no account or paid service is used.</p></div></div>`;
+    modalRoot.innerHTML = `<div class="modal-backdrop" data-action="close-modal"><div class="modal"><div class="modal-head"><h2>Moonfall</h2><button class="icon-btn" data-action="close-modal">×</button></div><div class="connection-health"><span class="health-orb ${connectionState === 'offline' ? 'offline' : ''}"></span><div><strong>${connectionState === 'connected' ? 'Village link healthy' : connectionState === 'connecting' ? 'Reconnecting to the village' : 'The host is currently away'}</strong><small>${wakeLock ? 'Screen-awake protection is active.' : 'Tap anywhere if your browser has paused screen-awake protection.'}</small></div></div><div class="button-stack" style="margin-top:14px">${appButton}${fullButton}<button class="btn secondary" data-action="show-rules">Role guide & classic rules</button><button class="btn secondary" data-action="toggle-sound">Sound effects: ${soundEnabled ? 'On' : 'Off'}</button>${narrationSupported() || voicePackReady() ? `<button class="btn secondary" data-action="toggle-voice">Automatic narrator: ${voiceEnabled ? 'On' : 'Off'}${voicePackReady() ? ' · cinematic' : ''}</button>` : ''}<button class="btn secondary" data-action="toggle-ambience">Night &amp; day ambience: ${ambienceEnabled ? 'On' : 'Off'}</button>${soundEnabled ? '<button class="btn ghost" data-action="preview-howl">Preview the nightfall howl</button>' : ''}<button class="btn ghost" data-action="copy-code">Copy room code ${esc(roomCode)}</button><button class="btn ghost" data-action="copy-diagnostics">Copy connection diagnostics</button>${currentView?.coordinator && currentView.phase !== 'lobby' && currentView.phase !== 'game-over' ? '<button class="btn danger" data-action="reset-game">Abandon this tale & reshuffle</button>' : ''}<button class="btn ghost" data-action="leave-game">Leave this screen</button></div><p class="footer-note">Every joined phone is kept awake. If the OS still suspends the web app, Moonfall restores the peer link and saved seat when the screen returns.</p><p class="footer-note">The host phone plays the room narration and ambience while its owner still plays a character. Every secret choice stays on the active player’s own screen.</p></div></div>`;
   }
 }
 
@@ -1715,6 +1834,7 @@ async function handleAction(action, element) {
     createVillage(document.querySelector('#create-name')?.value || '');
   } else if (action === 'start-agent-test') {
     sound('tap');
+    ui.modal = null;
     startAgentTest(document.querySelector('#create-name')?.value || document.querySelector('#join-name')?.value || '');
   } else if (action === 'join-room') {
     sound('tap');
@@ -1763,12 +1883,13 @@ async function handleAction(action, element) {
     if (ui.cupidChoices.includes(id)) ui.cupidChoices = ui.cupidChoices.filter(choice => choice !== id);
     else if (ui.cupidChoices.length < 2) ui.cupidChoices.push(id);
     else { toast('Cupid can bind exactly two hearts.', 'error'); return; }
-    vibrate(16); queueRender();
+    sound('select'); vibrate(16); queueRender();
   } else if (action === 'submit-cupid') {
     sendOwnCommand('player:cupid-choose', {choices: ui.cupidChoices});
   } else if (action === 'lovers-seen') {
     sendOwnCommand('player:lovers-seen');
   } else if (action === 'seer-choose') {
+    sound('select');
     sendOwnCommand('player:seer-choose', {target: id});
   } else if (action === 'flip-seer') {
     ui.seerFlipped = !ui.seerFlipped;
@@ -1777,19 +1898,23 @@ async function handleAction(action, element) {
     ui.seerFlipped = false;
     sendOwnCommand('player:seer-done');
   } else if (action === 'wolf-vote') {
+    sound('select');
     sendOwnCommand('player:wolf-vote', {target: id});
+  } else if (action === 'wolf-no-kill') {
+    sound('select');
+    sendOwnCommand('player:wolf-vote', {target: null});
   } else if (action === 'little-girl-caught') {
     if (confirm('Confirm that the Little Girl was physically caught peeking? She will replace the pack’s chosen victim.')) sendOwnCommand('player:little-girl-caught');
   } else if (action === 'toggle-heal') {
     ui.witchHeal = !ui.witchHeal;
-    vibrate(16); queueRender();
+    sound('select'); vibrate(16); queueRender();
   } else if (action === 'open-poison') {
     ui.poisonOpen = true;
     queueRender();
   } else if (action === 'choose-poison') {
     ui.witchPoisonTarget = id;
     ui.poisonOpen = true;
-    vibrate(16); queueRender();
+    sound('select'); vibrate(16); queueRender();
   } else if (action === 'clear-poison') {
     ui.witchPoisonTarget = null;
     ui.poisonOpen = false;
@@ -1799,25 +1924,12 @@ async function handleAction(action, element) {
   } else if (action === 'cast-vote') {
     sound('decision');
     sendOwnCommand('player:cast-vote', {target: id});
+  } else if (action === 'day-ready') {
+    sound('select');
+    sendOwnCommand('player:day-ready', {ready: element.dataset.ready !== 'false'});
   } else if (action === 'resolve-pending') {
     sound(currentView?.privateAction?.type === 'hunter' ? 'hunter' : 'sheriff');
     sendOwnCommand('player:resolve-pending', {target: id || null});
-  } else if (action === 'story-advance') {
-    sendOwnCommand('story:advance');
-  } else if (action === 'story-no-kill') {
-    if (confirm('Continue with no Werewolf victim tonight?')) sendOwnCommand('story:no-kill');
-  } else if (action === 'story-dawn') {
-    sendOwnCommand('story:dawn');
-  } else if (action === 'story-start-vote') {
-    sendOwnCommand('story:start-vote');
-  } else if (action === 'story-close-election') {
-    sendOwnCommand('story:close-election');
-  } else if (action === 'story-close-vote') {
-    if (confirm('Seal the vote now? Any living player who has not voted will abstain.')) sendOwnCommand('story:close-vote');
-  } else if (action === 'story-next-night') {
-    sendOwnCommand('story:next-night');
-  } else if (action === 'story-proxy-final') {
-    sendOwnCommand('story:proxy-final', {target: id || null});
   } else if (action === 'reset-game') {
     if (confirm('Return every card to the deck and abandon the current tale?')) {
       ui.modal = null;
@@ -1826,6 +1938,9 @@ async function handleAction(action, element) {
   } else if (action === 'open-menu') {
     sound('tap');
     ui.modal = 'menu'; renderModal();
+  } else if (action === 'show-settings') {
+    sound('tap');
+    ui.modal = 'settings'; renderModal();
   } else if (action === 'install-app') {
     sound('tap');
     await installApp();
@@ -1869,6 +1984,10 @@ async function handleAction(action, element) {
     queueRender();
   } else if (action === 'preview-howl') {
     sound('howl');
+  } else if (action === 'preview-kill') {
+    sound('kill');
+  } else if (action === 'preview-heal') {
+    sound('heal');
   } else if (action === 'close-modal') {
     sound('tap');
     ui.modal = null; renderModal();

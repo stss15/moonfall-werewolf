@@ -2,11 +2,13 @@
 
 Moonfall is a mobile-first, around-the-table adaptation of the classic Werewolves social-deduction game. It uses direct, encrypted browser-to-browser connections through Trystero; there is no account, game database, paid backend or permanent score.
 
-The game has no background track. Its procedural Web Audio soundscape uses private card-flip and confirmation sounds plus Storyteller-only cues for nightfall, role awakenings, killing, the Hunter, dawn, elections, voting and victory. The Storyteller's phone also plays a spoken narrator voice-over and a subtle procedural night/day ambience of wind, crickets and birdsong. Secret night choices remain silent on role phones, while the currently awakened phone gains a visible aura. Voice-over, ambience and sound effects can each be toggled from the in-game menu.
+Nobody sits out as a Storyteller. Every joined person receives a character card, while the host phone also acts as the automatic room voice. Its narration gates the turn: a role's controls stay hidden until the spoken wake cue finishes, and a completed action triggers the sleep cue and next phase automatically. Debate advances through an all-player ready check, ballots close when every living player has voted, and Werewolves choose privately on their own phones until the pack reaches unanimous consensus.
+
+The game has no looping music track. Its Web Audio soundscape combines generated night/day ambience with layered procedural effects and four tiny CC0 Kenney foley transients for selection, healing, killing and the Hunter. A master compressor and limiter keep cues clear on phone speakers. Voice-over, ambience and sound effects can each be toggled from the in-game menu.
 
 ### The narrator voice pack
 
-The narration script is fixed, so it is pre-recorded once into ~30 short clips (about two minutes of audio) that the game sequences at runtime — `dawn-death` + `reveal` + `role-werewolf` becomes a complete spoken line. Deploys generate the pack automatically; without it the game falls back to the phone's own offline Web Speech voices, so nothing ever breaks.
+The narration script is fixed, so it is pre-recorded once into short composable clips that the game sequences at runtime — `wake-village` + `dawn-death` + `reveal` + `role-werewolf` becomes a complete spoken passage. Deploys generate the pack automatically; without it the game falls back to the phone's own offline Web Speech voices.
 
 Generate or regenerate the pack with `python3 scripts/generate_voice_pack.py`. Three free engines are supported:
 
@@ -18,7 +20,7 @@ If `ffmpeg` is installed, each clip is also given a stone-hall storyteller treat
 
 The lobby shows a scannable QR code alongside the six-character village code, so friends can point a phone camera at the host's screen and land directly in the room.
 
-Moonfall is an installable Progressive Web App. Installed mode launches in a standalone/fullscreen portrait window, and an in-game control requests browser fullscreen when supported. Every joined phone requests a Screen Wake Lock. If a mobile OS suspends the web app or the connection changes, the client rebuilds its peer room and reclaims the saved seat; the coordinator then sends a fresh private view of the current game state.
+Moonfall is an installable Progressive Web App. Installed mode launches in a standalone/fullscreen portrait window, and an in-game control requests browser fullscreen when supported. Every joined phone requests a Screen Wake Lock. If a mobile OS suspends the web app or the connection changes, the client re-announces its saved seat on the existing peer room and the coordinator sends a fresh private view of the current game state.
 
 ## Play locally
 
@@ -28,7 +30,7 @@ npm run build
 npx serve dist
 ```
 
-Open the HTTPS/local address on each phone. One device creates a village and stays open as the temporary coordinator. That person still plays: the Storyteller is selected randomly from everyone in the room.
+Open the HTTPS/local address on each phone. One device creates a village and stays open as the temporary coordinator and room speaker. Its owner still receives a normal secret character and takes every turn on that same phone.
 
 ## Deploy
 
@@ -45,4 +47,4 @@ The home screen also includes a five-agent local test table for exercising the r
 
 ## Rules implemented
 
-The full original base collection is supported: Werewolves, Simple Villagers, Seer, Witch, Hunter, Cupid and lovers, Little Girl, Thief and Sheriff. The official setup/awakening order, one-use potions, Sheriff double vote and succession, Hunter death shot, lover chain-death, ties, role reveals and all three victory paths are handled by the game engine.
+The full original base collection is supported: Werewolves, Simple Villagers, Seer, Witch, Hunter, Cupid and lovers, Little Girl, Thief and Sheriff. The setup/awakening order, one-use potions, Sheriff double vote and succession, Hunter death shot, lover chain-death, ties, role reveals and all three victory paths are handled by the game engine. All targets appear as face-down table cards labelled with player names on the active person's own phone; nobody has to reach across the physical table.

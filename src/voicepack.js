@@ -53,16 +53,18 @@ export function stopVoicePack() {
 }
 
 export async function playVoicePack(context, ids, {delay = 0, gap = .3, volume = 1} = {}) {
-  if (!context || !voicePackCovers(ids)) return false;
+  if (!context || !voicePackCovers(ids)) return 0;
   stopVoicePack();
   const mine = generation;
   let buffers;
   try {
     buffers = await Promise.all(ids.map(id => bufferFor(context, id)));
   } catch {
-    return false;
+    return 0;
   }
-  if (generation !== mine) return true;
+  const spoken = buffers.reduce((total, buffer) => total + buffer.duration, 0);
+  const totalMs = Math.round(Math.max(0, delay) + (spoken + Math.max(0, buffers.length - 1) * gap) * 1000);
+  if (generation !== mine) return totalMs;
   const gain = context.createGain();
   gain.gain.value = volume;
   gain.connect(context.destination);
@@ -75,5 +77,5 @@ export async function playVoicePack(context, ids, {delay = 0, gap = .3, volume =
     at += buffer.duration + gap;
     activeSources.push(source);
   }
-  return true;
+  return totalMs;
 }

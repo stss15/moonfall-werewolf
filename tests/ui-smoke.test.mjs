@@ -99,7 +99,7 @@ test('mobile lobby renders, accepts five remote seats and deals the cards', asyn
   const start = dom.window.document.querySelector('[data-action="start-game"]');
   assert.equal(start.disabled, false);
   start.click();
-  await tick();
+  await new Promise(resolve => setTimeout(resolve, 1050));
 
   assert.equal(dom.window.document.body.dataset.phase, 'role-reveal');
   assert.match(dom.window.document.querySelector('.phase-ribbon').textContent, /cards are dealt/i);
@@ -115,7 +115,7 @@ test('mobile lobby renders, accepts five remote seats and deals the cards', asyn
   dom.window.close();
 });
 
-test('five local test agents play roles while the user controls the Storyteller', async () => {
+test('five local test agents play while the user keeps a character card and narration advances itself', async () => {
   const dom = new JSDOM(`<!doctype html><body><main id="app"></main><div id="toast-root"></div><div id="modal-root"></div></body>`, {
     url: 'https://moonfall.test/',
     runScripts: 'dangerously',
@@ -130,19 +130,15 @@ test('five local test agents play roles while the user controls the Storyteller'
   const name = dom.window.document.querySelector('#create-name');
   name.value = 'Steven';
   dom.window.document.querySelector('[data-action="start-agent-test"]').click();
-  await tick();
-  assert.match(dom.window.document.querySelector('.screen').textContent, /Storyteller/);
+  await new Promise(resolve => setTimeout(resolve, 1050));
+  assert.doesNotMatch(dom.window.document.querySelector('.screen').textContent, /You do not hold a character role/);
   assert.equal(dom.window.document.body.dataset.phase, 'role-reveal');
 
   dom.window.document.querySelector('[data-action="flip-role"]').click();
   await tick();
   dom.window.document.querySelector('[data-action="seal-role"]').click();
-  await new Promise(resolve => setTimeout(resolve, 1100));
-  const advance = dom.window.document.querySelector('[data-action="story-advance"]');
-  assert.ok(advance && !advance.disabled, 'all five agents should seal their cards automatically');
-  advance.click();
-  await new Promise(resolve => setTimeout(resolve, 1100));
-  assert.equal(dom.window.document.body.dataset.phase, 'setup-cupid');
-  assert.match(dom.window.document.querySelector('.screen').textContent, /Call the lovers|Cupid/);
+  await new Promise(resolve => setTimeout(resolve, 2600));
+  assert.notEqual(dom.window.document.body.dataset.phase, 'role-reveal', 'the automatic narrator should begin the first night after every card is sealed');
+  assert.equal(dom.window.document.querySelector('[data-action="story-advance"]'), null, 'there is no human Storyteller advance control');
   dom.window.close();
 });
