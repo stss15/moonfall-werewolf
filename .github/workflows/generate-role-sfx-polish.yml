@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - .github/workflows/generate-role-sfx-polish.yml
+      - scripts/run_role_sfx_remaining_budget.py
 
 permissions:
   contents: write
@@ -49,10 +50,10 @@ jobs:
             git push
           fi
 
-      - name: Generate missing role SFX and commit every successful file to main
+      - name: Spend remaining free credits and commit every successful SFX immediately
         env:
           ELEVENLABS_API_KEY: ${{ secrets[format('ELEVEN{0}{1}', 'LABS_API_', 'KEY')] }}
-        run: python scripts/generate_role_sfx_incremental.py
+        run: python scripts/run_role_sfx_remaining_budget.py
 
       - name: Rebuild production dist with committed role SFX
         run: |
