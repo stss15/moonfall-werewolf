@@ -17,92 +17,124 @@ concurrency:
 jobs:
   generate:
     runs-on: ubuntu-latest
-    env:
-      ELEVENLABS_RESERVE: "1600"
-      ELEVENLABS_SFX_CREDITS_PER_SECOND: "40"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
-      - name: Generate all premium ambience loops and hero stings
+      - name: Generate seven premium loops and hero stings with backoff
         env:
           ELEVENLABS_API_KEY: ${{ secrets[format('ELEVEN{0}{1}', 'LABS_API_', 'KEY')] }}
         run: |
-          set +e
-          python - <<'PY' 2>&1 | tee /tmp/moonfall-sfx.log
+          python - <<'PY'
           import importlib.util
+          import json
           import os
+          import tempfile
+          import time
+          import urllib.error
+          import urllib.request
           from pathlib import Path
 
-          key = os.environ.get("ELEVENLABS_API_KEY", "")
+          key = os.environ.get('ELEVENLABS_API_KEY', '')
           if not key:
-              raise SystemExit("Repository secret ELEVENLABS_API_KEY is missing")
+              raise SystemExit('Repository secret ELEVENLABS_API_KEY is missing')
 
-          generator_path = Path("scripts/generate_voice_pack.py")
-          spec = importlib.util.spec_from_file_location("moonfall_audio", generator_path)
+          spec = importlib.util.spec_from_file_location('moonfall_audio', Path('scripts/generate_voice_pack.py'))
           audio = importlib.util.module_from_spec(spec)
           spec.loader.exec_module(audio)
 
-          pack = Path("assets/ambience/pack.json")
-          if pack.exists():
-              print("Premium ambience pack already exists; nothing to generate.")
+          pack_path = Path('assets/ambience/pack.json')
+          if pack_path.exists():
+              print('Premium ambience/SFX pack already committed; nothing to generate.')
               raise SystemExit(0)
 
-          remaining, tier = audio.remaining_credits(key)
-          reserve = int(os.environ["ELEVENLABS_RESERVE"])
-          credits_per_second = int(os.environ["ELEVENLABS_SFX_CREDITS_PER_SECOND"])
-          total_seconds = sum(item[4] for item in audio.SOUNDSCAPES)
-          expected_cost = total_seconds * credits_per_second
-          print(f"ElevenLabs tier={tier}; remaining={remaining}; planned={total_seconds}s; expected cost={expected_cost}; reserve={reserve}")
-          if remaining - expected_cost < reserve:
-              raise SystemExit(f"Refusing generation: {remaining} credits remaining, {expected_cost} expected, {reserve} reserve required")
+          # Query actual credit usage rather than the legacy character counter.
+          now_ms = int(time.time() * 1000)
+          usage_payload = {
+              'start_time': now_ms - 32 * 24 * 60 * 60 * 1000,
+              'end_time': now_ms,
+              'interval_seconds': 86400,
+          }
+          req = urllib.request.Request(
+              'https://api.elevenlabs.io/v1/workspace/analytics/query/usage-by-product-over-time',
+              data=json.dumps(usage_payload).encode(),
+              headers={'xi-api-key': key, 'content-type': 'application/json'},
+              method='POST',
+          )
+          with urllib.request.urlopen(req, timeout=60) as response:
+              usage = json.loads(response.read())
+          columns = usage.get('columns', [])
+          usage_index = columns.index('total_usage')
+          credits_used = sum(float(row[usage_index] or 0) for row in usage.get('rows', []))
+          conservative_planned = len(audio.SOUNDSCAPES) * 200
+          reserve = 1600
+          print(f'Actual recent credits used={credits_used:.0f}; conservative seven-SFX estimate={conservative_planned}; reserve={reserve}')
+          if credits_used + conservative_planned > 10000 - reserve:
+              raise SystemExit('Refusing generation: conservative SFX estimate would breach the 1,600-credit free-tier reserve')
 
-          audio.generate_soundscapes(key)
-          if not pack.exists():
-              raise SystemExit("ElevenLabs returned no usable ambience/SFX pack")
-          print("Premium ambience and SFX generation complete.")
+          out_dir = Path('assets/ambience')
+          out_dir.mkdir(parents=True, exist_ok=True)
+          manifest = {'version': 1, 'loops': {}, 'stings': {}}
+          report = {'credits_before_estimate': credits_used, 'items': []}
+
+          with tempfile.TemporaryDirectory() as scratch:
+              for name, group, slot, prompt, seconds in audio.SOUNDSCAPES:
+                  payload = {
+                      'text': prompt,
+                      'duration_seconds': seconds,
+                      'prompt_influence': 0.4,
+                      'loop': group == 'loops',
+                      'model_id': 'eleven_text_to_sound_v2',
+                  }
+                  generated = None
+                  billed = None
+                  for attempt in range(1, 5):
+                      req = urllib.request.Request(
+                          'https://api.elevenlabs.io/v1/sound-generation',
+                          data=json.dumps(payload).encode(),
+                          headers={'xi-api-key': key, 'content-type': 'application/json'},
+                          method='POST',
+                      )
+                      try:
+                          with urllib.request.urlopen(req, timeout=300) as response:
+                              generated = response.read()
+                              billed = response.headers.get('character-cost')
+                          break
+                      except urllib.error.HTTPError as error:
+                          body = error.read().decode('utf-8', 'replace')[:300]
+                          if error.code != 429 or attempt == 4:
+                              raise RuntimeError(f'{name} failed HTTP {error.code}: {body}') from error
+                          delay = int(error.headers.get('Retry-After') or attempt * 15)
+                          print(f'{name}: rate limited; waiting {delay}s before retry {attempt + 1}/4')
+                          time.sleep(delay)
+                  if not generated or len(generated) < 800:
+                      raise RuntimeError(f'{name}: ElevenLabs returned no usable audio')
+
+                  raw = Path(scratch) / f'{name}.raw.mp3'
+                  raw.write_bytes(generated)
+                  final = out_dir / f'{name}.mp3'
+                  filters = audio.AMBIENCE_FILTERS if group == 'loops' else audio.STING_FILTERS
+                  bitrate = '96k' if group == 'loops' else '64k'
+                  audio.ffmpeg_process(raw, final, filters, bitrate=bitrate)
+                  manifest[group][slot] = final.name
+                  report['items'].append({'name': name, 'seconds': seconds, 'character_cost_header': billed, 'size_bytes': final.stat().st_size})
+                  print(f'✓ {name}: {seconds}s, billing header={billed}, {final.stat().st_size // 1024} KiB')
+                  time.sleep(3)
+
+          pack_path.write_text(json.dumps(manifest, indent=2) + '\n')
+          Path('sfx-generation-report.json').write_text(json.dumps(report, indent=2) + '\n')
+          print('All seven premium ambience/SFX files generated successfully.')
           PY
-          status=${PIPESTATUS[0]}
-          set -e
-          if [ "$status" != "0" ]; then
-            {
-              echo "Moonfall ambience/SFX generation failed with exit status $status."
-              echo
-              tail -n 120 /tmp/moonfall-sfx.log
-            } | sed -E 's/sk_[A-Za-z0-9_-]+/[REDACTED_API_KEY]/g' > sfx-generation-error.txt
-            exit "$status"
-          fi
-
-      - name: Commit scrubbed SFX failure diagnostics
-        if: failure()
-        run: |
-          if [ ! -f sfx-generation-error.txt ]; then exit 0; fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add sfx-generation-error.txt
-          if ! git diff --cached --quiet; then
-            git commit -m "Record premium ambience and SFX generation failure"
-            git pull --rebase origin main
-            git push
-          fi
 
       - name: Commit generated premium ambience and SFX
-        if: success()
         run: |
-          if [ ! -f assets/ambience/pack.json ]; then
-            echo "::error::Generator completed without an ambience manifest."
-            exit 3
-          fi
+          test -f assets/ambience/pack.json
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git rm -f --ignore-unmatch sfx-generation-error.txt
-          git add -A assets/ambience
-          if git diff --cached --quiet; then
-            echo "No ambience/SFX changes to commit."
-          else
-            git commit -m "Add generated premium ambience and SFX"
-            git pull --rebase origin main
-            git push
-          fi
+          git rm -f --ignore-unmatch sfx-generation-error.txt sfx-history-diagnostic.json elevenlabs-usage-diagnostic.json
+          git add -A assets/ambience sfx-generation-report.json
+          git commit -m "Add generated premium ambience and SFX"
+          git pull --rebase origin main
+          git push
