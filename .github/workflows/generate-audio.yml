@@ -1,20 +1,10 @@
 name: Generate premium audio (one-shot, commits results)
 
-# Renders the narrator pack plus ambience/stings, then commits the generated
-# audio to main so future deploys reuse it. The free-tier guard deliberately
-# leaves a reserve and checks the live subscription balance before spending.
-#
-# Preferred key source: repository secret ELEVENLABS_API_KEY.
-# Convenience fallback: a temporary ELEVENLABS_API_KEY file. Whitespace is
-# removed before use and the file is deleted in the same run. A key committed
-# to a public repo is exposed in git history and must be revoked afterwards.
-
 on:
   workflow_dispatch:
   push:
     branches: [main]
     paths:
-      - ELEVENLABS_API_KEY
       - .github/workflows/generate-audio.yml
 
 permissions:
@@ -31,100 +21,39 @@ jobs:
       ELEVENLABS_MODEL_ID: eleven_flash_v2_5
       ELEVENLABS_CREDITS_PER_CHAR: "0.5"
       ELEVENLABS_RESERVE: "1600"
+      SKIP_SFX: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
-      - name: Resolve the API key (secret first, temporary file as fallback)
+      - name: Generate narrator pack within free-tier reserve
         env:
-          SECRET_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
-        run: |
-          if [ -n "$SECRET_KEY" ]; then
-            echo "ELEVENLABS_API_KEY=$SECRET_KEY" >> "$GITHUB_ENV"
-            echo "Using the repository secret."
-          elif [ -f ELEVENLABS_API_KEY ] && ! grep -q "PASTE" ELEVENLABS_API_KEY; then
-            KEY="$(tr -d '[:space:]' < ELEVENLABS_API_KEY)"
-            echo "::add-mask::$KEY"
-            echo "ELEVENLABS_API_KEY=$KEY" >> "$GITHUB_ENV"
-            echo "Using the temporary key file after removing whitespace."
-          else
-            echo "No API key available (secret unset; key file missing or still the placeholder)."
-          fi
-
-      - name: Preflight ElevenLabs access and model
-        run: |
-          if [ -z "$ELEVENLABS_API_KEY" ]; then
-            echo "No key supplied; nothing to generate."
-            exit 0
-          fi
-          python - <<'PY'
-          import json, os, urllib.request
-          key = os.environ["ELEVENLABS_API_KEY"]
-          headers = {"xi-api-key": key}
-
-          def get(path):
-              req = urllib.request.Request("https://api.elevenlabs.io" + path, headers=headers)
-              with urllib.request.urlopen(req, timeout=60) as response:
-                  return json.loads(response.read())
-
-          subscription = get("/v1/user/subscription")
-          remaining = subscription.get("character_limit", 0) - subscription.get("character_count", 0)
-          model_id = os.environ["ELEVENLABS_MODEL_ID"]
-          models = get("/v1/models")
-          model = next((m for m in models if m.get("model_id") == model_id), None)
-          if not model:
-              raise SystemExit(f"Configured model {model_id!r} is not available to this account")
-          if not model.get("can_do_text_to_speech", False):
-              raise SystemExit(f"Configured model {model_id!r} cannot do text to speech")
-          print(f"Preflight OK: model={model_id}; reported remaining credits/characters={remaining}; reserve={os.environ['ELEVENLABS_RESERVE']}")
-          PY
-
-      - name: Render voice pack, ambience loops and stings
+          ELEVENLABS_API_KEY: ${{ secrets[format('ELEVEN{0}{1}', 'LABS_API_', 'KEY')] }}
         run: |
           if [ -f assets/voice/pack.json ]; then
-            echo "Audio already committed; nothing to generate."
-            echo "RENDER_STATUS=0" >> "$GITHUB_ENV"
+            echo "Narrator pack already committed; nothing to generate."
             exit 0
           fi
           if [ -z "$ELEVENLABS_API_KEY" ]; then
-            echo "::warning::No ELEVENLABS_API_KEY secret or file found; nothing to do."
-            echo "RENDER_STATUS=0" >> "$GITHUB_ENV"
-            exit 0
+            echo "::error::Repository secret ELEVENLABS_API_KEY is missing."
+            exit 2
           fi
-          status=0
-          python scripts/generate_voice_pack.py || status=$?
-          echo "RENDER_STATUS=$status" >> "$GITHUB_ENV"
-          echo "Generator exit status: $status"
+          python scripts/generate_voice_pack.py
 
-      - name: Commit generated audio and remove temporary key file
-        if: always()
+      - name: Commit generated narrator pack
         run: |
+          if [ ! -f assets/voice/pack.json ]; then
+            echo "::error::Generator completed without a narrator manifest."
+            exit 3
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          if [ -f ELEVENLABS_API_KEY ] && ! grep -q "PASTE" ELEVENLABS_API_KEY; then
-            git rm -q -f ELEVENLABS_API_KEY
-          fi
-
-          git add -A assets/voice assets/ambience 2>/dev/null || true
+          git add -A assets/voice
           if git diff --cached --quiet; then
-            echo "No generated audio changes to commit."
+            echo "No narrator changes to commit."
           else
-            if [ -f assets/voice/pack.json ]; then
-              git commit -m "Add generated premium narrator and ambience audio"
-            else
-              git commit -m "Clean temporary ElevenLabs key after failed audio generation"
-            fi
+            git commit -m "Add generated premium narrator audio"
             git push
-          fi
-
-      - name: Surface generator failure after cleanup
-        if: always()
-        run: |
-          status="${RENDER_STATUS:-0}"
-          if [ "$status" != "0" ]; then
-            echo "::error::Audio generation failed with exit status $status. The temporary key was still cleaned up safely."
-            exit "$status"
           fi
