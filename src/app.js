@@ -517,22 +517,25 @@ function startAmbience(kind) {
     wind.loop = true;
     const windFilter = context.createBiquadFilter();
     windFilter.type = 'lowpass';
-    windFilter.frequency.value = kind === 'night' ? 240 : 420;
+    // Keep enough midrange in the wind for tiny phone speakers. The earlier
+    // sub-heavy bed disappeared almost entirely below about 400 Hz, leaving
+    // the sparse cricket layer as the only audible ambience.
+    windFilter.frequency.value = kind === 'night' ? 620 : 880;
     windFilter.Q.value = .4;
     const windGain = context.createGain();
-    windGain.gain.value = kind === 'night' ? .038 : .022;
+    windGain.gain.value = kind === 'night' ? .046 : .029;
     const lfo = context.createOscillator();
     const lfoDepth = context.createGain();
     lfo.frequency.value = .07;
-    lfoDepth.gain.value = kind === 'night' ? 90 : 150;
+    lfoDepth.gain.value = kind === 'night' ? 230 : 290;
     lfo.connect(lfoDepth).connect(windFilter.frequency);
     wind.connect(windFilter).connect(windGain).connect(gain);
     const airFilter = context.createBiquadFilter();
     const airGain = context.createGain();
     airFilter.type = 'bandpass';
-    airFilter.frequency.value = kind === 'night' ? 920 : 1350;
+    airFilter.frequency.value = kind === 'night' ? 1120 : 1540;
     airFilter.Q.value = .55;
-    airGain.gain.value = kind === 'night' ? .009 : .006;
+    airGain.gain.value = kind === 'night' ? .019 : .012;
     wind.connect(airFilter).connect(airGain).connect(gain);
     const drone = context.createOscillator();
     const droneGain = context.createGain();
@@ -554,9 +557,9 @@ function startAmbience(kind) {
       if (ambience !== state) return;
       const at = context.currentTime + .05;
       if (kind === 'night') {
-        if (Math.random() < .42) cricketChirp(context, at, gain);
-        if (Math.random() < .1) owlHoot(context, at, gain);
-        if (Math.random() < .045) bell(context, at + .3, 392, .008, 2.2);
+        if (Math.random() < .2) cricketChirp(context, at, gain);
+        if (Math.random() < .14) owlHoot(context, at, gain);
+        if (Math.random() < .07) bell(context, at + .3, 392, .012, 2.2);
       } else if (Math.random() < .8) {
         birdChirp(context, at, gain);
       }
@@ -1612,7 +1615,7 @@ function renderWolves(view, action) {
     return `${view.players[id]?.name || 'Wolf'} → ${target === null ? 'spare the village' : target ? view.players[target]?.name : 'choosing…'}`;
   });
   app.innerHTML = `<section class="screen awake-screen awake-wolves">${gameHeader(view)}${phaseHeader(view)}
-    <div class="panel compact center"><div class="eyebrow">Your pack</div><div class="wolf-pack">${wolves.map(id => `<span class="wolf-chip">🐺 ${esc(view.players[id]?.name || 'Werewolf')}</span>`).join('')}</div><p class="muted small">Agree on the same victim. If the pack cannot agree, nobody dies tonight.</p></div>
+    <div class="panel compact center"><div class="eyebrow">Your pack</div><div class="wolf-pack">${wolves.map(id => `<span class="wolf-chip">🐺 ${esc(view.players[id]?.name || 'Werewolf')}</span>`).join('')}</div><p class="muted small">Agree on the same victim—or all choose to spare the village. The night waits for consensus.</p></div>
     ${choiceGrid(view, candidates, {action: 'wolf-vote', selected: myChoice ? [myChoice] : [], note: (player, id) => Object.values(action.votes).filter(target => target === id).length ? `${Object.values(action.votes).filter(target => target === id).length} pack choice` : 'Possible victim'})}
     <button class="choice no-kill-choice ${hasChoice && myChoice === null ? 'selected' : ''}" data-action="wolf-no-kill"><span class="no-kill-moon">☾</span><span class="copy"><strong>Spare the village</strong><span>Every living Werewolf must choose this</span></span>${hasChoice && myChoice === null ? '<b>✓</b>' : ''}</button>
     <div class="panel compact"><div class="eyebrow">Silent consensus</div>${teammateLines.map(line => `<div class="small muted" style="padding:3px 0">${esc(line)}</div>`).join('')}${action.consensus ? '<div class="badge green" style="margin-top:8px">✓ The pack agrees</div>' : ''}</div>
