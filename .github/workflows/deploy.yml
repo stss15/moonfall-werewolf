@@ -39,8 +39,20 @@ jobs:
           python scripts/generate_voice_pack.py \
             || echo "::warning::Voice pack generation failed; the game will fall back to on-device speech."
       - run: npm run build
-      # The Pages site already exists (enabled once in repo settings), so this
-      # succeeds and switches the source from branch/Jekyll to this workflow.
+      # Pages was first enabled with a branch source, which makes GitHub race
+      # a Jekyll README build against this workflow on every push. Switch the
+      # source to workflow deployments so only the built game is ever served.
+      - name: Ensure Pages serves this workflow's deployments
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          curl -sf -X PUT \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/pages" \
+            -d '{"build_type":"workflow"}' \
+            && echo "Pages source is now GitHub Actions" \
+            || echo "::warning::Could not switch the Pages source automatically. In Settings → Pages set Source to 'GitHub Actions'."
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
