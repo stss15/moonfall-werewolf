@@ -29,33 +29,39 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Generate missing role SFX and commit every successful file to main
-        env:
-          ELEVENLABS_API_KEY: ${{ secrets[format('ELEVEN{0}{1}', 'LABS_API_', 'KEY')] }}
-        run: python scripts/generate_role_sfx_incremental.py
-
-      - name: Apply audio mix and role cue wiring idempotently
+      - name: Apply narration ducking and role cue wiring first
         run: python scripts/patch_audio_polish.py
 
-      - name: Test and build current production app
+      - name: Test build and commit audio polish to main immediately
         run: |
           npm ci
           npm test
           npm run build
           test -f dist/assets/voice/pack.json
           test -f dist/assets/ambience/pack.json
-          if test -f assets/role-sfx/pack.json; then test -f dist/assets/role-sfx/pack.json; fi
-
-      - name: Commit polished source and finished production build to main
-        run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add src/app.js src/engine.js src/sw.js
           git add -f dist
-          if git diff --cached --quiet; then
-            echo "Audio polish and production dist are already current."
-            exit 0
+          if ! git diff --cached --quiet; then
+            git commit -m "Duck ambience under narration and prepare role SFX"
+            git pull --rebase origin main
+            git push
           fi
-          git commit -m "Wire premium role SFX and duck ambience under narration"
+
+      - name: Generate missing role SFX and commit every successful file to main
+        env:
+          ELEVENLABS_API_KEY: ${{ secrets[format('ELEVEN{0}{1}', 'LABS_API_', 'KEY')] }}
+        run: python scripts/generate_role_sfx_incremental.py
+
+      - name: Rebuild production dist with committed role SFX
+        run: |
           git pull --rebase origin main
-          git push
+          npm run build
+          if test -f assets/role-sfx/pack.json; then test -f dist/assets/role-sfx/pack.json; fi
+          git add -f dist
+          if ! git diff --cached --quiet; then
+            git commit -m "Deploy premium role SFX production build"
+            git pull --rebase origin main
+            git push
+          fi
