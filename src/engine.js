@@ -63,6 +63,7 @@ export function makeState({roomCode, coordinatorId, coordinatorName = 'Host'}) {
     electionCandidates: [],
     resolution: null,
     lastDeaths: [],
+    nightResult: {healed: false, poisoned: false},
     lastVote: null,
     winner: null,
     log: [{kind: 'moon', text: 'A new village gathered beneath the moon.', at: now}]
@@ -206,6 +207,7 @@ export function startGame(state, rng = Math.random) {
   state.potions = {heal: true, poison: true};
   state.resolution = null;
   state.lastDeaths = [];
+  state.nightResult = {healed: false, poisoned: false};
   state.lastVote = null;
   state.winner = null;
   log(state, 'The Moonfall narrator took its place. Every gathered player received a character card.', 'story');
@@ -306,6 +308,10 @@ function resolveNight(state) {
   let victim = state.actions.wolfVictim;
   if (state.actions.littleGirlCaught) victim = playerByRole(state, 'little-girl', true);
   const deaths = [];
+  state.nightResult = {
+    healed: Boolean(victim && state.actions.witchDraft.heal),
+    poisoned: Boolean(state.actions.witchDraft.poisonTarget)
+  };
   if (victim && !state.actions.witchDraft.heal) deaths.push({id: victim, cause: state.actions.littleGirlCaught ? 'caught peeking' : 'the Werewolves'});
   if (state.actions.witchDraft.poisonTarget) deaths.push({id: state.actions.witchDraft.poisonTarget, cause: 'the Witch’s poison'});
   if (state.actions.witchDraft.heal) state.potions.heal = false;
@@ -537,6 +543,7 @@ export function resetToLobby(state) {
   state.actions = freshActions();
   state.resolution = null;
   state.lastDeaths = [];
+  state.nightResult = {healed: false, poisoned: false};
   state.lastVote = null;
   state.winner = null;
   for (const player of Object.values(state.players)) Object.assign(player, {role: null, alive: true, ready: false});
@@ -765,6 +772,7 @@ export function viewFor(state, seatId, {coordinator = false} = {}) {
     coordinator,
     lobbyDeck: state.phase === 'lobby' ? lobbyDeckView(state) : null,
     lastDeaths: clone(state.lastDeaths),
+    nightResult: clone(state.nightResult || {healed: false, poisoned: false}),
     lastVote: clone(state.lastVote),
     winner: clone(state.winner),
     log: clone(state.log.filter(entry => entry.kind !== 'secret').slice(-12))

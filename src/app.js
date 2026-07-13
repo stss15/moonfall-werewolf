@@ -27,7 +27,7 @@ const NAME_KEY = 'moonfall:last-name';
 const SOUND_KEY = 'moonfall:sound-enabled';
 const VOICE_KEY = 'moonfall:voice-enabled';
 const AMBIENCE_KEY = 'moonfall:ambience-enabled';
-const APP_VERSION = '2.6.0';
+const APP_VERSION = '2.7.0';
 const RELAY_REDUNDANCY = 7;
 const STALE_CONNECTION_MS = 25000;
 const RECONNECT_DELAY_MS = 180;
@@ -81,6 +81,7 @@ const SFX_FILES = {
 // beds plus hero stings. Everything degrades to the procedural soundscape.
 const premiumLoops = {};
 const premiumStings = {};
+const roleSfxVariants = {};
 let renderQueued = false;
 let soundEnabled = safeRead(SOUND_KEY, true) !== false;
 let voiceEnabled = safeRead(VOICE_KEY, true) !== false;
@@ -312,7 +313,18 @@ async function initPremiumAudio() {
       SFX_FILES[`sting-${slot}`] = `assets/ambience/${file}`;
       premiumStings[slot] = `sting-${slot}`;
     }
-    diagnostic('premium-audio-ready', {loops: Object.keys(premiumLoops), stings: Object.keys(premiumStings)});
+    const roleResponse = await fetch('assets/role-sfx/pack.json', {cache: 'no-cache'});
+    if (roleResponse.ok) {
+      const roleData = await roleResponse.json();
+      for (const [slot, files] of Object.entries(roleData?.variants || {})) {
+        roleSfxVariants[slot] = (Array.isArray(files) ? files : [files]).map((file, index) => {
+          const id = `role-${slot}-${index}`;
+          SFX_FILES[id] = `assets/role-sfx/${file}`;
+          return id;
+        });
+      }
+    }
+    diagnostic('premium-audio-ready', {loops: Object.keys(premiumLoops), stings: Object.keys(premiumStings), roleSfx: Object.keys(roleSfxVariants)});
     if (audioContext) warmSfxSamples(audioContext);
   } catch { /* Procedural soundscape remains the fallback. */ }
 }
@@ -354,12 +366,25 @@ function bell(context, at, frequency, volume = .07, duration = 1, destination = 
   tone(context, {at, frequency: frequency * 3.98, duration: duration * .42, volume: volume * .13, type: 'sine', destination});
 }
 
+function premiumVariant(slot) {
+  const variants = roleSfxVariants[slot];
+  if (!variants?.length) return null;
+  return variants[Math.floor(Math.random() * variants.length)];
+}
+
 function sound(kind = 'tap', delay = 0) {
   if (!soundEnabled) return;
   const context = unlockAudio();
   if (!context) return;
   const at = context.currentTime + Math.max(0, delay);
   try {
+    const roleSlot = {keys: 'thief', cupid: 'cupid', lovers: 'lovers', seer: 'seer', 'wolf-cue': 'wolves', 'little-girl': 'little-girl', witch: 'witch', kill: 'death', heal: 'revive', hunter: 'hunter', sheriff: 'sheriff', vote: 'judgement'}[kind];
+    const roleSample = premiumVariant(roleSlot);
+    if (roleSample) {
+      const volume = {wolves: .54, death: .5, revive: .42, 'little-girl': .32, cupid: .38, lovers: .32, seer: .34, witch: .4, thief: .35, hunter: .48, sheriff: .36, judgement: .36}[roleSlot] || .4;
+      sample(context, roleSample, {at, volume});
+      return;
+    }
     // Generated hero effects replace the procedural versions when present.
     const sting = {howl: ['howl', .5], kill: ['kill', .55], heal: ['heal', .42], victory: ['victory', .5]}[kind];
     if (sting && sfxReady.get(premiumStings[sting[0]])) {
@@ -477,19 +502,32 @@ function transitionSound(view, previous) {
   if (enteringNight) return sound('howl');
   if (next === 'role-reveal') return sound('shuffle');
   if (next === 'setup-thief') return sound('keys');
-  if (next === 'setup-cupid' || next === 'setup-lovers') return sound('cupid');
+  if (next === 'setup-cupid') return sound('cupid');
+  if (next === 'setup-lovers') return sound('lovers');
   if (next === 'night-seer') return sound('seer');
-  if (next === 'night-wolves') return sound('wolf-cue');
+  if (next === 'night-wolves') {
+    sound('wolf-cue');
+    if (view.settings?.roles?.includes('little-girl')) sound('little-girl', 2.1);
+    return;
+  }
   if (next === 'night-witch') return sound('witch');
   if (next === 'resolution') return sound(view.narrator?.pending?.type === 'hunter' ? 'hunter' : 'kill');
   if (next === 'dawn') {
     const deathAtDawn = Boolean(view.lastDeaths?.length);
+    const healedAtDawn = Boolean(view.nightResult?.healed);
     if (deathAtDawn) sound('kill');
-    return sound('dawn', deathAtDawn ? .95 : 0);
+    else if (healedAtDawn) sound('heal');
+    return sound('dawn', deathAtDawn ? 3.8 : healedAtDawn ? 3.1 : 0);
   }
   if (next === 'sheriff-vote') return sound('sheriff');
   if (next === 'day-vote') return sound('vote');
-  if (next === 'day-result') return sound('decision');
+  if (next === 'day-result') {
+    if (view.lastDeaths?.length) {
+      sound('kill');
+      return sound('decision', 3.8);
+    }
+    return sound('decision');
+  }
   if (next === 'game-over') return sound('victory');
   return sound('decision');
 }
@@ -497,7 +535,7 @@ function transitionSound(view, previous) {
 function cricketChirp(context, at, destination) {
   const base = 4100 + Math.random() * 500;
   for (let index = 0; index < 4; index += 1) {
-    tone(context, {at: at + index * .052, frequency: base, endFrequency: base * .97, duration: .038, volume: .0065, type: 'sine', attack: .006, destination});
+    tone(context, {at: at + index * .052, frequency: base, endFrequency: base * .97, duration: .038, volume: .0022, type: 'sine', attack: .006, destination});
   }
 }
 
@@ -533,6 +571,18 @@ function stopAmbience() {
   } catch { /* Ambience teardown must never interrupt play. */ }
 }
 
+function setAmbienceDuck(active) {
+  const current = ambience;
+  if (!current || !audioContext) return;
+  try {
+    const now = audioContext.currentTime;
+    const baseGain = current.baseGain ?? 1;
+    const target = active ? Math.max(.012, baseGain * .11) : baseGain;
+    current.gain.gain.cancelScheduledValues(now);
+    current.gain.gain.setTargetAtTime(target, now, active ? .07 : .38);
+  } catch { /* Narrator ducking must never interrupt play. */ }
+}
+
 function startAmbience(kind) {
   if (ambience?.kind === kind) return;
   stopAmbience();
@@ -545,15 +595,24 @@ function startAmbience(kind) {
     try {
       const gain = context.createGain();
       const now = context.currentTime;
+      const baseGain = kind === 'night' ? .18 : kind === 'day' ? .14 : .15;
       gain.gain.setValueAtTime(.0001, now);
-      gain.gain.exponentialRampToValueAtTime(kind === 'night' ? .5 : .38, now + 2.5);
+      gain.gain.exponentialRampToValueAtTime(baseGain, now + 2.5);
       gain.connect(sfxOutput(context));
       const loop = context.createBufferSource();
       loop.buffer = loopBuffer;
       loop.loop = true;
-      loop.connect(gain);
+      if (kind === 'night') {
+        const mellow = context.createBiquadFilter();
+        mellow.type = 'lowpass';
+        mellow.frequency.value = 2600;
+        mellow.Q.value = .45;
+        loop.connect(mellow).connect(gain);
+      } else {
+        loop.connect(gain);
+      }
       loop.start();
-      ambience = {kind, gain, timer: null, stoppables: [loop]};
+      ambience = {kind, gain, baseGain, timer: null, stoppables: [loop]};
       return;
     } catch { /* Fall through to the procedural bed. */ }
   }
@@ -562,7 +621,7 @@ function startAmbience(kind) {
     const gain = context.createGain();
     const now = context.currentTime;
     gain.gain.setValueAtTime(.0001, now);
-    gain.gain.exponentialRampToValueAtTime(1, now + 2.5);
+    gain.gain.exponentialRampToValueAtTime(.72, now + 2.5);
     gain.connect(context.destination);
     ensureNoiseBuffer(context);
     const wind = context.createBufferSource();
@@ -605,7 +664,7 @@ function startAmbience(kind) {
     lfo.start();
     drone.start();
     droneLfo.start();
-    const state = {kind, gain, timer: null, stoppables: [wind, lfo, drone, droneLfo]};
+    const state = {kind, gain, baseGain: .72, timer: null, stoppables: [wind, lfo, drone, droneLfo]};
     const schedule = () => {
       if (ambience !== state) return;
       const at = context.currentTime + .05;
@@ -711,22 +770,27 @@ function openingNarration(view) {
 
 async function playNarratorSequence(ids, text, {delay = 350} = {}) {
   const fallbackMs = Math.max(900, String(text || '').trim().split(/\s+/).filter(Boolean).length * 510);
-  if (!voiceEnabled || (!ids?.length && !text)) {
-    await sleep(Math.min(900, fallbackMs));
-    return;
-  }
-  const context = unlockAudio(true);
-  if (context && ids?.length && voicePackCovers(ids)) {
-    stopNarration();
-    const duration = await playVoicePack(context, ids, {delay, gap: .24, volume: 1});
-    if (duration) {
-      await sleep(duration + 180);
+  setAmbienceDuck(true);
+  try {
+    if (!voiceEnabled || (!ids?.length && !text)) {
+      await sleep(Math.min(900, fallbackMs));
       return;
     }
+    const context = unlockAudio(true);
+    if (context && ids?.length && voicePackCovers(ids)) {
+      stopNarration();
+      const duration = await playVoicePack(context, ids, {delay, gap: .24, volume: 1});
+      if (duration) {
+        await sleep(duration + 180);
+        return;
+      }
+    }
+    stopVoicePack();
+    const duration = await narrate(text, {delay, volume: 1});
+    if (!duration) await sleep(Math.min(900, delay + fallbackMs));
+  } finally {
+    setAmbienceDuck(false);
   }
-  stopVoicePack();
-  const duration = await narrate(text, {delay, volume: 1});
-  if (!duration) await sleep(Math.min(900, delay + fallbackMs));
 }
 
 function narratorAutomationStage(view) {
@@ -751,7 +815,10 @@ function scheduleNarratorAutomation() {
   void (async () => {
     if (stage === 'opening') {
       const opening = openingNarration(view);
-      const delay = opening.ids?.[0] === 'nightfall' ? 2300 : phase === 'dawn' ? 650 : 350;
+      const phaseCueLead = {'setup-thief': 2100, 'setup-cupid': 2700, 'setup-lovers': 2500, 'night-seer': 2300, 'night-wolves': 4800, 'night-witch': 2700, 'sheriff-vote': 2100, 'day-vote': 1900, resolution: 2700};
+      const deathReveal = (phase === 'dawn' || phase === 'day-result') && Boolean(view.lastDeaths?.length);
+      const healedReveal = phase === 'dawn' && Boolean(view.nightResult?.healed) && !deathReveal;
+      const delay = opening.ids?.[0] === 'nightfall' ? 2300 : deathReveal ? 4300 : healedReveal ? 3500 : phase === 'dawn' ? 850 : phaseCueLead[phase] || 350;
       await playNarratorSequence(opening.ids, opening.text, {delay});
       if (phase === 'dawn' || phase === 'day-result') await sleep(phase === 'day-result' ? 1600 : 900);
     } else {
