@@ -2,3 +2,4 @@ node_modules/
 assets/*-original.png
 *.zip
 .DS_Store
+assets/voice/

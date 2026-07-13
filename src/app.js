@@ -17,7 +17,10 @@ import {
   updateSettings,
   viewFor
 } from './engine.js';
-import {PHASE_META, PRESETS, ROLES, SPECIAL_ROLE_IDS} from './roles.js';
+import {PHASE_META, PRESETS, ROLES, SPECIAL_ROLE_IDS, STORY_CUES} from './roles.js';
+import {narrate, narrationSupported, stopNarration} from './narrator.js';
+import {initVoicePack, playVoicePack, stopVoicePack, voicePackCovers, voicePackReady, warmVoicePack} from './voicepack.js';
+import qrFactory from 'qrcode-generator';
 
 const APP_ID = 'moonfall-steven-werewolf-v2-2026';
 const MAX_PEOPLE = 19;
@@ -26,7 +29,10 @@ const IDENTITY_PREFIX = 'moonfall:seat:';
 const LAST_HOST_KEY = 'moonfall:last-host';
 const NAME_KEY = 'moonfall:last-name';
 const SOUND_KEY = 'moonfall:sound-enabled';
-const APP_VERSION = '2.2.0';
+const VOICE_KEY = 'moonfall:voice-enabled';
+const AMBIENCE_KEY = 'moonfall:ambience-enabled';
+const APP_VERSION = '2.3.0';
+const RELAY_REDUNDANCY = 7;
 const STALE_CONNECTION_MS = 25000;
 const RECONNECT_DELAY_MS = 180;
 
@@ -68,6 +74,11 @@ let audioContext = null;
 let noiseBuffer = null;
 let renderQueued = false;
 let soundEnabled = safeRead(SOUND_KEY, true) !== false;
+let voiceEnabled = safeRead(VOICE_KEY, true) !== false;
+let ambienceEnabled = safeRead(AMBIENCE_KEY, true) !== false;
+let ambience = null;
+let phaseFxTimer = null;
+const recentCommandIds = new Map();
 const diagnosticEvents = [];
 
 const ui = {
@@ -80,6 +91,7 @@ const ui = {
   witchPoisonTarget: null,
   poisonOpen: false,
   previousPhase: null,
+  phaseFresh: false,
   modal: null,
   busy: false
 };
@@ -145,6 +157,14 @@ function diagnosticReport() {
   }, null, 2);
 }
 
+window.addEventListener('error', event => {
+  diagnostic('js-error', {message: String(event.message || 'unknown').slice(0, 220)});
+});
+
+window.addEventListener('unhandledrejection', event => {
+  diagnostic('promise-rejection', {message: String(event.reason?.message || event.reason || 'unknown').slice(0, 220)});
+});
+
 function seatIdentity(code, name) {
   const key = `${IDENTITY_PREFIX}${code}`;
   const existing = safeRead(key);
@@ -182,8 +202,8 @@ function vibrate(pattern = 24) {
   try { navigator.vibrate?.(pattern); } catch { /* no-op */ }
 }
 
-function unlockAudio() {
-  if (!soundEnabled) return null;
+function unlockAudio(force = false) {
+  if (!soundEnabled && !force) return null;
   try {
     const AudioCtor = window.AudioContext || window.webkitAudioContext;
     if (!AudioCtor) return null;
@@ -218,12 +238,17 @@ function tone(context, {at, frequency, endFrequency = frequency, duration = .2, 
   return oscillator;
 }
 
-function noise(context, {at, duration = .2, volume = .05, filterType = 'bandpass', frequency = 1200, endFrequency = frequency, q = 1.2, destination = null}) {
+function ensureNoiseBuffer(context) {
   if (!noiseBuffer || noiseBuffer.sampleRate !== context.sampleRate) {
     noiseBuffer = context.createBuffer(1, context.sampleRate * 4, context.sampleRate);
     const data = noiseBuffer.getChannelData(0);
     for (let index = 0; index < data.length; index += 1) data[index] = Math.random() * 2 - 1;
   }
+  return noiseBuffer;
+}
+
+function noise(context, {at, duration = .2, volume = .05, filterType = 'bandpass', frequency = 1200, endFrequency = frequency, q = 1.2, destination = null}) {
+  ensureNoiseBuffer(context);
   const source = context.createBufferSource();
   const filter = context.createBiquadFilter();
   const gain = context.createGain();
@@ -353,6 +378,186 @@ function transitionSound(view, previous) {
   if (next === 'day-result') return sound('decision');
   if (next === 'game-over') return sound('victory');
   return sound('decision');
+}
+
+function cricketChirp(context, at, destination) {
+  const base = 4100 + Math.random() * 500;
+  for (let index = 0; index < 4; index += 1) {
+    tone(context, {at: at + index * .052, frequency: base, endFrequency: base * .97, duration: .038, volume: .0065, type: 'sine', attack: .006, destination});
+  }
+}
+
+function owlHoot(context, at, destination) {
+  tone(context, {at, frequency: 340, endFrequency: 300, duration: .38, volume: .012, type: 'sine', attack: .09, destination});
+  tone(context, {at: at + .5, frequency: 320, endFrequency: 270, duration: .55, volume: .011, type: 'sine', attack: .09, destination});
+}
+
+function birdChirp(context, at, destination) {
+  const count = 2 + Math.floor(Math.random() * 3);
+  for (let index = 0; index < count; index += 1) {
+    const start = 2300 + Math.random() * 1500;
+    tone(context, {at: at + index * .14, frequency: start, endFrequency: start + 500 + Math.random() * 700, duration: .09, volume: .008, type: 'sine', attack: .012, destination});
+  }
+}
+
+function stopAmbience() {
+  const current = ambience;
+  if (!current) return;
+  ambience = null;
+  clearTimeout(current.timer);
+  try {
+    const now = audioContext.currentTime;
+    current.gain.gain.cancelScheduledValues(now);
+    current.gain.gain.setValueAtTime(Math.max(.0001, current.gain.gain.value), now);
+    current.gain.gain.exponentialRampToValueAtTime(.0001, now + 1.1);
+    setTimeout(() => {
+      try { current.wind.stop(); } catch { /* no-op */ }
+      try { current.lfo.stop(); } catch { /* no-op */ }
+      try { current.gain.disconnect(); } catch { /* no-op */ }
+    }, 1300);
+  } catch { /* Ambience teardown must never interrupt play. */ }
+}
+
+function startAmbience(kind) {
+  if (ambience?.kind === kind) return;
+  stopAmbience();
+  if (!kind || !soundEnabled || !ambienceEnabled) return;
+  const context = unlockAudio();
+  if (!context) return;
+  try {
+    const gain = context.createGain();
+    const now = context.currentTime;
+    gain.gain.setValueAtTime(.0001, now);
+    gain.gain.exponentialRampToValueAtTime(1, now + 2.5);
+    gain.connect(context.destination);
+    ensureNoiseBuffer(context);
+    const wind = context.createBufferSource();
+    wind.buffer = noiseBuffer;
+    wind.loop = true;
+    const windFilter = context.createBiquadFilter();
+    windFilter.type = 'lowpass';
+    windFilter.frequency.value = kind === 'night' ? 240 : 420;
+    windFilter.Q.value = .4;
+    const windGain = context.createGain();
+    windGain.gain.value = kind === 'night' ? .016 : .01;
+    const lfo = context.createOscillator();
+    const lfoDepth = context.createGain();
+    lfo.frequency.value = .07;
+    lfoDepth.gain.value = kind === 'night' ? 90 : 150;
+    lfo.connect(lfoDepth).connect(windFilter.frequency);
+    wind.connect(windFilter).connect(windGain).connect(gain);
+    wind.start();
+    lfo.start();
+    const state = {kind, gain, wind, lfo, timer: null};
+    const schedule = () => {
+      if (ambience !== state) return;
+      const at = context.currentTime + .05;
+      if (kind === 'night') {
+        if (Math.random() < .7) cricketChirp(context, at, gain);
+        if (Math.random() < .06) owlHoot(context, at, gain);
+      } else if (Math.random() < .8) {
+        birdChirp(context, at, gain);
+      }
+      state.timer = setTimeout(schedule, kind === 'night' ? 700 + Math.random() * 1900 : 900 + Math.random() * 2600);
+    };
+    state.timer = setTimeout(schedule, 1500);
+    ambience = state;
+  } catch {
+    ambience = null;
+  }
+}
+
+function updateAmbience(view) {
+  if (!view || !view.me?.storyteller || !soundEnabled || !ambienceEnabled) return stopAmbience();
+  const phase = view.phase;
+  const kind = ['lobby', 'game-over'].includes(phase) ? null
+    : ['dawn', 'sheriff-vote', 'day-discussion', 'day-vote', 'day-result'].includes(phase) ? 'day' : 'night';
+  startAmbience(kind);
+}
+
+function narrationFor(view) {
+  const phase = view.phase;
+  const roleAloud = roleId => ROLES[roleId]?.name || 'Villager';
+  if (phase === 'dawn') {
+    const deaths = view.lastDeaths || [];
+    if (!deaths.length) return 'The sun rises, and the village wakes to a miracle. Nobody died in the night.';
+    return `The sun rises. ${deaths.map(death => `${death.name} was claimed by ${death.cause}, and is revealed as the ${roleAloud(death.role)}`).join('. ')}.`;
+  }
+  if (phase === 'day-result') {
+    if (view.lastVote?.leaders?.length > 1) return 'The vote is tied. By the old law of the village, nobody is eliminated today.';
+    const deaths = view.lastDeaths || [];
+    if (!deaths.length) return 'No judgement was cast. Nobody leaves the village today.';
+    return `The village has spoken. ${deaths.map(death => `${death.name} faces the judgement, and is revealed as the ${roleAloud(death.role)}`).join('. ')}.`;
+  }
+  if (phase === 'game-over') return view.winner ? `${view.winner.title}. ${view.winner.text}` : 'The tale is ended.';
+  if (phase === 'resolution') return null;
+  return STORY_CUES[phase] || null;
+}
+
+function narrationIdsFor(view) {
+  const phase = view.phase;
+  const deathIds = deaths => {
+    const ids = [];
+    deaths.forEach((death, index) => {
+      if (index > 0) ids.push('another-death');
+      ids.push('reveal', `role-${death.role || 'villager'}`);
+    });
+    return ids;
+  };
+  if (phase === 'dawn') {
+    const deaths = view.lastDeaths || [];
+    return deaths.length ? ['dawn-death', ...deathIds(deaths)] : ['dawn-none'];
+  }
+  if (phase === 'day-result') {
+    if (view.lastVote?.leaders?.length > 1) return ['vote-tied'];
+    const deaths = view.lastDeaths || [];
+    return deaths.length ? ['vote-death', ...deathIds(deaths)] : ['vote-none'];
+  }
+  if (phase === 'game-over') return [`win-${view.winner?.team || 'none'}`];
+  if (phase === 'resolution') return null;
+  return STORY_CUES[phase] ? [`cue-${phase}`] : null;
+}
+
+function narrateTransition(view, previous) {
+  if (!voiceEnabled || !view?.me?.storyteller || !previous) return;
+  const text = narrationFor(view);
+  if (!text) return;
+  const enteringNight = (previous === 'role-reveal' || previous === 'day-result') && (view.phase.startsWith('setup-') || view.phase.startsWith('night-'));
+  const prefix = enteringNight ? 'Night falls on the village. Everyone closes their eyes. ' : '';
+  const delay = enteringNight ? 2400 : view.phase === 'dawn' ? 1300 : 600;
+  const ids = narrationIdsFor(view);
+  const fullIds = ids && enteringNight ? ['nightfall', ...ids] : ids;
+  if (fullIds && voicePackCovers(fullIds)) {
+    const context = unlockAudio(true);
+    if (context) {
+      stopNarration();
+      playVoicePack(context, fullIds, {delay}).then(played => {
+        if (!played) narrate(prefix + text, {delay: 200});
+      });
+      return;
+    }
+  }
+  stopVoicePack();
+  narrate(prefix + text, {delay});
+}
+
+function playPhaseFx(kind) {
+  const fx = document.querySelector('#phase-fx');
+  if (!fx || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+  fx.className = '';
+  void fx.offsetWidth;
+  fx.className = kind;
+  clearTimeout(phaseFxTimer);
+  phaseFxTimer = setTimeout(() => { fx.className = ''; }, 2700);
+}
+
+function phaseFxFor(view, previous) {
+  if (!previous) return null;
+  const toNight = view.phase.startsWith('setup-') || view.phase.startsWith('night-');
+  const fromDayOrDeal = previous === 'role-reveal' || previous === 'day-result';
+  if (toNight && fromDayOrDeal) return 'nightfall';
+  if (view.phase === 'dawn') return 'dawnrise';
+  return null;
 }
 
 async function holdWakeLock() {
@@ -540,8 +745,16 @@ function phaseChanged(view) {
   ui.witchPoisonTarget = view.privateAction?.draft?.poisonTarget || null;
   ui.poisonOpen = false;
   document.body.dataset.phase = view.phase;
+  ui.phaseFresh = true;
+  updateAmbience(view);
+  if (view.phase === 'role-reveal' && view.me?.storyteller && voiceEnabled && voicePackReady()) {
+    warmVoicePack(unlockAudio(true));
+  }
   if (previous) {
     transitionSound(view, previous);
+    narrateTransition(view, previous);
+    const fx = phaseFxFor(view, previous);
+    if (fx) playPhaseFx(fx);
     vibrate(view.phase === 'resolution' ? [35, 45, 70] : 24);
   }
 }
@@ -580,7 +793,7 @@ async function setupNetwork(code) {
   networkStartedAt = Date.now();
   lastHostSignalAt = mode === 'coordinator' ? networkStartedAt : 0;
   diagnostic('room-join-start', {mode, generation});
-  room = joinRoom({appId: APP_ID, password: `moonfall:${code}`}, code, error => {
+  room = joinRoom({appId: APP_ID, password: `moonfall:${code}`, relayRedundancy: RELAY_REDUNDANCY}, code, error => {
     if (generation !== networkGeneration) return;
     console.error('Room join failed', error);
     connectionState = 'offline';
@@ -764,6 +977,13 @@ function validateRemote(data, peerId) {
 function handleRemoteCommand(data, peerId) {
   const seatId = validateRemote(data, peerId);
   if (!seatId) return;
+  if (data.commandId) {
+    if (recentCommandIds.has(data.commandId)) return;
+    recentCommandIds.set(data.commandId, Date.now());
+    if (recentCommandIds.size > 240) {
+      for (const key of [...recentCommandIds.keys()].slice(0, 120)) recentCommandIds.delete(key);
+    }
+  }
   const result = processCommand(seatId, data.type, data.payload || {});
   if (!result.ok) net.sendNotice({text: result.error, type: 'error'}, peerId);
   else if (result.message) net.sendNotice({text: result.message, type: 'success'}, peerId);
@@ -991,6 +1211,10 @@ function leaveToHome() {
   hiddenAt = null;
   lastHostSignalAt = 0;
   releaseWakeLock();
+  stopNarration();
+  stopVoicePack();
+  stopAmbience();
+  recentCommandIds.clear();
   ui.previousPhase = null;
   document.body.dataset.phase = 'home';
   history.replaceState(null, '', location.pathname);
@@ -1119,7 +1343,7 @@ function renderLobby(view) {
   const deckParts = [`${deck.wolves}× ${deck.wolves === 1 ? 'Werewolf' : 'Werewolves'}`, ...deck.specials.map(id => ROLES[id].name), deck.villagers ? `${deck.villagers}× Villager${deck.villagers === 1 ? '' : 's'}` : ''].filter(Boolean);
   app.innerHTML = `<section class="screen ${isHost ? 'has-dock' : ''}">
     ${gameHeader(view)}
-    <div class="panel ornate center"><div class="eyebrow">Share this code</div><div class="room-code">${esc(view.roomCode)}</div><p class="muted small">${Object.keys(view.players).length} people gathered · one will become Storyteller</p><div class="button-row"><button class="btn mini secondary" data-action="copy-code">Copy code</button><button class="btn mini ghost" data-action="share-room">Share invite</button></div></div>
+    <div class="panel ornate center"><div class="eyebrow">Share this code</div><div class="room-code">${esc(view.roomCode)}</div><div class="qr-wrap" aria-label="QR code that joins village ${esc(view.roomCode)}">${inviteQrSvg()}</div><p class="muted small">Scan with a phone camera to join instantly · ${Object.keys(view.players).length} gathered</p><div class="button-row"><button class="btn mini secondary" data-action="copy-code">Copy code</button><button class="btn mini ghost" data-action="share-room">Share invite</button></div></div>
     <div class="panel compact"><div class="eyebrow">The circle</div><h3>${Object.keys(view.players).length} of ${MAX_PEOPLE} places</h3>${playerList(view, {kickable: isHost})}</div>
     ${isHost ? `<div class="panel">
       <div class="eyebrow">Choose the tale</div><h2>Build the deck</h2>
@@ -1418,27 +1642,36 @@ function renderGame() {
 function renderModal() {
   if (!ui.modal) { modalRoot.innerHTML = ''; return; }
   if (ui.modal === 'rules') {
-    modalRoot.innerHTML = `<div class="modal-backdrop" data-action="close-modal"><div class="modal" onclick="event.stopPropagation()"><div class="modal-head"><h2>The Moonfall deck</h2><button class="icon-btn" data-action="close-modal">×</button></div><p class="muted small">The app follows the original base-game role powers and turn order, adapted for private phone actions.</p><div class="rule-list">${['werewolf','villager','seer','witch','hunter','cupid','little-girl','thief','sheriff','storyteller'].map(id => `<div class="rule-item"><img src="${ROLES[id].image}" alt=""><div><h3>${esc(ROLES[id].name)}</h3><p>${esc(ROLES[id].rule)}</p></div></div>`).join('')}</div><p class="footer-note"><a href="https://www.zygomatic-games.com/en/game/the-werewolves-of-millers-hollow/" target="_blank" rel="noreferrer">Read the publisher’s classic rulebook</a></p></div></div>`;
+    modalRoot.innerHTML = `<div class="modal-backdrop" data-action="close-modal"><div class="modal"><div class="modal-head"><h2>The Moonfall deck</h2><button class="icon-btn" data-action="close-modal">×</button></div><p class="muted small">The app follows the original base-game role powers and turn order, adapted for private phone actions.</p><div class="rule-list">${['werewolf','villager','seer','witch','hunter','cupid','little-girl','thief','sheriff','storyteller'].map(id => `<div class="rule-item"><img src="${ROLES[id].image}" alt=""><div><h3>${esc(ROLES[id].name)}</h3><p>${esc(ROLES[id].rule)}</p></div></div>`).join('')}</div><p class="footer-note"><a href="https://www.zygomatic-games.com/en/game/the-werewolves-of-millers-hollow/" target="_blank" rel="noreferrer">Read the publisher’s classic rulebook</a></p></div></div>`;
     return;
   }
   if (ui.modal === 'install') {
     const ios = isIosDevice();
     const fullscreenButton = fullscreenAvailable() && !fullscreenElement() ? '<button class="btn secondary" data-action="toggle-fullscreen">Enter fullscreen now</button>' : '';
-    modalRoot.innerHTML = `<div class="modal-backdrop" data-action="close-modal"><div class="modal" onclick="event.stopPropagation()"><div class="modal-head"><h2>Make Moonfall an app</h2><button class="icon-btn" data-action="close-modal">×</button></div><div class="install-mark"><img src="assets/icon-192.png" alt="Moonfall app icon"></div><p class="muted">${ios ? 'In Safari, tap the Share button, choose “Add to Home Screen”, then open Moonfall from its new icon.' : 'Open your browser menu and choose “Install app” or “Add to Home screen”, then launch Moonfall from its icon.'}</p><div class="button-stack">${fullscreenButton}<button class="btn ghost" data-action="close-modal">Continue in the browser</button></div><p class="footer-note">Installed mode removes most browser controls. Moonfall also keeps every joined phone awake and restores the peer connection when the app returns to the foreground.</p></div></div>`;
+    modalRoot.innerHTML = `<div class="modal-backdrop" data-action="close-modal"><div class="modal"><div class="modal-head"><h2>Make Moonfall an app</h2><button class="icon-btn" data-action="close-modal">×</button></div><div class="install-mark"><img src="assets/icon-192.png" alt="Moonfall app icon"></div><p class="muted">${ios ? 'In Safari, tap the Share button, choose “Add to Home Screen”, then open Moonfall from its new icon.' : 'Open your browser menu and choose “Install app” or “Add to Home screen”, then launch Moonfall from its icon.'}</p><div class="button-stack">${fullscreenButton}<button class="btn ghost" data-action="close-modal">Continue in the browser</button></div><p class="footer-note">Installed mode removes most browser controls. Moonfall also keeps every joined phone awake and restores the peer connection when the app returns to the foreground.</p></div></div>`;
     return;
   }
   if (ui.modal === 'menu') {
     const appButton = isStandalone() ? '' : '<button class="btn secondary" data-action="install-app">Install Moonfall to home screen</button>';
     const fullButton = fullscreenAvailable() ? `<button class="btn secondary" data-action="toggle-fullscreen">${fullscreenElement() ? 'Exit fullscreen' : 'Enter fullscreen'}</button>` : '';
-    modalRoot.innerHTML = `<div class="modal-backdrop" data-action="close-modal"><div class="modal" onclick="event.stopPropagation()"><div class="modal-head"><h2>Moonfall</h2><button class="icon-btn" data-action="close-modal">×</button></div><div class="connection-health"><span class="health-orb ${connectionState === 'offline' ? 'offline' : ''}"></span><div><strong>${connectionState === 'connected' ? 'Village link healthy' : connectionState === 'connecting' ? 'Reconnecting to the village' : 'The host is currently away'}</strong><small>${wakeLock ? 'Screen-awake protection is active.' : 'Tap anywhere if your browser has paused screen-awake protection.'}</small></div></div><div class="button-stack" style="margin-top:14px">${appButton}${fullButton}<button class="btn secondary" data-action="show-rules">Role guide & classic rules</button><button class="btn secondary" data-action="toggle-sound">Sound effects: ${soundEnabled ? 'On' : 'Off'}</button>${soundEnabled ? '<button class="btn ghost" data-action="preview-howl">Preview the nightfall howl</button>' : ''}<button class="btn ghost" data-action="copy-code">Copy room code ${esc(roomCode)}</button><button class="btn ghost" data-action="copy-diagnostics">Copy connection diagnostics</button>${currentView?.coordinator && currentView.phase !== 'lobby' && currentView.phase !== 'game-over' ? '<button class="btn danger" data-action="reset-game">Abandon this tale & reshuffle</button>' : ''}<button class="btn ghost" data-action="leave-game">Leave this screen</button></div><p class="footer-note">Every joined phone is kept awake. If the OS still suspends the web app, Moonfall restores the peer link and saved seat when the screen returns.</p><p class="footer-note">The Storyteller’s phone plays the room cues. Night actions on player phones stay silent, and there is no background music.</p></div></div>`;
+    modalRoot.innerHTML = `<div class="modal-backdrop" data-action="close-modal"><div class="modal"><div class="modal-head"><h2>Moonfall</h2><button class="icon-btn" data-action="close-modal">×</button></div><div class="connection-health"><span class="health-orb ${connectionState === 'offline' ? 'offline' : ''}"></span><div><strong>${connectionState === 'connected' ? 'Village link healthy' : connectionState === 'connecting' ? 'Reconnecting to the village' : 'The host is currently away'}</strong><small>${wakeLock ? 'Screen-awake protection is active.' : 'Tap anywhere if your browser has paused screen-awake protection.'}</small></div></div><div class="button-stack" style="margin-top:14px">${appButton}${fullButton}<button class="btn secondary" data-action="show-rules">Role guide & classic rules</button><button class="btn secondary" data-action="toggle-sound">Sound effects: ${soundEnabled ? 'On' : 'Off'}</button>${narrationSupported() || voicePackReady() ? `<button class="btn secondary" data-action="toggle-voice">Storyteller voice-over: ${voiceEnabled ? 'On' : 'Off'}${voicePackReady() ? ' · cinematic' : ''}</button>` : ''}<button class="btn secondary" data-action="toggle-ambience">Night &amp; day ambience: ${ambienceEnabled ? 'On' : 'Off'}</button>${soundEnabled ? '<button class="btn ghost" data-action="preview-howl">Preview the nightfall howl</button>' : ''}<button class="btn ghost" data-action="copy-code">Copy room code ${esc(roomCode)}</button><button class="btn ghost" data-action="copy-diagnostics">Copy connection diagnostics</button>${currentView?.coordinator && currentView.phase !== 'lobby' && currentView.phase !== 'game-over' ? '<button class="btn danger" data-action="reset-game">Abandon this tale & reshuffle</button>' : ''}<button class="btn ghost" data-action="leave-game">Leave this screen</button></div><p class="footer-note">Every joined phone is kept awake. If the OS still suspends the web app, Moonfall restores the peer link and saved seat when the screen returns.</p><p class="footer-note">The Storyteller’s phone plays the room cues, ${voicePackReady() ? 'a pre-recorded cinematic narrator' : 'spoken narration from your phone’s own free offline voices'} and ambience. Night actions on player phones stay silent—no account or paid service is used.</p></div></div>`;
   }
 }
 
 function render() {
-  if (!mode) renderHome();
-  else if (mode === 'guest' && !currentView) renderConnecting();
-  else renderGame();
-  renderModal();
+  try {
+    if (!mode) renderHome();
+    else if (mode === 'guest' && !currentView) renderConnecting();
+    else renderGame();
+    renderModal();
+    if (ui.phaseFresh) {
+      ui.phaseFresh = false;
+      app.firstElementChild?.classList.add('phase-enter');
+    }
+  } catch (error) {
+    diagnostic('render-error', {message: String(error?.message || error).slice(0, 220)});
+    app.innerHTML = `<section class="screen centered"><div class="panel ornate center"><div class="eyebrow">A cloud crossed the moon</div><h2>The screen failed to draw</h2><p class="muted">Your seat and the game state are safe. Redraw to continue.</p><div class="button-stack"><button class="btn" data-action="recover-render">Redraw the screen</button><button class="btn ghost" data-action="leave-game">Leave to the home screen</button></div></div></section>`;
+  }
 }
 
 async function copyText(text) {
@@ -1458,6 +1691,17 @@ async function copyText(text) {
 
 function roomInviteUrl() {
   return `${location.origin}${location.pathname}?room=${roomCode}`;
+}
+
+function inviteQrSvg() {
+  try {
+    const qr = qrFactory(0, 'M');
+    qr.addData(roomInviteUrl());
+    qr.make();
+    return qr.createSvgTag({cellSize: 4, margin: 0, scalable: true});
+  } catch {
+    return '';
+  }
 }
 
 async function handleAction(action, element) {
@@ -1601,7 +1845,28 @@ async function handleAction(action, element) {
       sound('decision');
     }
     safeWrite(SOUND_KEY, soundEnabled);
+    updateAmbience(currentView);
     renderModal();
+  } else if (action === 'toggle-voice') {
+    voiceEnabled = !voiceEnabled;
+    safeWrite(VOICE_KEY, voiceEnabled);
+    if (voiceEnabled) {
+      const context = unlockAudio(true);
+      if (context && voicePackCovers(['preview'])) playVoicePack(context, ['preview'], {delay: 120});
+      else narrate('The village sleeps, and the tale continues.', {delay: 120});
+    } else {
+      stopNarration();
+      stopVoicePack();
+    }
+    renderModal();
+  } else if (action === 'toggle-ambience') {
+    sound('tap');
+    ambienceEnabled = !ambienceEnabled;
+    safeWrite(AMBIENCE_KEY, ambienceEnabled);
+    updateAmbience(currentView);
+    renderModal();
+  } else if (action === 'recover-render') {
+    queueRender();
   } else if (action === 'preview-howl') {
     sound('howl');
   } else if (action === 'close-modal') {
@@ -1616,6 +1881,9 @@ async function handleAction(action, element) {
 function delegatedClick(event) {
   const element = event.target.closest('[data-action]');
   if (!element || element.disabled) return;
+  // The backdrop closes the modal only when tapped directly; taps inside the
+  // sheet bubble up through it and must not dismiss the open modal.
+  if (element.classList.contains('modal-backdrop') && event.target.closest('.modal')) return;
   event.preventDefault();
   unlockAudio();
   handleAction(element.dataset.action, element);
@@ -1642,4 +1910,10 @@ app.addEventListener('keydown', event => {
 window.addEventListener('beforeunload', persistHost);
 
 registerPwa();
+initVoicePack().then(ready => {
+  if (ready) {
+    diagnostic('voice-pack-ready');
+    if (ui.modal === 'menu') renderModal();
+  }
+});
 render();
