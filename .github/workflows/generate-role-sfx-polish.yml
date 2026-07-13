@@ -12,7 +12,7 @@ permissions:
 
 concurrency:
   group: role-sfx-polish
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   generate-and-wire:
