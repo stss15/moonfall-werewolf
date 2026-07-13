@@ -37,12 +37,38 @@ jobs:
             exit 0
           fi
           if [ -z "$ELEVENLABS_API_KEY" ]; then
-            echo "::error::Repository secret ELEVENLABS_API_KEY is missing."
+            echo "Repository secret ELEVENLABS_API_KEY is missing." | tee audio-generation-error.txt
             exit 2
           fi
-          python scripts/generate_voice_pack.py
+          set +e
+          python scripts/generate_voice_pack.py 2>&1 | tee /tmp/moonfall-audio.log
+          status=${PIPESTATUS[0]}
+          set -e
+          if [ "$status" != "0" ]; then
+            {
+              echo "Moonfall premium audio generation failed with exit status $status."
+              echo
+              tail -n 100 /tmp/moonfall-audio.log
+            } | sed -E 's/sk_[A-Za-z0-9_-]+/[REDACTED_API_KEY]/g' > audio-generation-error.txt
+            exit "$status"
+          fi
+
+      - name: Commit scrubbed failure diagnostics
+        if: failure()
+        run: |
+          if [ ! -f audio-generation-error.txt ]; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add audio-generation-error.txt
+          if ! git diff --cached --quiet; then
+            git commit -m "Record premium audio generation failure"
+            git push
+          fi
 
       - name: Commit generated narrator pack
+        if: success()
         run: |
           if [ ! -f assets/voice/pack.json ]; then
             echo "::error::Generator completed without a narrator manifest."
@@ -50,6 +76,7 @@ jobs:
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm -f --ignore-unmatch audio-generation-error.txt
           git add -A assets/voice
           if git diff --cached --quiet; then
             echo "No narrator changes to commit."
