@@ -1,4 +1,4 @@
-const CACHE = 'moonfall-v10-arrow';
+const CACHE = 'moonfall-v11-canonical-audio';
 const SHELL = [
   './',
   './index.html',
