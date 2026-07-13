@@ -1,4 +1,4 @@
-Moonfall premium audio generation failed with exit status 1.
+Moonfall ElevenLabs authentication failed with exit status 11.
 
-Rendering 116 clips (42 lines, 6179 characters) with engine 'elevenlabs'…
-::error::ElevenLabs rejected the key (HTTP 401). It is invalid or was auto-revoked after being committed publicly — create a fresh key and try again.
+ElevenLabs authentication failed: HTTP 401
+{"detail":{"type":"authentication_error","code":"unauthorized","message":"The API key you used is missing the permission user_read to execute this operation.","status":"missing_permissions","request_id":"3f17777404402dd51650aab8cb6603cd"}}
