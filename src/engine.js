@@ -256,7 +256,7 @@ function canAdvance(state) {
     case 'role-reveal': return allSeatIds(state).every(id => state.actions.seen[id]);
     case 'setup-thief': return state.actions.thiefDone;
     case 'setup-cupid': return state.actions.cupidDone;
-    case 'setup-lovers': return state.lovers.every(id => state.actions.loversSeen[id]);
+    case 'setup-lovers': return aliveIds(state).every(id => state.actions.loversSeen[id]);
     case 'night-seer': return state.actions.seerDone || !phaseHasLivingRole(state, 'seer');
     case 'night-wolves': return wolvesHaveConsensus(state);
     case 'night-witch': return state.actions.witchDone || !phaseHasLivingRole(state, 'witch');
@@ -583,7 +583,9 @@ export function applyPlayerCommand(state, actorId, type, payload = {}) {
     state.actions.cupidChoices = choices;
     state.actions.cupidDone = true;
   } else if (type === 'lovers-seen') {
-    if (state.phase !== 'setup-lovers' || !state.lovers.includes(actorId)) return {ok: false, error: 'This secret belongs to the lovers.'};
+    // Everyone turns a fate card during the arrow reveal, so nobody can tell
+    // who the lovers are from behaviour — the card itself carries the secret.
+    if (state.phase !== 'setup-lovers' || !state.players[actorId]?.alive) return {ok: false, error: 'The arrow reveal is not open.'};
     state.actions.loversSeen[actorId] = true;
   } else if (type === 'seer-choose') {
     error = commandRoleGuard(state, actorId, 'seer', 'night-seer');
@@ -650,7 +652,15 @@ function privateAction(state, seatId) {
       if (player.role === 'cupid' && player.alive) return {type: 'cupid', choices: [...state.actions.cupidChoices], done: state.actions.cupidDone};
       break;
     case 'setup-lovers':
-      if (state.lovers.includes(seatId)) return {type: 'lover', partnerId: state.lovers.find(id => id !== seatId), done: Boolean(state.actions.loversSeen[seatId])};
+      if (player.alive) {
+        const chosen = state.lovers.includes(seatId);
+        return {
+          type: 'lover',
+          chosen,
+          partnerId: chosen ? state.lovers.find(id => id !== seatId) : null,
+          done: Boolean(state.actions.loversSeen[seatId])
+        };
+      }
       break;
     case 'night-seer':
       if (player.role === 'seer' && player.alive) {

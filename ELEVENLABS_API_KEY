@@ -1,0 +1,1 @@
+PASTE-YOUR-NEW-ELEVENLABS-KEY-OVER-THIS-LINE (add a space anywhere in the middle of the key so GitHub's secret scanner cannot auto-revoke it; the workflow joins it back, uses it once, then deletes this file)

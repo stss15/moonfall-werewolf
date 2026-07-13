@@ -27,7 +27,7 @@ const NAME_KEY = 'moonfall:last-name';
 const SOUND_KEY = 'moonfall:sound-enabled';
 const VOICE_KEY = 'moonfall:voice-enabled';
 const AMBIENCE_KEY = 'moonfall:ambience-enabled';
-const APP_VERSION = '2.5.1';
+const APP_VERSION = '2.6.0';
 const RELAY_REDUNDANCY = 7;
 const STALE_CONNECTION_MS = 25000;
 const RECONNECT_DELAY_MS = 180;
@@ -81,7 +81,6 @@ const SFX_FILES = {
 // beds plus hero stings. Everything degrades to the procedural soundscape.
 const premiumLoops = {};
 const premiumStings = {};
-let loverPulseTimers = [];
 let renderQueued = false;
 let soundEnabled = safeRead(SOUND_KEY, true) !== false;
 let voiceEnabled = safeRead(VOICE_KEY, true) !== false;
@@ -98,6 +97,7 @@ const ui = {
   roleFaceUp: false,
   thiefRevealed: false,
   seerFlipped: false,
+  loverFlipped: false,
   cupidChoices: [],
   witchHeal: false,
   witchPoisonTarget: null,
@@ -557,6 +557,7 @@ function startAmbience(kind) {
       return;
     } catch { /* Fall through to the procedural bed. */ }
   }
+  if (kind === 'theme') return;
   try {
     const gain = context.createGain();
     const now = context.currentTime;
@@ -627,7 +628,9 @@ function startAmbience(kind) {
 function updateAmbience(view) {
   if (!view || !isTableVoice(view) || !soundEnabled || !ambienceEnabled) return stopAmbience();
   const phase = view.phase;
-  const kind = ['lobby', 'game-over'].includes(phase) ? null
+  // 'theme' plays the generated title-music loop when one exists; there is no
+  // procedural fallback for it, so the lobby stays quiet on fresh clones.
+  const kind = ['lobby', 'game-over'].includes(phase) ? 'theme'
     : ['dawn', 'sheriff-vote', 'day-discussion', 'day-vote', 'day-result'].includes(phase) ? 'day' : 'night';
   startAmbience(kind);
 }
@@ -959,33 +962,16 @@ document.addEventListener('pointerdown', () => {
 
 let lastWakePulseKey = null;
 
-function stopLoverPulse() {
-  loverPulseTimers.forEach(clearTimeout);
-  loverPulseTimers = [];
-}
-
-// Cupid's silent tap on the shoulder: when a night action opens on this phone,
-// a soft haptic tells its owner to wake without a sound or a lifted screen.
-// Lovers get a repeating heartbeat so both chosen players notice discreetly.
+// When a night action opens on this phone, a firm double pulse tells its
+// owner to wake without a sound or a lifted screen. (The lovers no longer
+// need a private cue: everyone flips an identical fate card together.)
 function updateHaptics(view) {
   const action = view?.privateAction;
   const awake = Boolean(action?.type) && !action.done && view.phaseReady !== false;
-  if (!awake) {
-    if (loverPulseTimers.length) stopLoverPulse();
-    return;
-  }
+  if (!awake) return;
   const key = `${view.phaseSerial}:${action.type}`;
-  if (action.type === 'lover') {
-    if (!loverPulseTimers.length) {
-      [0, 1900, 3800, 5700].forEach(offset => {
-        loverPulseTimers.push(setTimeout(() => vibrate([28, 70, 28]), offset));
-      });
-    }
-    return;
-  }
   if (key === lastWakePulseKey) return;
   lastWakePulseKey = key;
-  // Two firm pulses: enough to feel through a hand with eyes closed.
   vibrate([70, 70, 70]);
 }
 
@@ -997,6 +983,7 @@ function phaseChanged(view) {
   ui.roleFaceUp = false;
   ui.thiefRevealed = false;
   ui.seerFlipped = false;
+  ui.loverFlipped = false;
   ui.cupidChoices = [];
   ui.witchHeal = Boolean(view.privateAction?.draft?.heal);
   ui.witchPoisonTarget = view.privateAction?.draft?.poisonTarget || null;
@@ -1476,7 +1463,7 @@ function leaveToHome() {
   stopNarration();
   stopVoicePack();
   stopAmbience();
-  stopLoverPulse();
+
   lastWakePulseKey = null;
   narratorAutomationGeneration += 1;
   narratorAutomationKey = null;
@@ -1674,11 +1661,23 @@ function renderCupid(view, action) {
   </section>`;
 }
 
+// Everyone flips an identical fate card, so nobody can spot the lovers from
+// behaviour — the card face alone carries the secret.
 function renderLover(view, action) {
-  const partner = view.players[action.partnerId];
-  app.innerHTML = `<section class="screen awake-screen awake-lovers has-dock">${gameHeader(view)}${phaseHeader(view)}
-    <div class="panel ornate center"><div class="lover-heart">♥</div><div class="eyebrow">Bound beneath the moon</div><h2>${esc(partner?.name || 'A hidden lover')}</h2><p class="muted">You live and die together. You may never vote against one another. Their character role remains unknown to you.</p></div>
-    ${dock('<button class="btn" data-action="lovers-seen">I recognise my lover · fall asleep</button>')}
+  const partner = action.partnerId ? view.players[action.partnerId] : null;
+  const flipped = ui.loverFlipped;
+  const front = action.chosen
+    ? `<span class="lover-face chosen"><b>♥</b><strong>Your heart is bound</strong><em>${esc(partner?.name || 'A hidden soul')}</em><span>You live and die together. Never vote against one another. Tell no one—not even a glance.</span></span>`
+    : `<span class="lover-face"><b>☾</b><strong>The arrow passed you by</strong><span>Your heart remains your own. Reveal nothing: only the chosen know they are chosen.</span></span>`;
+  app.innerHTML = `<section class="screen awake-screen awake-lovers ${flipped ? 'has-dock' : ''}">${gameHeader(view)}${phaseHeader(view)}
+    <div class="flip-wrap">
+      <button class="flip-card ${flipped ? 'flipped' : ''}" data-action="flip-lover" aria-label="${flipped ? 'Your fate card' : 'Turn over your fate card'}">
+        <span class="card-face back"><img src="assets/card-back.webp" alt="Face-down fate card"></span>
+        <span class="card-face front">${front}</span>
+      </button>
+    </div>
+    ${!flipped ? '<div class="tap-hint">Turn over your fate card</div>' : ''}
+    ${flipped ? dock('<button class="btn" data-action="lovers-seen">Seal the card · close your eyes</button>') : ''}
   </section>`;
 }
 
@@ -1989,6 +1988,11 @@ async function handleAction(action, element) {
     sendOwnCommand('player:seer-choose', {target: id});
   } else if (action === 'flip-seer') {
     ui.seerFlipped = !ui.seerFlipped;
+    queueRender();
+  } else if (action === 'flip-lover') {
+    ui.loverFlipped = true;
+    sound('flip');
+    vibrate(18);
     queueRender();
   } else if (action === 'seer-done') {
     ui.seerFlipped = false;

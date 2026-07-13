@@ -218,8 +218,14 @@ test('complete first night follows Thief → Cupid → lovers → Seer → Wolve
   storytellerAdvance(state);
   assert.equal(state.phase, 'setup-lovers');
   narratorUnlock(state);
-  applyPlayerCommand(state, 'cupid', 'lovers-seen');
-  applyPlayerCommand(state, 'wolf', 'lovers-seen');
+  // The arrow reveal: every living player flips a fate card, not just the
+  // lovers, so nobody can be identified by who wakes.
+  const everyone = ['thief', 'cupid', 'seer', 'wolf', 'witch', 'girl', 'villager'];
+  for (const id of everyone.slice(0, -1)) {
+    assert.equal(applyPlayerCommand(state, id, 'lovers-seen').ok, true);
+    assert.equal(storytellerAdvance(state).ok, false, 'the night must wait for every fate card');
+  }
+  assert.equal(applyPlayerCommand(state, 'villager', 'lovers-seen').ok, true);
   storytellerAdvance(state);
   assert.equal(state.phase, 'night-seer');
   narratorUnlock(state);

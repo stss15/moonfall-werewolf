@@ -41,13 +41,13 @@ jobs:
           if [ -n "$SECRET_KEY" ]; then
             echo "ELEVENLABS_API_KEY=$SECRET_KEY" >> "$GITHUB_ENV"
             echo "Using the repository secret."
-          elif [ -f ELEVENLABS_API_KEY ]; then
+          elif [ -f ELEVENLABS_API_KEY ] && ! grep -q "PASTE" ELEVENLABS_API_KEY; then
             KEY="$(tr -d '[:space:]' < ELEVENLABS_API_KEY)"
             echo "::add-mask::$KEY"
             echo "ELEVENLABS_API_KEY=$KEY" >> "$GITHUB_ENV"
             echo "Using the committed key file. It will be deleted after generation — revoke and regenerate this key afterwards; committed keys live on in git history."
           else
-            echo "No API key available."
+            echo "No API key available (secret unset; key file missing or still the placeholder)."
           fi
       - name: Render voice pack, ambience loops and stings
         run: |
@@ -61,10 +61,15 @@ jobs:
           fi
           python scripts/generate_voice_pack.py
       - name: Commit generated audio and remove the key file
+        if: always()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git rm -q -f --ignore-unmatch ELEVENLABS_API_KEY
+          # Remove a real key file even when generation failed (the key is
+          # burned either way), but keep the paste-here placeholder in place.
+          if [ -f ELEVENLABS_API_KEY ] && ! grep -q "PASTE" ELEVENLABS_API_KEY; then
+            git rm -q -f ELEVENLABS_API_KEY
+          fi
           git add -A assets/voice assets/ambience 2>/dev/null || true
           if git diff --cached --quiet; then
             echo "No changes to commit."

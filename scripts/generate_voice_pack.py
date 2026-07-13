@@ -53,6 +53,9 @@ RESERVE = int(os.environ.get("ELEVENLABS_RESERVE", "800"))
 KOKORO_VOICE = os.environ.get("KOKORO_VOICE", "bm_george")
 
 SOUNDSCAPES = [
+    ("theme-loop", "loops", "theme",
+     "Seamless looping dark fantasy title music: a slow mysterious harp melody over soft low strings, "
+     "sparse and atmospheric, quiet, medieval, moonlit.", 20),
     ("night-loop", "loops", "night",
      "Seamless looping night ambience in a quiet medieval village: soft wind through old trees, "
      "steady crickets, a distant owl, very faint eerie low drone. No music, no voices, no footsteps.", 20),
