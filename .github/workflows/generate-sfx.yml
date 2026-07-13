@@ -84,6 +84,7 @@ jobs:
           git add sfx-generation-error.txt
           if ! git diff --cached --quiet; then
             git commit -m "Record premium ambience and SFX generation failure"
+            git pull --rebase origin main
             git push
           fi
 
@@ -102,5 +103,6 @@ jobs:
             echo "No ambience/SFX changes to commit."
           else
             git commit -m "Add generated premium ambience and SFX"
+            git pull --rebase origin main
             git push
           fi
