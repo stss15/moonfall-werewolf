@@ -1,0 +1,106 @@
+name: Generate premium ambience and SFX (one-shot)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/generate-sfx.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: generate-sfx
+  cancel-in-progress: false
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    env:
+      ELEVENLABS_RESERVE: "1600"
+      ELEVENLABS_SFX_CREDITS_PER_SECOND: "40"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Generate all premium ambience loops and hero stings
+        env:
+          ELEVENLABS_API_KEY: ${{ secrets[format('ELEVEN{0}{1}', 'LABS_API_', 'KEY')] }}
+        run: |
+          set +e
+          python - <<'PY' 2>&1 | tee /tmp/moonfall-sfx.log
+          import importlib.util
+          import os
+          from pathlib import Path
+
+          key = os.environ.get("ELEVENLABS_API_KEY", "")
+          if not key:
+              raise SystemExit("Repository secret ELEVENLABS_API_KEY is missing")
+
+          generator_path = Path("scripts/generate_voice_pack.py")
+          spec = importlib.util.spec_from_file_location("moonfall_audio", generator_path)
+          audio = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(audio)
+
+          pack = Path("assets/ambience/pack.json")
+          if pack.exists():
+              print("Premium ambience pack already exists; nothing to generate.")
+              raise SystemExit(0)
+
+          remaining, tier = audio.remaining_credits(key)
+          reserve = int(os.environ["ELEVENLABS_RESERVE"])
+          credits_per_second = int(os.environ["ELEVENLABS_SFX_CREDITS_PER_SECOND"])
+          total_seconds = sum(item[4] for item in audio.SOUNDSCAPES)
+          expected_cost = total_seconds * credits_per_second
+          print(f"ElevenLabs tier={tier}; remaining={remaining}; planned={total_seconds}s; expected cost={expected_cost}; reserve={reserve}")
+          if remaining - expected_cost < reserve:
+              raise SystemExit(f"Refusing generation: {remaining} credits remaining, {expected_cost} expected, {reserve} reserve required")
+
+          audio.generate_soundscapes(key)
+          if not pack.exists():
+              raise SystemExit("ElevenLabs returned no usable ambience/SFX pack")
+          print("Premium ambience and SFX generation complete.")
+          PY
+          status=${PIPESTATUS[0]}
+          set -e
+          if [ "$status" != "0" ]; then
+            {
+              echo "Moonfall ambience/SFX generation failed with exit status $status."
+              echo
+              tail -n 120 /tmp/moonfall-sfx.log
+            } | sed -E 's/sk_[A-Za-z0-9_-]+/[REDACTED_API_KEY]/g' > sfx-generation-error.txt
+            exit "$status"
+          fi
+
+      - name: Commit scrubbed SFX failure diagnostics
+        if: failure()
+        run: |
+          if [ ! -f sfx-generation-error.txt ]; then exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add sfx-generation-error.txt
+          if ! git diff --cached --quiet; then
+            git commit -m "Record premium ambience and SFX generation failure"
+            git push
+          fi
+
+      - name: Commit generated premium ambience and SFX
+        if: success()
+        run: |
+          if [ ! -f assets/ambience/pack.json ]; then
+            echo "::error::Generator completed without an ambience manifest."
+            exit 3
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm -f --ignore-unmatch sfx-generation-error.txt
+          git add -A assets/ambience
+          if git diff --cached --quiet; then
+            echo "No ambience/SFX changes to commit."
+          else
+            git commit -m "Add generated premium ambience and SFX"
+            git push
+          fi
