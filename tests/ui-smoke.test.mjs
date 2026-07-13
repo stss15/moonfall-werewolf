@@ -74,6 +74,16 @@ test('mobile lobby renders, accepts five remote seats and deals the cards', asyn
   const code = dom.window.document.querySelector('.room-code')?.textContent.trim();
   assert.match(code, /^[A-Z2-9]{6}$/);
   assert.match(dom.window.document.querySelector('.screen').textContent, /1 of 19 places/);
+  assert.ok(dom.window.document.querySelector('.qr-wrap svg'), 'the lobby should show a scannable invite QR code');
+
+  dom.window.document.querySelector('[data-action="open-menu"]').click();
+  await tick();
+  dom.window.document.querySelector('.modal [data-action="show-rules"]').click();
+  await tick();
+  assert.match(dom.window.document.querySelector('.modal').textContent, /The Moonfall deck/, 'buttons inside the modal sheet must receive clicks');
+  dom.window.document.querySelector('.modal [data-action="close-modal"]').click();
+  await tick();
+  assert.equal(dom.window.document.querySelector('.modal'), null, 'the modal should close from its own close button');
 
   for (let index = 1; index <= 5; index += 1) {
     const peerId = `peer-${index}`;
