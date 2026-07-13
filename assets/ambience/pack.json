@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "loops": {
+    "theme": "theme-loop.mp3",
+    "night": "night-loop.mp3",
+    "day": "day-loop.mp3"
+  },
+  "stings": {
+    "howl": "howl.mp3",
+    "kill": "kill.mp3",
+    "heal": "heal.mp3",
+    "victory": "victory.mp3"
+  }
+}

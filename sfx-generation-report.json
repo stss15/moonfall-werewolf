@@ -1,0 +1,47 @@
+{
+  "credits_before_estimate": 4614.0,
+  "items": [
+    {
+      "name": "theme-loop",
+      "seconds": 20,
+      "character_cost_header": "200",
+      "size_bytes": 321036
+    },
+    {
+      "name": "night-loop",
+      "seconds": 20,
+      "character_cost_header": "200",
+      "size_bytes": 321036
+    },
+    {
+      "name": "day-loop",
+      "seconds": 18,
+      "character_cost_header": "180",
+      "size_bytes": 289271
+    },
+    {
+      "name": "howl",
+      "seconds": 6,
+      "character_cost_header": "60",
+      "size_bytes": 97010
+    },
+    {
+      "name": "kill",
+      "seconds": 4,
+      "character_cost_header": "40",
+      "size_bytes": 65245
+    },
+    {
+      "name": "heal",
+      "seconds": 3,
+      "character_cost_header": "30",
+      "size_bytes": 48945
+    },
+    {
+      "name": "victory",
+      "seconds": 5,
+      "character_cost_header": "50",
+      "size_bytes": 81128
+    }
+  ]
+}
