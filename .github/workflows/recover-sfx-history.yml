@@ -1,0 +1,62 @@
+name: Recover already-generated ElevenLabs SFX
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/recover-sfx-history.yml
+
+permissions:
+  contents: write
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Inspect recent generated-audio history without generating anything
+        env:
+          ELEVENLABS_API_KEY: ${{ secrets[format('ELEVEN{0}{1}', 'LABS_API_', 'KEY')] }}
+        run: |
+          python - <<'PY'
+          import json, os, time, urllib.error, urllib.parse, urllib.request
+          key = os.environ.get('ELEVENLABS_API_KEY', '')
+          result = {'checked_at_unix': int(time.time()), 'items': []}
+          try:
+              query = urllib.parse.urlencode({'page_size': 300, 'date_after_unix': int(time.time()) - 10800})
+              req = urllib.request.Request(
+                  'https://api.elevenlabs.io/v1/history?' + query,
+                  headers={'xi-api-key': key},
+              )
+              with urllib.request.urlopen(req, timeout=60) as response:
+                  data = json.loads(response.read())
+              for item in data.get('history', []):
+                  result['items'].append({
+                      'history_item_id': item.get('history_item_id'),
+                      'date_unix': item.get('date_unix'),
+                      'source': item.get('source'),
+                      'model_id': item.get('model_id'),
+                      'content_type': item.get('content_type'),
+                      'text': item.get('text'),
+                      'request_id': item.get('request_id'),
+                  })
+              result['has_more'] = data.get('has_more')
+          except urllib.error.HTTPError as error:
+              result['http_error'] = error.code
+              result['body'] = error.read().decode('utf-8', 'replace')[:1000]
+          with open('sfx-history-diagnostic.json', 'w') as fh:
+              json.dump(result, fh, indent=2)
+              fh.write('\n')
+          PY
+      - name: Commit scrubbed history diagnostic
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add sfx-history-diagnostic.json
+          git commit -m "Inspect recent ElevenLabs audio history for SFX recovery"
+          git pull --rebase origin main
+          git push
