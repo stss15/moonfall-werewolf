@@ -1,0 +1,4 @@
+Moonfall premium audio generation failed with exit status 1.
+
+Rendering 116 clips (42 lines, 6179 characters) with engine 'elevenlabs'…
+::error::ElevenLabs rejected the key (HTTP 401). It is invalid or was auto-revoked after being committed publicly — create a fresh key and try again.
