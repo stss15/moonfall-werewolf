@@ -1,8 +1,9 @@
 {
-  "checked_at_unix": 1783987186,
+  "checked_at_unix": 1783987513,
+  "reason": "during-live-role-sfx-generation",
   "tier": "free",
   "status": "free",
-  "credits_used": 5534.0,
+  "credits_used": 5614.0,
   "credit_limit": 10000,
-  "credits_remaining": 4466.0
+  "credits_remaining": 4386.0
 }
