@@ -139,13 +139,20 @@
       "seconds": 2.5,
       "character_cost_header": 25.0,
       "size_bytes": 40586
+    },
+    {
+      "slot": "hunter",
+      "variant": "02",
+      "seconds": 2.5,
+      "character_cost_header": 25.0,
+      "size_bytes": 40586
     }
   ],
-  "credits_before_incremental_run": 6264.0,
+  "credits_before_incremental_run": 6289.0,
   "free_limit": 10000,
   "reserve": 600,
   "incremental_billed_headers_total": 25.0,
-  "generated_variant_count": 20,
+  "generated_variant_count": 21,
   "planned_variant_count": 30,
   "complete": false
 }
