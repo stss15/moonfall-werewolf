@@ -39,7 +39,7 @@ jobs:
             effect="$1"
             git pull --rebase origin main
             set +e
-            ROLE_SFX_ONLY="$effect" ROLE_SFX_NO_GIT=1 python scripts/generate_role_sfx_incremental.py 2>&1 | tee role-sfx-last-run.log
+            ROLE_SFX_ONLY="$effect" ROLE_SFX_NO_GIT=1 python scripts/generate_role_sfx_raw.py 2>&1 | tee role-sfx-last-run.log
             status=${PIPESTATUS[0]}
             set -e
             git add role-sfx-last-run.log
@@ -82,7 +82,7 @@ jobs:
             effect="$1"
             git pull --rebase origin main
             set +e
-            ROLE_SFX_ONLY="$effect" ROLE_SFX_NO_GIT=1 python scripts/generate_role_sfx_incremental.py 2>&1 | tee role-sfx-last-run.log
+            ROLE_SFX_ONLY="$effect" ROLE_SFX_NO_GIT=1 python scripts/generate_role_sfx_raw.py 2>&1 | tee role-sfx-last-run.log
             status=${PIPESTATUS[0]}
             set -e
             git add role-sfx-last-run.log
