@@ -111,19 +111,19 @@ export const PRESETS = {
 
 export const PHASE_META = {
   lobby: ['The village gathers', 'Invite everyone before the moon rises.'],
-  'role-reveal': ['The cards are dealt', 'Privately reveal your card, then return your phone face-down.'],
+  'role-reveal': ['The cards are dealt', 'Your fate waits face-down.'],
   'setup-thief': ['The Thief wakes', 'Two unclaimed destinies wait in the dark.'],
   'setup-cupid': ['Cupid wakes', 'Two hearts will be bound until death.'],
-  'setup-lovers': ['The arrow has flown', 'Everyone wakes and turns a card. Only two hearts are bound.'],
+  'setup-lovers': ['The arrow has flown', 'Only two hearts are bound.'],
   'night-seer': ['The Seer wakes', 'One true identity may be revealed.'],
-  'night-wolves': ['The pack wakes', 'The Werewolves must agree on one victim.'],
+  'night-wolves': ['The pack wakes', 'The hunt must agree on one victim.'],
   'night-witch': ['The Witch wakes', 'Tonight’s fate may still be rewritten.'],
-  resolution: ['Fate is turning', 'Final wishes and ancient bonds must be resolved.'],
+  resolution: ['Fate is turning', 'Ancient bonds claim their due.'],
   dawn: ['Dawn breaks', 'The village discovers what the night has taken.'],
-  'sheriff-vote': ['Elect the Sheriff', 'Choose a voice whose future votes will count twice.'],
-  'day-discussion': ['The village debates', 'Accuse, defend, bluff and watch for every tell.'],
-  'day-vote': ['The village votes', 'Choose who will face the judgement of the village.'],
-  'day-result': ['Judgement falls', 'A card is turned and night draws closer.'],
+  'sheriff-vote': ['Elect the Sheriff', 'One voice will carry the weight of two.'],
+  'day-discussion': ['The village debates', 'Truth and lies wear the same face.'],
+  'day-vote': ['Cast your judgement', 'The ballot seals when the last vote falls.'],
+  'day-result': ['Judgement falls', 'Night draws closer.'],
   'game-over': ['The tale is ended', 'The final cards have been revealed.']
 };
 

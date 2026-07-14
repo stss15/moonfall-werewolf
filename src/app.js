@@ -1685,18 +1685,18 @@ function renderRoleReveal(view) {
   const seenCount = Object.values(view.players).filter(player => player.ready).length;
   const total = Object.keys(view.players).length;
   if (!view.phaseReady) {
-    app.innerHTML = `<section class="screen centered">${gameHeader(view)}<div class="narrator-stage"><div class="narrator-orb"><i></i><i></i><i></i></div><div class="eyebrow">The automatic narrator</div><h1>Listen to the tale</h1><p>The cards will unlock when the spoken introduction has finished.</p></div></section>`;
+    app.innerHTML = `<section class="screen centered">${gameHeader(view)}<div class="narrator-stage"><div class="narrator-orb"><i></i><i></i><i></i></div><div class="eyebrow">The automatic narrator</div><h1>Listen to the tale</h1></div></section>`;
     return;
   }
   if (!view.me.seenRole) {
     app.innerHTML = `<section class="screen ${ui.roleFaceUp ? 'has-dock' : ''}">${gameHeader(view)}${phaseHeader(view)}<div class="flip-layout">
       ${roleCard(view.me.role, ui.roleFaceUp)}
-      <div>${!ui.roleFaceUp ? '<div class="tap-hint">Tap the card to reveal your fate</div>' : `<div class="panel compact center"><div class="eyebrow">For your eyes only</div><h2>${esc(role.name)}</h2><p class="muted small">${esc(role.rule)}</p></div>`}</div>
-    </div>${ui.roleFaceUp ? dock('<button class="btn" data-action="seal-role">I know my role · turn it face-down</button>') : ''}</section>`;
+      <div>${!ui.roleFaceUp ? '<div class="tap-hint">Tap the card to reveal your fate</div>' : ''}</div>
+    </div>${ui.roleFaceUp ? dock('<button class="btn" data-action="seal-role">Seal my fate · face-down</button>') : ''}</section>`;
     return;
   }
   app.innerHTML = `<section class="screen">${gameHeader(view)}${phaseHeader(view)}
-    <div class="sleep-card"><div><img src="assets/card-back.webp" alt="Face-down card"><h2>Your card is sealed</h2><p>Hold your phone and close your eyes when night falls—it pulses whenever it is your turn to wake. The narrator begins once every card is sealed.</p><div class="progress-track"><i style="width:${Math.round(seenCount / total * 100)}%"></i></div><span class="badge green">${seenCount} of ${total} ready</span></div></div>
+    <div class="sleep-card"><div>${villageScene(view)}<h2>Your card is sealed</h2><p>Close your eyes when night falls. Your phone pulses when the tale needs you.</p><div class="progress-track"><i style="width:${Math.round(seenCount / total * 100)}%"></i></div><span class="badge green">${seenCount} of ${total} ready</span></div></div>
   </section>`;
 }
 
@@ -1709,16 +1709,15 @@ function sleepMessage(view, custom = null) {
     'night-wolves': 'The pack',
     'night-witch': 'The Witch'
   }[view.phase] || 'Another soul';
-  return `<section class="screen">${gameHeader(view)}${phaseHeader(view)}<div class="sleep-card"><div>${villageScene(view)}<h2>${esc(custom?.title || 'Keep your eyes closed')}</h2><p>${esc(custom?.text || `${phaseRole} is awake. Cradle your phone with your eyes closed—it pulses the moment the tale needs you.`)}</p><div class="eyes">— ◡ —</div></div></div></section>`;
+  return `<section class="screen">${gameHeader(view)}${phaseHeader(view)}<div class="sleep-card"><div>${villageScene(view)}<h2>${esc(custom?.title || 'Keep your eyes closed')}</h2><p>${esc(custom?.text || `${phaseRole} is awake.`)}</p><div class="eyes">— ◡ —</div></div></div></section>`;
 }
 
 function renderThief(view, action) {
   const forced = action.extras.length === 2 && action.extras.every(role => role === 'werewolf');
-  app.innerHTML = `<section class="screen awake-screen awake-thief ${ui.thiefRevealed ? 'has-dock' : ''}">${gameHeader(view)}${phaseHeader(view)}
-    <div class="panel compact center"><div class="eyebrow">First night only</div><p class="muted small">Reveal the two spare cards. You may exchange your Thief card for either fate.${forced ? ' Both are Werewolves, so one must be taken.' : ''}</p></div>
+  app.innerHTML = `<section class="screen awake-screen awake-thief ${ui.thiefRevealed ? 'has-dock' : ''}">${gameHeader(view)}${phaseHeader(view, forced ? {title: 'The Thief wakes', subtitle: 'Both spares are Werewolves. One must be taken.'} : null)}
     <div class="mini-cards">${action.extras.map((roleId, index) => `<div class="mini-flip ${ui.thiefRevealed ? 'revealed' : ''}"><button data-action="${ui.thiefRevealed ? 'choose-thief' : 'reveal-thief'}" data-choice="${index}"><span class="card-face back"><img src="assets/card-back.webp" alt="Spare face-down card"></span><span class="card-face front"><img src="${ROLES[roleId].image}" alt="${esc(ROLES[roleId].name)}"><span class="mini-card-name">${esc(ROLES[roleId].name)}</span></span></button></div>`).join('')}</div>
-    ${!ui.thiefRevealed ? '<div class="tap-hint">Tap either card to reveal both</div>' : ''}
-    ${ui.thiefRevealed ? dock(`<div class="button-stack">${forced ? '' : '<button class="btn secondary" data-action="choose-thief" data-choice="keep">Keep the Thief</button>'}<button class="btn ghost" disabled>Or tap a revealed card to take it</button></div>`) : ''}
+    ${!ui.thiefRevealed ? '<div class="tap-hint">Tap to reveal the spare cards</div>' : '<div class="tap-hint">Tap a card to take its fate</div>'}
+    ${ui.thiefRevealed && !forced ? dock('<button class="btn secondary" data-action="choose-thief" data-choice="keep">Keep the Thief</button>') : ''}
   </section>`;
 }
 
@@ -1726,7 +1725,7 @@ function renderCupid(view, action) {
   const candidates = Object.values(view.players).filter(player => !player.storyteller).map(player => player.id);
   const selected = ui.cupidChoices;
   app.innerHTML = `<section class="screen awake-screen awake-cupid has-dock">${gameHeader(view)}${phaseHeader(view)}
-    <div class="panel compact center"><div class="lover-heart">♥</div><p class="muted small">Choose exactly two characters. You may bind yourself. Their roles remain secret even from one another.</p></div>
+    <div class="lover-heart">♥</div>
     ${choiceGrid(view, candidates, {action: 'choose-cupid', selected})}
     ${dock(`<button class="btn" data-action="submit-cupid" ${selected.length === 2 ? '' : 'disabled'}>Bind ${selected.length === 2 ? `${esc(view.players[selected[0]].name)} & ${esc(view.players[selected[1]].name)}` : 'two hearts'}</button>`)}
   </section>`;
@@ -1738,8 +1737,8 @@ function renderLover(view, action) {
   const partner = action.partnerId ? view.players[action.partnerId] : null;
   const flipped = ui.loverFlipped;
   const front = action.chosen
-    ? `<span class="lover-face chosen"><b>♥</b><strong>Your heart is bound</strong><em>${esc(partner?.name || 'A hidden soul')}</em><span>You live and die together. Never vote against one another. Tell no one—not even a glance.</span></span>`
-    : `<span class="lover-face"><b>☾</b><strong>The arrow passed you by</strong><span>Your heart remains your own. Reveal nothing: only the chosen know they are chosen.</span></span>`;
+    ? `<span class="lover-face chosen"><b>♥</b><strong>Your heart is bound</strong><em>${esc(partner?.name || 'A hidden soul')}</em><span>You live and die together. Tell no one — not even a glance.</span></span>`
+    : `<span class="lover-face"><b>☾</b><strong>The arrow passed you by</strong><span>Your heart remains your own. Reveal nothing.</span></span>`;
   app.innerHTML = `<section class="screen awake-screen awake-lovers ${flipped ? 'has-dock' : ''}">${gameHeader(view)}${phaseHeader(view)}
     <div class="flip-wrap">
       <button class="flip-card ${flipped ? 'flipped' : ''}" data-action="flip-lover" aria-label="${flipped ? 'Your fate card' : 'Turn over your fate card'}">
@@ -1755,7 +1754,7 @@ function renderLover(view, action) {
 function renderSeer(view, action) {
   if (!action.target) {
     const candidates = Object.values(view.players).filter(player => player.alive && !player.storyteller && player.id !== view.me.id).map(player => player.id);
-    app.innerHTML = `<section class="screen awake-screen awake-seer">${gameHeader(view)}${phaseHeader(view)}<div class="panel compact center"><div class="eyebrow">One vision each night</div><p class="muted small">Choose one living soul. Their complete character card will be shown only to you.</p></div>${choiceGrid(view, candidates, {action: 'seer-choose'})}</section>`;
+    app.innerHTML = `<section class="screen awake-screen awake-seer">${gameHeader(view)}${phaseHeader(view, {title: 'The Seer wakes', subtitle: 'Whose truth will the vision show you?'})}${choiceGrid(view, candidates, {action: 'seer-choose'})}</section>`;
     return;
   }
   const target = view.players[action.target];
@@ -1776,17 +1775,17 @@ function renderWolves(view, action) {
     const target = action.votes[id];
     return `${view.players[id]?.name || 'Wolf'} → ${target === null ? 'spare the village' : target ? view.players[target]?.name : 'choosing…'}`;
   });
-  app.innerHTML = `<section class="screen awake-screen awake-wolves">${gameHeader(view)}${phaseHeader(view)}
-    <div class="panel compact center"><div class="eyebrow">Your pack</div><div class="wolf-pack">${wolves.map(id => `<span class="wolf-chip">🐺 ${esc(view.players[id]?.name || 'Werewolf')}</span>`).join('')}</div><p class="muted small">Agree on the same victim—or all choose to spare the village. The night waits for consensus.</p></div>
+  app.innerHTML = `<section class="screen awake-screen awake-wolves">${gameHeader(view)}${phaseHeader(view, {title: 'The pack hunts', subtitle: 'The night waits for one shared victim.'})}
+    <div class="wolf-pack">${wolves.map(id => `<span class="wolf-chip">🐺 ${esc(view.players[id]?.name || 'Werewolf')}</span>`).join('')}</div>
     ${choiceGrid(view, candidates, {action: 'wolf-vote', selected: myChoice ? [myChoice] : [], note: (player, id) => Object.values(action.votes).filter(target => target === id).length ? `${Object.values(action.votes).filter(target => target === id).length} pack choice` : 'Possible victim'})}
-    <button class="choice no-kill-choice ${hasChoice && myChoice === null ? 'selected' : ''}" data-action="wolf-no-kill"><span class="no-kill-moon">☾</span><span class="copy"><strong>Spare the village</strong><span>Every living Werewolf must choose this</span></span>${hasChoice && myChoice === null ? '<b>✓</b>' : ''}</button>
-    <div class="panel compact"><div class="eyebrow">Silent consensus</div>${teammateLines.map(line => `<div class="small muted" style="padding:3px 0">${esc(line)}</div>`).join('')}${action.consensus ? '<div class="badge green" style="margin-top:8px">✓ The pack agrees</div>' : ''}</div>
+    <button class="choice no-kill-choice ${hasChoice && myChoice === null ? 'selected' : ''}" data-action="wolf-no-kill"><span class="no-kill-moon">☾</span><span class="copy"><strong>Spare the village</strong><span>Only unanimous mercy holds</span></span>${hasChoice && myChoice === null ? '<b>✓</b>' : ''}</button>
+    ${wolves.length > 1 || action.consensus ? `<div class="panel compact"><div class="eyebrow">Silent consensus</div>${teammateLines.map(line => `<div class="small muted" style="padding:3px 0">${esc(line)}</div>`).join('')}${action.consensus ? '<div class="badge green" style="margin-top:8px">✓ The pack agrees</div>' : ''}</div>` : ''}
     ${action.littleGirlInPlay ? `<button class="btn danger wide" data-action="little-girl-caught" ${action.littleGirlCaught ? 'disabled' : ''}>${action.littleGirlCaught ? 'The Little Girl was caught' : 'I caught the Little Girl peeking'}</button>` : ''}
   </section>`;
 }
 
 function renderLittleGirl(view) {
-  app.innerHTML = sleepMessage(view, {title: 'Dare you peek?', text: 'The Werewolves are awake. You may quietly lift your eyes from the table to spy on them—but if the pack catches you, you die instead of their chosen victim.'});
+  app.innerHTML = sleepMessage(view, {title: 'Dare you peek?', text: 'The pack is awake. Spy if you dare — caught, you die in the victim’s place.'});
 }
 
 function renderWitch(view, action) {
@@ -1797,7 +1796,6 @@ function renderWitch(view, action) {
     <div class="victim-banner"><span>The pack chose</span><strong>${victim ? esc(victim.name) : 'No victim tonight'}</strong></div>
     <div class="potions"><button class="potion ${ui.witchHeal ? 'selected' : ''} ${action.potions.heal ? '' : 'used'}" data-action="toggle-heal" ${!action.potions.heal || !victim ? 'disabled' : ''}><b>✚</b><strong>Healing</strong><span>${action.potions.heal ? 'One use for the whole game' : 'Potion already spent'}</span></button><button class="potion ${poisonOpen ? 'selected' : ''} ${action.potions.poison ? '' : 'used'}" data-action="open-poison" ${!action.potions.poison ? 'disabled' : ''}><b>⚗</b><strong>Poison</strong><span>${action.potions.poison ? (poisonOpen ? `Target: ${esc(view.players[ui.witchPoisonTarget]?.name || '')}` : 'Choose one living soul') : 'Potion already spent'}</span></button></div>
     ${action.potions.poison && poisonOpen ? `<div class="panel compact"><div class="eyebrow">Poison target</div>${choiceGrid(view, candidates, {action: 'choose-poison', selected: ui.witchPoisonTarget ? [ui.witchPoisonTarget] : []})}<button class="btn ghost wide mini" data-action="clear-poison">Use no poison</button></div>` : ''}
-    <div class="danger-note">You may use either potion, both potions, or neither. Each used potion disappears for the rest of this game.</div>
     ${dock(`<button class="btn" data-action="submit-witch">Seal the potion choice</button>`)}
   </section>`;
 }
@@ -1805,11 +1803,9 @@ function renderWitch(view, action) {
 function renderVote(view, action) {
   const ids = action.candidates.filter(id => view.players[id]?.alive && !view.players[id].storyteller);
   const disabled = action.election ? [] : view.me.loverId ? [view.me.loverId] : [];
-  const title = action.election ? 'Choose the Sheriff' : 'Cast your judgement';
-  const subtitle = action.election ? 'The winner’s village votes count twice. You may nominate yourself.' : 'Your choice stays sealed. The ballot closes automatically when every living player has voted.';
-  app.innerHTML = `<section class="screen">${gameHeader(view)}${phaseHeader(view, {title, subtitle})}
-    ${choiceGrid(view, ids, {action: 'cast-vote', selected: action.choice ? [action.choice] : [], disabled, note: (player, id) => disabled.includes(id) ? 'Your lover · forbidden' : id === view.me.id ? 'Vote for yourself' : player.sheriff ? 'Current Sheriff' : 'Tap to choose'})}
-    ${action.choice ? `<div class="panel compact center"><span class="badge green">✓ Vote sealed for ${esc(view.players[action.choice].name)}</span><p class="muted tiny" style="margin:9px 0 0">Waiting for the remaining living players.</p></div>` : '<div class="tap-hint">Choose one face-down card</div>'}
+  app.innerHTML = `<section class="screen">${gameHeader(view)}${phaseHeader(view, action.election ? {title: 'Choose the Sheriff', subtitle: 'Their voice will carry the weight of two.'} : null)}
+    ${choiceGrid(view, ids, {action: 'cast-vote', selected: action.choice ? [action.choice] : [], disabled, note: (player, id) => disabled.includes(id) ? 'Your lover · forbidden' : id === view.me.id ? 'You' : player.sheriff ? 'Sheriff' : ''})}
+    ${action.choice ? `<div class="center"><span class="badge green">✓ Sealed for ${esc(view.players[action.choice].name)}</span></div>` : ''}
   </section>`;
 }
 
@@ -1826,7 +1822,7 @@ function renderPending(view, action) {
 function renderPrivateAction(view) {
   const action = view.privateAction || {};
   if (action.done && action.type !== 'vote') {
-    app.innerHTML = sleepMessage(view, {title: 'Your choice is sealed', text: 'Return the phone face-down. The narrator continues automatically.'});
+    app.innerHTML = sleepMessage(view, {title: 'Your choice is sealed', text: 'The tale continues on its own.'});
     return true;
   }
   if (action.type === 'thief') return renderThief(view, action);
@@ -1876,7 +1872,7 @@ function whisperMarkup(view, {compact = false} = {}) {
   return `<button class="whisper ${open ? 'open' : ''} ${compact ? 'compact' : ''}" data-action="toggle-whisper" aria-label="${open ? 'Hide your private whisper' : 'Read what you noticed in the night'}">
     <span class="whisper-mark">${open ? '✦' : '✉'}</span>
     <span class="whisper-copy"><strong>${open ? 'You alone remember' : 'What the night left you'}</strong>
-    <span>${open ? esc(whisper) : 'Tap to recall it — for your eyes only. Repeat it, twist it, or bury it.'}</span></span>
+    <span>${open ? esc(whisper) : 'For your eyes only · tap to read'}</span></span>
   </button>`;
 }
 
@@ -1893,7 +1889,7 @@ function renderDead(view) {
   app.innerHTML = `<section class="screen">${gameHeader(view)}${phaseHeader(view)}
     ${villageScene(view, {caption: 'You drift above the lane now. The living cannot hear you.'})}
     ${whisperMarkup(view, {compact: true})}
-    <div class="panel compact center"><div class="eyebrow">You are a silent spirit</div><h2>${esc(role.name)}</h2><p class="muted small" style="margin:0">Watch the tale, but do not speak, signal or vote. Your team can still win.</p></div></section>`;
+    <div class="panel compact center"><div class="eyebrow">A silent spirit</div><h2>${esc(role.name)}</h2><p class="muted small" style="margin:0">Watch. Do not speak, signal or vote.</p></div></section>`;
 }
 
 function renderDawn(view) {
@@ -1909,7 +1905,6 @@ function renderDiscussion(view) {
   app.innerHTML = `<section class="screen ${action ? 'has-dock' : ''}">${gameHeader(view)}${phaseHeader(view)}
     ${villageScene(view)}
     ${whisperMarkup(view, {compact: true})}
-    <div class="look-up trimmed"><div><h2>Look up from your phone</h2><p>Accuse. Defend. Bluff. Trade what you heard in the night — truthfully or not. When the debate feels complete, every living player marks themselves ready.</p></div></div>
     ${action ? `<div class="ready-ring"><strong>${action.readyCount}</strong><span>of ${action.total} ready for judgement</span></div>${dock(`<button class="btn ${action.ready ? 'secondary' : ''}" data-action="day-ready" data-ready="${action.ready ? 'false' : 'true'}">${action.ready ? '✓ Ready · tap to keep debating' : 'I am ready to vote'}</button>`)}` : ''}
   </section>`;
 }
@@ -1918,7 +1913,7 @@ function renderDayResult(view) {
   const tied = view.lastVote?.leaders?.length > 1;
   app.innerHTML = `<section class="screen">${gameHeader(view)}${phaseHeader(view, {title: tied ? 'The vote is tied' : 'The village has spoken', subtitle: tied ? 'By the classic rule, nobody is eliminated.' : 'The sealed tally is now revealed.'})}
     ${villageScene(view)}
-    <div class="panel">${tallyMarkup(view)}</div>${deathsMarkup(view, {staged: ui.phaseFresh})}<div class="panel compact center"><p class="muted small" style="margin:0">Listen. Night falls automatically when the judgement is complete.</p></div></section>`;
+    <div class="panel">${tallyMarkup(view)}</div>${deathsMarkup(view, {staged: ui.phaseFresh})}</section>`;
 }
 
 function renderGameOver(view) {
@@ -1935,14 +1930,13 @@ function renderGameOver(view) {
       const role = ROLES[roleId] || ROLES.villager;
       return `<div class="final-card ${player.alive ? '' : 'dead'}"><img src="${role.image}" alt="${esc(role.name)}"><div class="label"><strong>${esc(player.name)}</strong><span>${esc(role.name)}${player.sheriff ? ' · Sheriff' : ''}</span></div></div>`;
     }).join('')}</div>
-    <div class="panel compact center" style="margin-top:16px"><p class="muted small" style="margin:0">No score is kept. A new game reshuffles every character card.</p></div>
     ${view.coordinator ? dock('<button class="btn" data-action="reset-game">Gather the cards · play again</button>') : ''}
   </section>`;
 }
 
 function renderNarratorWait(view) {
   const [title] = PHASE_META[view.phase] || ['The tale continues'];
-  app.innerHTML = `<section class="screen centered">${gameHeader(view)}<div class="narrator-stage"><div class="narrator-orb"><i></i><i></i><i></i></div><div class="eyebrow">Automatic narrator</div><h1>${esc(title)}</h1><p>Listen. The active controls appear only after the spoken cue has finished.</p><span class="narrator-live">● Narrating now</span></div></section>`;
+  app.innerHTML = `<section class="screen centered">${gameHeader(view)}<div class="narrator-stage"><div class="narrator-orb"><i></i><i></i><i></i></div><div class="eyebrow">Automatic narrator</div><h1>${esc(title)}</h1><span class="narrator-live">● Narrating now</span></div></section>`;
 }
 
 function renderGame() {
@@ -1961,7 +1955,7 @@ function renderGame() {
   if (!view.me.alive) return renderDead(view);
   if (view.phase === 'day-discussion') return renderDiscussion(view);
   if (view.phase === 'resolution') {
-    app.innerHTML = `<section class="screen">${gameHeader(view)}${phaseHeader(view)}<div class="panel ornate center"><div class="moon-loader"><span></span></div><h2 style="margin-top:18px">A final choice is being made</h2><p class="muted">Keep silent while fate resolves around the table.</p></div></section>`;
+    app.innerHTML = `<section class="screen">${gameHeader(view)}${phaseHeader(view)}<div class="panel ornate center"><div class="moon-loader"><span></span></div><h2 style="margin-top:18px">A final choice is being made</h2></div></section>`;
     return;
   }
   app.innerHTML = sleepMessage(view);

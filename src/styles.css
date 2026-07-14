@@ -42,8 +42,16 @@ body:after{
   content:"";position:fixed;inset:0;z-index:-2;pointer-events:none;
   background:radial-gradient(circle at 50% 12%,rgba(100,127,196,.22),transparent 34%),linear-gradient(180deg,transparent 55%,rgba(0,0,0,.58));
 }
-body[data-phase="dawn"]:before,body[data-phase="day-discussion"]:before,body[data-phase="day-vote"]:before,body[data-phase="day-result"]:before{filter:saturate(.82) brightness(1.32) sepia(.08)}
-body[data-phase="dawn"]:after,body[data-phase="day-discussion"]:after,body[data-phase="day-vote"]:after,body[data-phase="day-result"]:after{background:linear-gradient(180deg,rgba(210,142,76,.17),transparent 38%,rgba(0,0,0,.55))}
+/* Day truly arrives: a heavy painted-sky wash sits over the night photograph
+   so only its texture survives — the moonlit scene reads as morning light. */
+body[data-phase="dawn"]:before{background:
+  linear-gradient(180deg,rgba(88,50,92,.9),rgba(219,139,84,.84) 44%,rgba(64,36,48,.9) 78%,rgba(24,14,22,.94)),
+  url("assets/table-bg.webp") center top/cover no-repeat;filter:saturate(.95) brightness(1.2)}
+body[data-phase="dawn"]:after{background:radial-gradient(circle at 50% 16%,rgba(255,196,120,.3),transparent 42%),linear-gradient(180deg,transparent 55%,rgba(20,8,14,.5))}
+body[data-phase="sheriff-vote"]:before,body[data-phase="day-discussion"]:before,body[data-phase="day-vote"]:before,body[data-phase="day-result"]:before{background:
+  linear-gradient(180deg,rgba(116,158,198,.92),rgba(214,199,160,.85) 50%,rgba(74,72,54,.9) 80%,rgba(28,26,22,.94)),
+  url("assets/table-bg.webp") center top/cover no-repeat;filter:saturate(.9) brightness(1.28)}
+body[data-phase="sheriff-vote"]:after,body[data-phase="day-discussion"]:after,body[data-phase="day-vote"]:after,body[data-phase="day-result"]:after{background:radial-gradient(circle at 50% 12%,rgba(255,236,180,.26),transparent 38%),linear-gradient(180deg,transparent 58%,rgba(22,20,12,.48))}
 button,input,select{font:inherit}
 button{color:inherit}
 button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--gold-2);outline-offset:3px}
@@ -231,6 +239,11 @@ body[data-phase="setup-cupid"] #sky i,body[data-phase="setup-lovers"] #sky i{bac
 body[data-phase="night-seer"] #sky i{background:radial-gradient(circle at 38% 34%,#f3ecff,#a189dd 55%,#493180);box-shadow:0 0 58px 16px rgba(158,128,228,.34)}
 body[data-phase="night-witch"] #sky i{background:radial-gradient(circle at 38% 34%,#eefbe8,#87b47e 55%,#2c5136);box-shadow:0 0 58px 16px rgba(115,190,130,.3)}
 body[data-phase="dawn"] #sky i,body[data-phase="sheriff-vote"] #sky i,body[data-phase^="day-"] #sky i{background:radial-gradient(circle at 40% 35%,#fff6c9,#eab54c 55%,#9a601f);box-shadow:0 0 74px 24px rgba(238,180,80,.4)}
+/* Under the bright daytime wash the big sky orb shrinks out of the header's
+   way, and the header copy switches to ink so it stays legible. */
+body[data-phase="sheriff-vote"] #sky,body[data-phase^="day-"] #sky{top:4px;width:108px;height:108px;margin-left:-54px;opacity:.7}
+body[data-phase="sheriff-vote"] .top-copy strong,body[data-phase^="day-"] .top-copy strong{color:#2e2517;text-shadow:0 1px 2px rgba(255,248,225,.55)}
+body[data-phase="sheriff-vote"] .top-copy span,body[data-phase^="day-"] .top-copy span{color:#4a4030;text-shadow:0 1px 2px rgba(255,248,225,.5)}
 /* Coloured night vignettes so the whole screen breathes with the phase. */
 body[data-phase="night-wolves"]:after,body[data-phase="resolution"]:after{background:radial-gradient(circle at 50% 6%,rgba(190,45,32,.24),transparent 44%),linear-gradient(180deg,transparent 52%,rgba(22,1,0,.64))}
 body[data-phase="setup-cupid"]:after,body[data-phase="setup-lovers"]:after{background:radial-gradient(circle at 50% 6%,rgba(226,100,150,.17),transparent 42%),linear-gradient(180deg,transparent 55%,rgba(0,0,0,.58))}
@@ -241,10 +254,10 @@ body[data-phase="night-witch"]:after{background:radial-gradient(circle at 50% 6%
    light are keyed to data-mood; house states are keyed to real game events. */
 .village-stage{position:relative;margin:12px 0;border-radius:20px;overflow:hidden;border:1px solid rgba(223,183,85,.34);box-shadow:0 18px 48px rgba(0,0,0,.5),inset 0 0 0 1px rgba(255,255,255,.03);background:#05060d}
 .village-stage svg{display:block;width:100%;height:auto;filter:saturate(calc(1 - var(--wear,0)*.8)) brightness(calc(1 - var(--wear,0)*.22));transition:filter 1.4s ease}
-.village-stage:after{content:"";position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse 120% 90% at 50% 30%,transparent 55%,rgba(2,2,8,.42)),linear-gradient(180deg,rgba(0,0,0,.14),transparent 22%)}
+.village-stage:after{content:"";position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse 120% 90% at 50% 30%,transparent 55%,rgba(2,2,8,.4)),linear-gradient(180deg,rgba(0,0,0,.12),transparent 22%)}
 .village-stage figcaption{position:absolute;z-index:2;left:10px;right:10px;bottom:8px;text-align:center;font-family:Georgia,serif;font-style:italic;font-size:11px;line-height:1.4;color:#efe3cf;text-shadow:0 2px 8px #000,0 0 14px rgba(0,0,0,.9)}
 .village-stage[data-ghost="1"] svg{filter:saturate(.28) brightness(.82) hue-rotate(-12deg)}
-/* sky, sun & moon */
+/* sky, sun, moon, clouds & birds */
 .vg-s0,.vg-s1,.vg-g0,.vg-g1{transition:stop-color 1.6s ease}
 .vg-s0{stop-color:#111739}.vg-s1{stop-color:#06070f}
 .vg-g0{stop-color:#131427}.vg-g1{stop-color:#08080f}
@@ -254,25 +267,55 @@ body[data-phase="night-witch"]:after{background:radial-gradient(circle at 50% 6%
 .vg-moon .vg-crater{fill:#cfc6a8}
 .vg-sun{fill:#ffdf8f;opacity:0;transition:opacity 1.4s ease}
 .vg-glow{opacity:.5;transition:opacity 1.4s ease}
-/* land & landmarks */
+.vg-cloud{fill:rgba(196,206,236,.07);transition:fill 1.6s ease}
+.vg-cloud.c1{animation:vg-cloud-drift 46s ease-in-out infinite alternate}
+.vg-cloud.c2{animation:vg-cloud-drift 62s ease-in-out infinite alternate-reverse}
+.vg-cloud.c3{animation:vg-cloud-drift 54s ease-in-out infinite alternate}
+@keyframes vg-cloud-drift{to{transform:translateX(22px)}}
+.vg-birds{stroke:#2b3046;stroke-width:.9;fill:none;stroke-linecap:round;opacity:0;transition:opacity 1.4s ease,stroke 1.6s ease}
+/* land, trees & landmarks */
 .vg-hill{transition:fill 1.6s ease}
 .vg-hill.far{fill:#0d1024}.vg-hill.near{fill:#10132b}
-.vg-lane{fill:rgba(214,187,138,.1);transition:fill 1.6s ease}
-.vg-church rect,.vg-church polygon,.vg-mill polygon,.vg-well rect,.vg-well polygon{fill:#171a30;transition:fill 1.6s ease}
-.vg-church .vg-cross,.vg-mill .vg-sails line,.vg-well line,.vg-tree line{stroke:#171a30;stroke-width:1.5;stroke-linecap:round;transition:stroke 1.6s ease}
-.vg-mill .vg-sails line{stroke-width:1.2}
-.vg-church .vg-cwin{fill:#e8b45c;opacity:.85;transition:fill 1.6s ease,opacity 1.6s ease}
-.vg-grave line{stroke:#242841;stroke-width:1.1;stroke-linecap:round;transition:stroke 1.6s ease}
+.vg-treeline polygon,.vg-treeline rect{fill:#0a0d1e;transition:fill 1.6s ease}
+.vg-pine polygon,.vg-pine rect{fill:#0c0f20;transition:fill 1.6s ease}
+.vg-pine.deep polygon,.vg-pine.deep rect{fill:#080a18}
+.vg-lane{fill:rgba(209,181,132,.12);transition:fill 1.6s ease}
+.vg-stone{fill:rgba(214,193,150,.16);transition:fill 1.6s ease}
+.vg-shadow{fill:rgba(0,0,0,.3)}
+.vg-church .vg-nave,.vg-church .vg-tower{fill:#1a1d33;transition:fill 1.6s ease}
+.vg-church .vg-naveroof,.vg-church .vg-spire{fill:#232741;transition:fill 1.6s ease}
+.vg-church .vg-cross{stroke:#8f86a8;stroke-width:1.1;stroke-linecap:round;transition:stroke 1.6s ease}
+.vg-church .vg-cwin{fill:#e8b45c;opacity:.9;transition:fill 1.6s ease,opacity 1.6s ease}
+.vg-church .vg-cdoor{fill:#0d0a16;transition:fill 1.6s ease}
+.vg-grave line{stroke:#2c3050;stroke-width:1.1;stroke-linecap:round;transition:stroke 1.6s ease}
+.vg-mill .vg-milltower{fill:#1a1d33;transition:fill 1.6s ease}
+.vg-mill .vg-millcap{fill:#232741;transition:fill 1.6s ease}
+.vg-mill .vg-milldoor{fill:#0d0a16}
+.vg-mill .vg-sails line{stroke:#232741;stroke-width:1.3;stroke-linecap:round;transition:stroke 1.6s ease}
+.vg-mill .vg-hub{fill:#3a3f60;transition:fill 1.6s ease}
+.vg-mill .vg-sails{animation:vg-sails 40s linear infinite;transform-box:fill-box;transform-origin:center}
+@keyframes vg-sails{to{transform:rotate(360deg)}}
+.vg-well .vg-wellbase{fill:#1c1f36;transition:fill 1.6s ease}
+.vg-well .vg-wellroof{fill:#252945;transition:fill 1.6s ease}
+.vg-well .vg-wellpost,.vg-well .vg-wellrope{stroke:#252945;stroke-width:1;stroke-linecap:round;transition:stroke 1.6s ease}
 /* cottages */
-.vg-body{fill:#241d33;transition:fill 1.6s ease}
-.vg-roof{fill:#332947;transition:fill 1.6s ease}
-.vg-roof.v1{fill:#3a2b44}.vg-roof.v2{fill:#2d2740}
-.vg-chimney{fill:#1e1930;transition:fill 1.6s ease}
-.vg-door{fill:#160f1e;transition:fill 1.6s ease}
+.vg-body{fill:#2b2340;transition:fill 1.6s ease}
+.vg-plinth{fill:#1c1730;transition:fill 1.6s ease}
+.vg-roof{fill:#3d2f54;transition:fill 1.6s ease}
+.vg-roof.v1{fill:#453054}.vg-roof.v2{fill:#35304f}
+.vg-eave{stroke:#171226;stroke-width:.8;transition:stroke 1.6s ease}
+.vg-chimney{fill:#221c38;transition:fill 1.6s ease}
+.vg-chimcap{fill:#191430;transition:fill 1.6s ease}
+.vg-door{fill:#150f22;transition:fill 1.6s ease}
+.vg-knob{fill:#8b7440}
+.vg-bush{fill:#131a2c;transition:fill 1.6s ease}
+.vg-winhalo{fill:#ffd98a;opacity:.14;transition:opacity 1.6s ease}
 .vg-win{fill:#ffd98a;animation:vg-flicker 3.1s ease-in-out infinite alternate;animation-delay:var(--fd,0s);transition:fill 1.6s ease}
 @keyframes vg-flicker{to{opacity:.62}}
+.vg-mull{stroke:rgba(20,12,6,.55);stroke-width:.5;fill:none}
 .vg-house.dead .vg-win{fill:#0c0a13;animation:none}
-.vg-house.dead .vg-body{fill:#1a1523}.vg-house.dead .vg-roof{fill:#221b2e}
+.vg-house.dead .vg-winhalo{opacity:0}
+.vg-house.dead .vg-body{fill:#1c1729}.vg-house.dead .vg-roof{fill:#241d33}.vg-house.dead .vg-plinth{fill:#151126}
 .vg-boards line{stroke:#4d3d29;stroke-width:1.5;stroke-linecap:round}
 .vg-claw{stroke:#8e232e;stroke-width:.9;stroke-linecap:round;fill:none}
 .vg-smoke circle{fill:rgba(206,204,216,.24)}
@@ -298,6 +341,9 @@ body[data-phase="night-witch"]:after{background:radial-gradient(circle at 50% 6%
 .village-stage[data-mood="dusk"] .vg-g0{stop-color:#241c31}.village-stage[data-mood="dusk"] .vg-g1{stop-color:#120d18}
 .village-stage[data-mood="dusk"] .vg-stars circle{opacity:.3}
 .village-stage[data-mood="dusk"] .vg-hill.far{fill:#2a2038}.village-stage[data-mood="dusk"] .vg-hill.near{fill:#1e1830}
+.village-stage[data-mood="dusk"] .vg-treeline polygon,.village-stage[data-mood="dusk"] .vg-treeline rect{fill:#241b30}
+.village-stage[data-mood="dusk"] .vg-pine polygon,.village-stage[data-mood="dusk"] .vg-pine rect{fill:#191323}
+.village-stage[data-mood="dusk"] .vg-cloud{fill:rgba(255,178,132,.16)}
 /* mood: dawn */
 .village-stage[data-mood="dawn"] .vg-s0{stop-color:#503058}.village-stage[data-mood="dawn"] .vg-s1{stop-color:#dd8f52}
 .village-stage[data-mood="dawn"] .vg-g0{stop-color:#3a2c38}.village-stage[data-mood="dawn"] .vg-g1{stop-color:#181119}
@@ -305,7 +351,10 @@ body[data-phase="night-witch"]:after{background:radial-gradient(circle at 50% 6%
 .village-stage[data-mood="dawn"] .vg-moon circle{opacity:0}
 .village-stage[data-mood="dawn"] .vg-sun{opacity:.95}
 .village-stage[data-mood="dawn"] .vg-hill.far{fill:#3c2c44}.village-stage[data-mood="dawn"] .vg-hill.near{fill:#2b2136}
+.village-stage[data-mood="dawn"] .vg-treeline polygon,.village-stage[data-mood="dawn"] .vg-treeline rect{fill:#34253c}
+.village-stage[data-mood="dawn"] .vg-pine polygon,.village-stage[data-mood="dawn"] .vg-pine rect{fill:#231a2c}
 .village-stage[data-mood="dawn"] .vg-win{fill:#e7bd7d;opacity:.8}
+.village-stage[data-mood="dawn"] .vg-cloud{fill:rgba(255,205,160,.3)}
 .village-stage[data-mood="dawn"] .vg-fog ellipse{fill:#d9b48f}
 /* mood: day */
 .village-stage[data-mood="day"] .vg-s0{stop-color:#7ba3c6}.village-stage[data-mood="day"] .vg-s1{stop-color:#d8c9a4}
@@ -313,26 +362,49 @@ body[data-phase="night-witch"]:after{background:radial-gradient(circle at 50% 6%
 .village-stage[data-mood="day"] .vg-stars circle{opacity:0}
 .village-stage[data-mood="day"] .vg-moon circle{opacity:0}
 .village-stage[data-mood="day"] .vg-sun{opacity:1}
+.village-stage[data-mood="day"] .vg-cloud{fill:rgba(255,255,255,.65)}
+.village-stage[data-mood="day"] .vg-birds{opacity:.8;stroke:#3d4452}
 .village-stage[data-mood="day"] .vg-hill.far{fill:#4c5a49}.village-stage[data-mood="day"] .vg-hill.near{fill:#3c4a3c}
-.village-stage[data-mood="day"] .vg-body{fill:#57453e}.village-stage[data-mood="day"] .vg-roof{fill:#6b5340}
-.village-stage[data-mood="day"] .vg-roof.v1{fill:#755a41}.village-stage[data-mood="day"] .vg-roof.v2{fill:#61503f}
-.village-stage[data-mood="day"] .vg-chimney{fill:#4b3c36}
-.village-stage[data-mood="day"] .vg-win{fill:#2e2a38;animation:none}
-.village-stage[data-mood="day"] .vg-house.dead .vg-body{fill:#332b31}.village-stage[data-mood="day"] .vg-house.dead .vg-roof{fill:#3e343a}
-.village-stage[data-mood="day"] .vg-church rect,.village-stage[data-mood="day"] .vg-church polygon,.village-stage[data-mood="day"] .vg-mill polygon,.village-stage[data-mood="day"] .vg-well rect,.village-stage[data-mood="day"] .vg-well polygon{fill:#41443f}
-.village-stage[data-mood="day"] .vg-church .vg-cross,.village-stage[data-mood="day"] .vg-mill .vg-sails line,.village-stage[data-mood="day"] .vg-well line,.village-stage[data-mood="day"] .vg-tree line{stroke:#41443f}
-.village-stage[data-mood="day"] .vg-church .vg-cwin{fill:#292d3c;opacity:1}
-.village-stage[data-mood="day"] .vg-grave line{stroke:#565a4f}
+.village-stage[data-mood="day"] .vg-treeline polygon,.village-stage[data-mood="day"] .vg-treeline rect{fill:#3a4a3a}
+.village-stage[data-mood="day"] .vg-pine polygon,.village-stage[data-mood="day"] .vg-pine rect{fill:#2c3a2e}
+.village-stage[data-mood="day"] .vg-pine.deep polygon,.village-stage[data-mood="day"] .vg-pine.deep rect{fill:#25332a}
+.village-stage[data-mood="day"] .vg-body{fill:#8a6f5c}.village-stage[data-mood="day"] .vg-plinth{fill:#6a5344}
+.village-stage[data-mood="day"] .vg-roof{fill:#7d5138}.village-stage[data-mood="day"] .vg-roof.v1{fill:#8a5c3c}.village-stage[data-mood="day"] .vg-roof.v2{fill:#6f4c39}
+.village-stage[data-mood="day"] .vg-eave{stroke:#4a3626}
+.village-stage[data-mood="day"] .vg-chimney,.village-stage[data-mood="day"] .vg-chimcap{fill:#5f4a3c}
+.village-stage[data-mood="day"] .vg-door{fill:#3c2b20}
+.village-stage[data-mood="day"] .vg-bush{fill:#3f5438}
+.village-stage[data-mood="day"] .vg-win{fill:#33313f;animation:none}
+.village-stage[data-mood="day"] .vg-winhalo{opacity:0}
+.village-stage[data-mood="day"] .vg-house.dead .vg-body{fill:#4f4441}.village-stage[data-mood="day"] .vg-house.dead .vg-roof{fill:#514138}.village-stage[data-mood="day"] .vg-house.dead .vg-plinth{fill:#3e3531}
+.village-stage[data-mood="day"] .vg-church .vg-nave,.village-stage[data-mood="day"] .vg-church .vg-tower{fill:#8f8a7a}
+.village-stage[data-mood="day"] .vg-church .vg-naveroof,.village-stage[data-mood="day"] .vg-church .vg-spire{fill:#5c5347}
+.village-stage[data-mood="day"] .vg-church .vg-cross{stroke:#4c463c}
+.village-stage[data-mood="day"] .vg-church .vg-cwin{fill:#2c3040;opacity:1}
+.village-stage[data-mood="day"] .vg-church .vg-cdoor{fill:#3a3228}
+.village-stage[data-mood="day"] .vg-grave line{stroke:#5c6152}
+.village-stage[data-mood="day"] .vg-mill .vg-milltower{fill:#7c6a54}
+.village-stage[data-mood="day"] .vg-mill .vg-millcap{fill:#54462f}
+.village-stage[data-mood="day"] .vg-mill .vg-sails line{stroke:#4c4232}
+.village-stage[data-mood="day"] .vg-mill .vg-hub{fill:#392f22}
+.village-stage[data-mood="day"] .vg-well .vg-wellbase{fill:#6f6a5c}
+.village-stage[data-mood="day"] .vg-well .vg-wellroof{fill:#54462f}
+.village-stage[data-mood="day"] .vg-well .vg-wellpost,.village-stage[data-mood="day"] .vg-well .vg-wellrope{stroke:#54462f}
 .village-stage[data-mood="day"] .vg-fog ellipse{fill:#cfd3c2}
-.village-stage[data-mood="day"] .vg-lane{fill:rgba(214,187,138,.28)}
-.village-stage[data-mood="day"] .vg-name{fill:rgba(24,20,14,.55)}
+.village-stage[data-mood="day"] .vg-lane{fill:rgba(199,173,124,.5)}
+.village-stage[data-mood="day"] .vg-stone{fill:rgba(120,104,74,.5)}
+.village-stage[data-mood="day"] .vg-name{fill:rgba(24,20,14,.6)}
 /* mood: ember (the pack has won) */
 .village-stage[data-mood="ember"] .vg-s0{stop-color:#43111a}.village-stage[data-mood="ember"] .vg-s1{stop-color:#983320}
 .village-stage[data-mood="ember"] .vg-g0{stop-color:#2a1214}.village-stage[data-mood="ember"] .vg-g1{stop-color:#120708}
 .village-stage[data-mood="ember"] .vg-stars circle{opacity:.1}
 .village-stage[data-mood="ember"] .vg-moon circle{fill:#e8a184}
 .village-stage[data-mood="ember"] .vg-win{fill:#1d0e12;animation:none}
+.village-stage[data-mood="ember"] .vg-winhalo{opacity:0}
 .village-stage[data-mood="ember"] .vg-hill.far{fill:#26101a}.village-stage[data-mood="ember"] .vg-hill.near{fill:#1c0d15}
+.village-stage[data-mood="ember"] .vg-treeline polygon,.village-stage[data-mood="ember"] .vg-treeline rect{fill:#200d14}
+.village-stage[data-mood="ember"] .vg-pine polygon,.village-stage[data-mood="ember"] .vg-pine rect{fill:#180a10}
+.village-stage[data-mood="ember"] .vg-cloud{fill:rgba(220,110,70,.12)}
 .village-stage[data-mood="ember"] .vg-fog ellipse{fill:#a06452}
 .sleep-card .village-stage{width:100%;margin:0 0 18px}
 /* ── Night whispers ─────────────────────────────────────────────────────── */
@@ -353,6 +425,4 @@ body[data-phase="night-witch"]:after{background:radial-gradient(circle at 50% 6%
 .no-deaths.staged{animation:death-in .9s ease both;animation-delay:.9s}
 @keyframes death-in{from{opacity:0;transform:translateY(16px) scale(.97)}}
 .death-flavor{font-family:Georgia,serif;font-style:italic;color:#e6cdc4!important;font-size:11.5px!important;margin:0 0 5px!important}
-.look-up.trimmed{min-height:0;padding:16px 20px 6px}
-.look-up.trimmed h2{font-size:26px}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
