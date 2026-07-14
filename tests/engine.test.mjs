@@ -6,6 +6,7 @@ import {
   buildDeck,
   checkWinner,
   closeDayVote,
+  generateWhispers,
   makeState,
   narratorUnlock,
   resolvePending,
@@ -191,6 +192,43 @@ test('day debate and ballots advance only after every living player acts', () =>
   applyPlayerCommand(state, living.at(-1), 'cast-vote', {target: 'ben'});
   assert.notEqual(state.phase, 'day-vote');
   assert.equal(state.players.ben.alive, false);
+});
+
+test('a resolved night leaves every character a private whisper and writes the chronicle', () => {
+  const state = fixture();
+  state.storytellerId = null;
+  state.players.story.role = 'villager';
+  state.players.wolf.role = 'werewolf';
+  state.phase = 'night-wolves';
+  state.phaseReady = true;
+  state.night = 1;
+  applyPlayerCommand(state, 'wolf', 'wolf-vote', {target: 'ben'});
+  assert.equal(storytellerAdvance(state).ok, true);
+  assert.equal(state.phase, 'dawn');
+  assert.equal(state.players.ben.alive, false);
+  assert.deepEqual(state.chronicle.map(event => [event.id, event.cause]), [['ben', 'the Werewolves']]);
+  for (const id of ['story', 'wolf', 'ada', 'ben', 'cleo', 'drew']) {
+    assert.equal(typeof state.whispers[id], 'string');
+    assert.ok(state.whispers[id].length > 10, 'each whisper should be a real sentence');
+    assert.doesNotMatch(state.whispers[id], /werewol|witch|seer|thief|cupid|hunter/i, 'whispers must never name a role');
+  }
+});
+
+test('whispers and the chronicle are private and public in the right measure', () => {
+  const state = fixture();
+  state.storytellerId = null;
+  state.players.story.role = 'villager';
+  state.players.wolf.role = 'werewolf';
+  state.players.ben.alive = false;
+  state.lastDeaths = [{id: 'ben', name: 'Ben', role: 'villager', cause: 'the Werewolves'}];
+  state.chronicle = [{id: 'ben', cause: 'the Werewolves', night: 1, day: 1, source: 'night'}];
+  generateWhispers(state, () => .1);
+  const view = viewFor(state, 'ada');
+  assert.equal(view.me.whisper, state.whispers.ada);
+  assert.equal('whispers' in view, false, 'the full whisper map must never leave the host');
+  assert.equal(view.chronicle.length, 1, 'the village chronicle is shared scenery data');
+  assert.equal(typeof state.whispers.ben, 'string', 'the dead receive spirit whispers');
+  assert.notEqual(state.whispers.ben, state.whispers.ada === undefined);
 });
 
 test('complete first night follows Thief → Cupid → lovers → Seer → Wolves → Witch → dawn', () => {

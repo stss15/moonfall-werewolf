@@ -63,6 +63,8 @@ export function makeState({roomCode, coordinatorId, coordinatorName = 'Host'}) {
     electionCandidates: [],
     resolution: null,
     lastDeaths: [],
+    chronicle: [],
+    whispers: {},
     nightResult: {healed: false, poisoned: false},
     lastVote: null,
     winner: null,
@@ -207,6 +209,8 @@ export function startGame(state, rng = Math.random) {
   state.potions = {heal: true, poison: true};
   state.resolution = null;
   state.lastDeaths = [];
+  state.chronicle = [];
+  state.whispers = {};
   state.nightResult = {healed: false, poisoned: false};
   state.lastVote = null;
   state.winner = null;
@@ -332,6 +336,10 @@ function markDead(state, item) {
     night: state.night
   };
   state.resolution.resolved.push(death);
+  // The village remembers: every loss is written into the chronicle so the
+  // scenery (boarded windows, claw-marks, graves) reflects real game events.
+  state.chronicle = state.chronicle || [];
+  state.chronicle.push({id: item.id, cause: item.cause, night: state.night, day: state.day, source: state.resolution.source});
   log(state, `${player.name} was claimed by ${item.cause}.`, 'death');
   const triggers = [];
   if (player.role === 'hunter' && aliveIds(state).length) triggers.push({type: 'hunter', actorId: item.id});
@@ -341,6 +349,64 @@ function markDead(state, item) {
     state.resolution.queue.push({id: lover, cause: 'a broken heart'});
   }
   state.resolution.triggers.push(...triggers);
+}
+
+// ── Night whispers ─────────────────────────────────────────────────────────
+// After every night resolves, each character privately receives one short
+// observation. Some are fragments of what truly happened; some are ordinary
+// village noise. Nobody can tell which kind they hold, nothing ever names a
+// role, and shared fact-lines let two players corroborate each other — or
+// catch each other lying. The whispers exist to feed the day's argument.
+const WHISPER_AMBIENT = [
+  'A dog barked twice after midnight, then fell suddenly and completely quiet.',
+  'You woke once, certain a shutter had banged somewhere down the lane.',
+  'The old well-rope creaked in the wind for most of the night.',
+  'An owl called from the church tower until the small hours.',
+  'You dreamed of running water and woke with cold feet, your door unlatched.',
+  'A fox screamed in the far fields. At least, you think it was a fox.',
+  'The candle you left burning was out by morning, though no window was open.',
+  'Rain tapped your glass a while, yet the road was dry at sunrise.',
+  'Somewhere before dawn, a gate swung and was carefully closed again.',
+  'You heard the mill boards settle, like a weight crossing them slowly.'
+];
+
+const WHISPER_SPIRIT = [
+  'The village looks smaller from where you watch now. Its secrets do not.',
+  'You drifted down the lane all night. One chimney breathed when it should not have.',
+  'The living lock their doors against the wrong things. You see that now.',
+  'From the churchyard you counted the lit windows, and one went dark too quickly.',
+  'No one hears you. But you hear everything now, and morning will prove you right.'
+];
+
+export function generateWhispers(state, rng = Math.random) {
+  const pick = list => list[randomIndex(list.length, rng)];
+  const living = aliveIds(state);
+  const wolfKill = (state.lastDeaths || []).find(death => death.cause === 'the Werewolves');
+  const packSize = roleIds(state, 'werewolf', true).length;
+  const facts = [];
+  if (wolfKill) {
+    // One true trail and one false trail, built once per night so several
+    // players can hold the same line and corroborate one another by day.
+    const decoys = living.filter(id => id !== wolfKill.id);
+    const decoy = decoys.length ? state.players[pick(decoys)] : null;
+    facts.push(`Something crossed the lane by ${state.players[wolfKill.id]?.name || 'a dark cottage'}’s home in the dark — quick, and heavier than a neighbour.`);
+    if (decoy) facts.push(`You heard a door open near ${decoy.name}’s home long after the lamps went out.`);
+    if (packSize > 1) facts.push('You are certain of one thing: there was more than one set of footsteps.');
+    facts.push('Toward dawn, something ran for the treeline. You did not look out to count its legs.');
+  }
+  if (state.nightResult?.healed) facts.push('Long after midnight, smoke rose from one chimney — sweet, like herbs thrown on embers.');
+  if (state.nightResult?.poisoned) facts.push('A bitter smell clung to the morning air, like crushed green stems.');
+  if (state.actions?.seerDone) facts.push('A pale light moved behind a window, was held high a moment, then went dark.');
+  if (!wolfKill && !(state.lastDeaths || []).length) facts.push('The night felt held-of-breath, as if the whole village were pretending to sleep.');
+  state.whispers = {};
+  for (const id of characterIds(state)) {
+    const player = state.players[id];
+    if (!player.alive) {
+      state.whispers[id] = pick(WHISPER_SPIRIT);
+    } else {
+      state.whispers[id] = facts.length && rng() < .55 ? pick(facts) : pick(WHISPER_AMBIENT);
+    }
+  }
 }
 
 export function beginResolution(state, deaths, source) {
@@ -381,6 +447,7 @@ export function continueResolution(state) {
   }
   if (source === 'night') {
     state.day += 1;
+    generateWhispers(state);
     enterPhase(state, 'dawn');
   } else {
     enterPhase(state, 'day-result');
@@ -543,6 +610,8 @@ export function resetToLobby(state) {
   state.actions = freshActions();
   state.resolution = null;
   state.lastDeaths = [];
+  state.chronicle = [];
+  state.whispers = {};
   state.nightResult = {healed: false, poisoned: false};
   state.lastVote = null;
   state.winner = null;
@@ -762,6 +831,7 @@ export function viewFor(state, seatId, {coordinator = false} = {}) {
       role: state.phase === 'lobby' ? null : own.role,
       seenRole: Boolean(state.actions.seen[seatId]),
       loverId,
+      whisper: (state.whispers || {})[seatId] || null,
       storyteller: false,
       tableVoice: coordinator,
       sheriff: seatId === state.sheriffId
@@ -771,6 +841,7 @@ export function viewFor(state, seatId, {coordinator = false} = {}) {
     storyteller: null,
     coordinator,
     lobbyDeck: state.phase === 'lobby' ? lobbyDeckView(state) : null,
+    chronicle: clone(state.chronicle || []),
     lastDeaths: clone(state.lastDeaths),
     nightResult: clone(state.nightResult || {healed: false, poisoned: false}),
     lastVote: clone(state.lastVote),

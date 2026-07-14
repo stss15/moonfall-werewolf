@@ -4,6 +4,14 @@ Moonfall is a mobile-first, around-the-table adaptation of the classic Werewolve
 
 Nobody sits out as a Storyteller. Every joined person receives a character card, while the host phone also acts as the automatic room voice. Its narration gates the turn: a role's controls stay hidden until the spoken wake cue finishes, and a completed action triggers the sleep cue and next phase automatically. Debate advances through an all-player ready check, ballots close when every living player has voted, and Werewolves choose privately on their own phones until the pack reaches unanimous consensus.
 
+### The living village
+
+Every screen looks onto the same procedurally drawn village, and the village is the game board. Each character owns a cottage: its window glows while they live, goes dark and is boarded the morning they die, claw-marks stain a door the pack broke, and a cross joins the churchyard for every soul the tale claims. Fog thickens and colour drains as the body count grows, the sky turns with each phase — lantern dusk in the lobby, deep night while roles wake, ember red if the pack wins — and the dead watch the same lanes through a ghost's veil. Lovers alone see a faint red thread joining their two houses. Nothing is a canned animation; the scenery is driven entirely by real game state, so the village remembers what actually happened.
+
+### Night whispers
+
+Phones can do what cards cannot: give every player a *different fragment of the truth*. When each night resolves, every character privately receives one short observation — some are real evidence generated from what genuinely happened (a trail past the victim's cottage, more than one set of footsteps, sweet smoke from a late chimney after a healing, a pale lantern held high), and some are ordinary village noise. Nobody can tell which kind they hold, whispers never name a role, and several players may receive the same true line and corroborate one another — or get caught inventing one. Repeat yours, twist it, or bury it: the whisper system exists to feed the day's argument, and it makes every game tell a different story.
+
 The game has no looping music track. Its Web Audio soundscape combines generated night/day ambience with layered procedural effects and four tiny CC0 Kenney foley transients for selection, healing, killing and the Hunter. A master compressor and limiter keep cues clear on phone speakers. Voice-over, ambience and sound effects can each be toggled from the in-game menu.
 
 ### The narrator voice pack
