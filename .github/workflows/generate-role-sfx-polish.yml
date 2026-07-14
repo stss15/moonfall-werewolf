@@ -29,6 +29,16 @@ jobs:
           node-version: 22
           cache: npm
 
+      - name: Mark runner started on main
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          date -u +%Y-%m-%dT%H:%M:%SZ > role-sfx-runner-started.txt
+          git add role-sfx-runner-started.txt
+          git commit -m "Mark role SFX runner started"
+          git pull --rebase origin main
+          git push
+
       - name: Generate and immediately commit each missing role SFX
         env:
           ELEVENLABS_API_KEY: ${{ secrets[format('ELEVEN{0}{1}', 'LABS_API_', 'KEY')] }}
