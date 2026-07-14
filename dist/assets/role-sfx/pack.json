@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "variants": {
+    "wolves": [
+      "wolves-01.mp3"
+    ],
+    "death": [
+      "death-01.mp3"
+    ],
+    "revive": [
+      "revive-01.mp3"
+    ],
+    "cupid": [
+      "cupid-01.mp3"
+    ],
+    "little-girl": [
+      "little-girl-01.mp3"
+    ],
+    "witch": [
+      "witch-01.mp3"
+    ],
+    "seer": [
+      "seer-01.mp3"
+    ],
+    "thief": [
+      "thief-01.mp3"
+    ],
+    "hunter": [
+      "hunter-01.mp3"
+    ],
+    "lovers": [
+      "lovers-01.mp3"
+    ],
+    "sheriff": [
+      "sheriff-01.mp3"
+    ],
+    "judgement": [
+      "judgement-01.mp3"
+    ]
+  }
+}
