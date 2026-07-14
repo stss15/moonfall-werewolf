@@ -129,12 +129,22 @@ h1,h2,h3,.display{font-family:Georgia,"Times New Roman",serif}
 .app-install-card{width:100%;display:grid;grid-template-columns:38px 1fr 18px;gap:11px;align-items:center;margin:13px 0 4px;padding:12px 13px;border:1px solid rgba(223,183,85,.3);border-radius:15px;background:linear-gradient(145deg,rgba(57,36,69,.76),rgba(10,9,17,.78));text-align:left;color:var(--ink);box-shadow:0 10px 28px rgba(0,0,0,.3)}
 .app-install-card>span:first-child{width:38px;height:38px;display:grid;place-items:center;border-radius:11px;background:linear-gradient(145deg,#8a58ad,#34203f);border:1px solid rgba(255,226,143,.34);color:var(--gold-2);font-size:20px}.app-install-card strong{display:block;font-family:Georgia,serif;font-size:15px}.app-install-card small{display:block;color:var(--muted);font-size:9px;line-height:1.4;margin-top:2px}.app-install-card b{color:var(--gold);font-size:22px}
 .resume-banner{display:flex;align-items:center;gap:12px;padding:13px 14px;border:1px solid rgba(110,207,155,.3);background:rgba(20,55,43,.35);border-radius:15px;margin:10px 0}.resume-banner div{flex:1}.resume-banner strong{display:block;color:#b8f5d4}
-.game-top{display:flex;align-items:center;gap:10px;margin-bottom:12px;position:relative;z-index:4;padding:8px 10px;border-radius:18px;background:rgba(5,5,12,.55);border:1px solid rgba(255,255,255,.06);backdrop-filter:blur(10px);box-shadow:0 8px 26px rgba(0,0,0,.3)}
+/* Floating header tab: the bar is folded away behind a small glass pill so
+   the screen belongs to the game. The dot stays glanceable for connection. */
+.top-dock{position:fixed;top:var(--safe-top);right:12px;z-index:30}
+.top-tab{display:flex;align-items:center;gap:8px;min-height:42px;padding:0 14px;border-radius:999px;border:1px solid rgba(223,183,85,.32);background:rgba(6,6,13,.7);backdrop-filter:blur(12px);color:var(--gold-2);box-shadow:0 8px 24px rgba(0,0,0,.38);transition:transform .15s ease}
+.top-tab:active{transform:scale(.95)}
+.top-tab b{font-weight:400;font-size:17px;line-height:1}
+.connection-dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 9px rgba(110,207,155,.8)}
+.connection-dot.offline{background:#d45867;box-shadow:0 0 8px rgba(212,88,103,.6)}
+.top-sheet{position:absolute;top:calc(100% + 8px);right:0;width:min(calc(100vw - 24px),380px);display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:18px;border:1px solid rgba(223,183,85,.34);background:rgba(6,5,12,.92);backdrop-filter:blur(14px);box-shadow:0 18px 44px rgba(0,0,0,.55);opacity:0;transform:translateY(-6px);pointer-events:none;transition:opacity .22s ease,transform .22s ease}
+.top-dock.open .top-tab{border-color:rgba(255,224,139,.6)}
+.top-dock.open .top-sheet{opacity:1;transform:none;pointer-events:auto}
 .mini-mark{width:48px;height:48px;object-fit:cover;object-position:center;border-radius:50%;border:1px solid rgba(223,183,85,.43);box-shadow:0 4px 18px #000}
 .top-copy{min-width:0;flex:1}.top-copy strong{display:block;font-family:Georgia,serif;font-size:19px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.top-copy span{color:var(--muted);font-size:10px;letter-spacing:.1em;text-transform:uppercase}
 .connection{display:inline-flex;align-items:center;gap:6px;font-size:10px;color:var(--muted);padding:7px 9px;border:1px solid rgba(255,255,255,.1);border-radius:999px;background:rgba(4,5,10,.54)}
 .connection i{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 10px rgba(110,207,155,.7)}.connection.offline i{background:#d45867;box-shadow:none}
-.phase-ribbon{text-align:center;margin:10px auto 14px}.phase-ribbon .moon-number{display:inline-flex;align-items:center;gap:6px;color:var(--violet);font-size:10px;font-weight:900;letter-spacing:.17em;text-transform:uppercase}.phase-ribbon h1{font-size:clamp(31px,9vw,45px);line-height:.98;margin:7px 0 6px;text-shadow:0 4px 18px #000}.phase-ribbon p{font-family:Georgia,serif;color:#d5c8d5;font-size:14px;line-height:1.4;margin:0 auto;max-width:390px}
+.phase-ribbon{text-align:center;margin:6px auto 14px;padding-right:0}.phase-ribbon .moon-number{display:inline-flex;align-items:center;gap:6px;color:var(--violet);font-size:10px;font-weight:900;letter-spacing:.17em;text-transform:uppercase}.phase-ribbon h1{font-size:clamp(31px,9vw,45px);line-height:.98;margin:7px 0 6px;text-shadow:0 4px 18px #000}.phase-ribbon p{font-family:Georgia,serif;color:#d5c8d5;font-size:14px;line-height:1.4;margin:0 auto;max-width:390px}
 .room-code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--gold-2);font-size:clamp(38px,13vw,64px);font-weight:950;letter-spacing:.16em;margin:6px 0 2px;text-shadow:0 0 22px rgba(223,183,85,.24)}
 .player-list{display:grid;gap:8px;margin:13px 0}.player-row{display:flex;align-items:center;gap:11px;padding:10px 11px;border:1px solid rgba(255,255,255,.08);background:rgba(3,4,9,.42);border-radius:14px;min-height:53px}
 .player-row.dead{opacity:.55}.avatar{width:34px;height:34px;display:grid;place-items:center;flex:0 0 auto;border-radius:50%;background:linear-gradient(145deg,#5e3d70,#26182f);border:1px solid rgba(223,183,85,.23);font-family:Georgia,serif;color:var(--gold-2);font-weight:900}.player-row .info{flex:1;min-width:0}.player-row .info strong{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.player-row .info span{display:block;color:var(--muted);font-size:10px;margin-top:2px}.status-icons{display:flex;gap:5px;align-items:center}.status-icon{font-size:12px;padding:4px 6px;border-radius:999px;border:1px solid rgba(255,255,255,.1);background:#15101d}.kick{border:0;background:transparent;color:#8f818f;font-size:18px;padding:8px}
@@ -214,7 +224,6 @@ h1,h2,h3,.display{font-family:Georgia,"Times New Roman",serif}
 .phase-ribbon h1{text-shadow:0 3px 16px rgba(0,0,0,.85)}
 .phase-ribbon p{text-shadow:0 2px 8px rgba(0,0,0,.9)}
 .phase-ribbon .moon-number{text-shadow:0 1px 6px rgba(0,0,0,.9)}
-.game-top .top-copy strong,.game-top .top-copy span{text-shadow:0 2px 8px rgba(0,0,0,.9)}
 .tap-hint{text-shadow:0 2px 8px rgba(0,0,0,.95)}
 .sleep-card h2,.sleep-card p,.look-up h2,.look-up p{text-shadow:0 2px 10px rgba(0,0,0,.9)}
 /* Fate card faces for the arrow reveal (everyone flips together). */
@@ -255,7 +264,7 @@ body[data-phase="night-witch"]:after{background:radial-gradient(circle at 50% 6%
 .square{position:absolute;inset:0;opacity:0;animation:square-in 1.4s ease .1s both}
 @keyframes square-in{to{opacity:1}}
 .sprite{position:absolute;transform:translateX(-50%);border:0;padding:0;background:none;pointer-events:auto;cursor:pointer;-webkit-tap-highlight-color:transparent}
-.sprite img{display:block;height:calc(min(15.5svh,136px)*var(--s,1));width:auto;max-width:none;pointer-events:none;
+.sprite img{display:block;height:calc(var(--base,min(15.5svh,136px))*var(--s,1));width:auto;max-width:none;pointer-events:none;
   filter:drop-shadow(0 7px 13px rgba(0,0,0,.85)) drop-shadow(0 0 24px rgba(0,0,0,.5));
   animation:sprite-sway var(--sway,4s) ease-in-out var(--sd,0s) infinite alternate;transform-origin:50% 100%}
 @keyframes sprite-sway{from{transform:rotate(-.8deg)}to{transform:rotate(.8deg)}}

@@ -107,6 +107,7 @@ const ui = {
   witchPoisonTarget: null,
   poisonOpen: false,
   whisperOpen: false,
+  headerOpen: false,
   previousPhase: null,
   transitionFrom: null,
   phaseFresh: false,
@@ -1060,6 +1061,7 @@ function phaseChanged(view) {
   ui.witchPoisonTarget = view.privateAction?.draft?.poisonTarget || null;
   ui.poisonOpen = false;
   ui.whisperOpen = false;
+  ui.headerOpen = false;
   document.body.dataset.phase = view.phase;
   ui.phaseFresh = true;
   updateAmbience(view);
@@ -1553,14 +1555,19 @@ function connectionMarkup() {
   return `<span class="connection ${offline ? 'offline' : ''}"><i></i>${text}</span>`;
 }
 
+// The header lives in a small floating tab: a glance shows the connection
+// dot; a tap unfolds name, seat, room code and the menu.
 function gameHeader(view) {
   const me = view.me;
   const subtitle = me?.storyteller ? 'Storyteller' : me?.alive === false ? 'Silent spirit' : me?.sheriff ? 'Sheriff of the village' : 'Villager of Moonfall';
-  return `<header class="game-top">
-    <img class="mini-mark" src="assets/card-back.webp" alt="">
-    <div class="top-copy"><strong>${esc(me?.name || 'Moonfall')}</strong><span>${esc(subtitle)} · ${esc(view.roomCode)}</span></div>
-    ${connectionMarkup()}
-    <button class="icon-btn" data-action="open-menu" aria-label="Open menu">⋯</button>
+  return `<header class="top-dock ${ui.headerOpen ? 'open' : ''}">
+    <button class="top-tab" data-action="toggle-header" aria-expanded="${ui.headerOpen ? 'true' : 'false'}" aria-label="Player and connection details"><span class="connection-dot ${connectionState === 'offline' ? 'offline' : ''}"></span><b>☾</b></button>
+    <div class="top-sheet">
+      <img class="mini-mark" src="assets/card-back.webp" alt="">
+      <div class="top-copy"><strong>${esc(me?.name || 'Moonfall')}</strong><span>${esc(subtitle)} · ${esc(view.roomCode)}</span></div>
+      ${connectionMarkup()}
+      <button class="icon-btn" data-action="open-menu" aria-label="Open menu">⋯</button>
+    </div>
   </header>`;
 }
 
@@ -2184,6 +2191,10 @@ async function handleAction(action, element) {
   } else if (action === 'cast-vote') {
     sound('decision');
     sendOwnCommand('player:cast-vote', {target: id});
+  } else if (action === 'toggle-header') {
+    sound('tap');
+    ui.headerOpen = !ui.headerOpen;
+    queueRender();
   } else if (action === 'toggle-whisper') {
     ui.whisperOpen = !ui.whisperOpen;
     sound('flip');

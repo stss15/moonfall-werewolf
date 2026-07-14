@@ -59,19 +59,32 @@ export function townSquare(view) {
   const freshIds = new Set((view.lastDeaths || []).map(death => death.id));
 
   // The crowd stands in staggered rows — nearer rows larger, every position
-  // stable for the whole game so ghosts remain where they fell.
+  // stable for the whole game so ghosts remain where they fell. Layout and
+  // sprite size adapt to the head-count so a six-soul hamlet and a
+  // nineteen-soul town both fill the square.
   const count = players.length;
-  const rows = count <= 4 ? 1 : count <= 9 ? 2 : 3;
-  const perRow = Math.ceil(count / rows);
+  const rowCount = count <= 9 ? 2 : count <= 13 ? 3 : 4;
+  const rowSizes = [];
+  for (let remaining = count, r = rowCount; r > 0; r -= 1) {
+    const n = Math.ceil(remaining / r);
+    rowSizes.push(n);
+    remaining -= n;
+  }
+  const bottoms = rowCount === 2 ? [0, 32] : rowCount === 3 ? [0, 24, 46] : [0, 18, 36, 53];
+  const scales = rowCount === 2 ? [1, .78] : rowCount === 3 ? [1, .8, .64] : [1, .82, .68, .56];
+  const base = count <= 6 ? 'min(19svh,172px)' : count <= 9 ? 'min(16.5svh,150px)' : count <= 13 ? 'min(14svh,128px)' : 'min(12svh,110px)';
   const sprites = players.map((player, index) => {
-    const row = Math.floor(index / perRow);            // 0 = front
-    const col = index % perRow;
-    const inRow = row === rows - 1 ? count - perRow * (rows - 1) : perRow;
+    let row = 0;                                       // 0 = front
+    let col = index;
+    while (col >= rowSizes[row]) { col -= rowSizes[row]; row += 1; }
+    const inRow = rowSizes[row];
     const h = hashOf(seed + player.id);
     const t = inRow === 1 ? .5 : col / (inRow - 1);
-    const x = Math.min(86, Math.max(14, 17 + t * 66 + ((h % 7) - 3) + (row % 2 ? 4 : -4)));
-    const bottom = row === 0 ? 0 : row === 1 ? 27 : 51;
-    const scale = row === 0 ? 1 : row === 1 ? .8 : .64;
+    const lo = inRow <= 3 ? 22 : inRow <= 4 ? 16 : 12;
+    const edge = row === 0 ? 22 : 14;
+    const x = Math.min(100 - edge, Math.max(edge, lo + t * (100 - lo * 2) + ((h % 5) - 2) + (row % 2 ? 2 : -2)));
+    const bottom = bottoms[row];
+    const scale = scales[row];
     const dead = !player.alive;
     const loverMark = Boolean(me?.loverId && me.alive && view.players[me.loverId]?.alive
       && (player.id === me.id || player.id === me.loverId));
@@ -93,7 +106,7 @@ export function townSquare(view) {
     </button>`;
   }).join('');
 
-  return `<div class="square" data-mood="${moodFor(view)}">${sprites}</div>`;
+  return `<div class="square" data-mood="${moodFor(view)}" style="--base:${base}">${sprites}</div>`;
 }
 
 // One-line scene-setting for the dawn reveal, keyed to what actually
