@@ -160,13 +160,20 @@
       "seconds": 2.0,
       "character_cost_header": 20.0,
       "size_bytes": 33062
+    },
+    {
+      "slot": "judgement",
+      "variant": "02",
+      "seconds": 2.0,
+      "character_cost_header": 20.0,
+      "size_bytes": 33062
     }
   ],
-  "credits_before_incremental_run": 6344.0,
+  "credits_before_incremental_run": 6364.0,
   "free_limit": 10000,
   "reserve": 600,
   "incremental_billed_headers_total": 20.0,
-  "generated_variant_count": 23,
+  "generated_variant_count": 24,
   "planned_variant_count": 30,
   "complete": false
 }
