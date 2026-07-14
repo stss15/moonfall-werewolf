@@ -29,37 +29,34 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Mark runner started on main
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          date -u +%Y-%m-%dT%H:%M:%SZ > role-sfx-runner-started.txt
-          git add role-sfx-runner-started.txt
-          git commit -m "Mark role SFX runner started"
-          git pull --rebase origin main
-          git push
-
-      - name: Generate and immediately commit each missing role SFX
+      - name: Generate and commit one primary effect at a time
         env:
           ELEVENLABS_API_KEY: ${{ secrets[format('ELEVEN{0}{1}', 'LABS_API_', 'KEY')] }}
         run: |
-          set +e
-          python scripts/run_role_sfx_remaining_budget.py 2>&1 | tee role-sfx-run.log
-          status=${PIPESTATUS[0]}
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add role-sfx-run.log assets/role-sfx/pack.json role-sfx-generation-report.json 2>/dev/null || true
-          if ! git diff --cached --quiet; then
-            git commit -m "Record role SFX generation result"
+          generate_one() {
+            effect="$1"
             git pull --rebase origin main
-            git push
-          fi
-          exit $status
+            set +e
+            ROLE_SFX_ONLY="$effect" ROLE_SFX_NO_GIT=1 python scripts/generate_role_sfx_incremental.py 2>&1 | tee role-sfx-last-run.log
+            status=${PIPESTATUS[0]}
+            set -e
+            git add role-sfx-last-run.log role-sfx-generation-report.json 2>/dev/null || true
+            git add assets/role-sfx 2>/dev/null || true
+            if ! git diff --cached --quiet; then
+              git commit -m "Add ${effect/:/ role SFX variant }"
+              git pull --rebase origin main
+              git push
+            fi
+            if [ "$status" -ne 0 ]; then exit "$status"; fi
+            sleep 3
+          }
+          for effect in wolves:01 death:01 revive:01 cupid:01 little-girl:01 witch:01 seer:01 thief:01 hunter:01 lovers:01 sheriff:01 judgement:01; do
+            generate_one "$effect"
+          done
 
-      - name: Apply narration ducking and role cue wiring
-        run: python scripts/patch_audio_polish.py
-
-      - name: Test, build and deploy production dist with role SFX
+      - name: Deploy broad first-pass role SFX to Practice
         run: |
           npm ci
           npm test
@@ -67,12 +64,48 @@ jobs:
           test -f dist/assets/voice/pack.json
           test -f dist/assets/ambience/pack.json
           test -f dist/assets/role-sfx/pack.json
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/app.js src/engine.js src/sw.js
           git add -f dist
           if ! git diff --cached --quiet; then
-            git commit -m "Deploy premium role SFX production build"
+            git commit -m "Deploy broad premium role SFX pack"
+            git pull --rebase origin main
+            git push
+          fi
+
+      - name: Generate and commit extra variants one at a time
+        env:
+          ELEVENLABS_API_KEY: ${{ secrets[format('ELEVEN{0}{1}', 'LABS_API_', 'KEY')] }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          generate_one() {
+            effect="$1"
+            git pull --rebase origin main
+            set +e
+            ROLE_SFX_ONLY="$effect" ROLE_SFX_NO_GIT=1 python scripts/generate_role_sfx_incremental.py 2>&1 | tee role-sfx-last-run.log
+            status=${PIPESTATUS[0]}
+            set -e
+            git add role-sfx-last-run.log role-sfx-generation-report.json 2>/dev/null || true
+            git add assets/role-sfx 2>/dev/null || true
+            if ! git diff --cached --quiet; then
+              git commit -m "Add ${effect/:/ role SFX variant }"
+              git pull --rebase origin main
+              git push
+            fi
+            if [ "$status" -ne 0 ]; then exit "$status"; fi
+            sleep 3
+          }
+          for effect in wolves:02 cupid:02 little-girl:02 witch:02 death:02 revive:02 seer:02 thief:02 hunter:02 lovers:02 sheriff:02 judgement:02 wolves:03 cupid:03 little-girl:03 witch:03 death:03 revive:03; do
+            generate_one "$effect"
+          done
+
+      - name: Deploy complete premium role SFX production build
+        run: |
+          git pull --rebase origin main
+          npm run build
+          test -f dist/assets/role-sfx/pack.json
+          git add -f dist
+          if ! git diff --cached --quiet; then
+            git commit -m "Deploy complete premium role SFX production build"
             git pull --rebase origin main
             git push
           fi
