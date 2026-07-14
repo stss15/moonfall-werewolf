@@ -37,7 +37,13 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           generate_one() {
             effect="$1"
+            slot="${effect%%:*}"
+            variant="${effect##*:}"
             git pull --rebase origin main
+            if [ -f "assets/role-sfx/${slot}-${variant}.mp3" ]; then
+              echo "Skipping committed ${slot}-${variant}.mp3"
+              return
+            fi
             set +e
             ROLE_SFX_ONLY="$effect" ROLE_SFX_NO_GIT=1 python scripts/generate_role_sfx_raw.py 2>&1 | tee role-sfx-last-run.log
             status=${PIPESTATUS[0]}
@@ -80,7 +86,13 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           generate_one() {
             effect="$1"
+            slot="${effect%%:*}"
+            variant="${effect##*:}"
             git pull --rebase origin main
+            if [ -f "assets/role-sfx/${slot}-${variant}.mp3" ]; then
+              echo "Skipping committed ${slot}-${variant}.mp3"
+              return
+            fi
             set +e
             ROLE_SFX_ONLY="$effect" ROLE_SFX_NO_GIT=1 python scripts/generate_role_sfx_raw.py 2>&1 | tee role-sfx-last-run.log
             status=${PIPESTATUS[0]}
