@@ -231,6 +231,27 @@ test('whispers and the chronicle are private and public in the right measure', (
   assert.notEqual(state.whispers.ben, state.whispers.ada === undefined);
 });
 
+test('square knowledge stays private: visions go only to the Seer, the pack only to wolves', () => {
+  const state = fixture();
+  state.storytellerId = null;
+  state.players.story.role = 'seer';
+  state.players.wolf.role = 'werewolf';
+  state.players.ada.role = 'werewolf';
+  state.phase = 'night-seer';
+  state.phaseReady = true;
+  applyPlayerCommand(state, 'story', 'seer-choose', {target: 'wolf'});
+  assert.equal(state.visions.wolf, 'werewolf');
+  const seer = viewFor(state, 'story');
+  const wolf = viewFor(state, 'wolf');
+  const bystander = viewFor(state, 'ben');
+  assert.deepEqual(seer.me.visions, {wolf: 'werewolf'});
+  assert.equal(seer.me.pack, null);
+  assert.deepEqual(wolf.me.pack, ['ada']);
+  assert.equal(wolf.me.visions, null);
+  assert.equal(bystander.me.visions, null);
+  assert.equal(bystander.me.pack, null);
+});
+
 test('complete first night follows Thief → Cupid → lovers → Seer → Wolves → Witch → dawn', () => {
   const state = fixture(['Story', 'Thief', 'Cupid', 'Seer', 'Wolf', 'Witch', 'Girl', 'Villager']);
   Object.assign(state.players.thief, {role: 'thief'});

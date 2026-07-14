@@ -14,7 +14,7 @@ import {
   viewFor
 } from './engine.js';
 import {PHASE_META, PRESETS, ROLES, SPECIAL_ROLE_IDS, STORY_CUES} from './roles.js';
-import {morningLine, villageScene} from './village.js';
+import {morningLine, townSquare} from './village.js';
 import {narrate, narrationSupported, stopNarration} from './narrator.js';
 import {initVoicePack, playVoicePack, stopVoicePack, voicePackCovers, voicePackEngine, voicePackReady, warmVoicePack} from './voicepack.js';
 import qrFactory from 'qrcode-generator';
@@ -1686,7 +1686,7 @@ function renderRoleReveal(view) {
   const seenCount = Object.values(view.players).filter(player => player.ready).length;
   const total = Object.keys(view.players).length;
   if (!view.phaseReady) {
-    app.innerHTML = `<section class="screen centered">${gameHeader(view)}<div class="narrator-stage"><div class="narrator-orb"><i></i><i></i><i></i></div><h1>Listen to the tale</h1></div></section>`;
+    app.innerHTML = `<section class="screen">${gameHeader(view)}<div class="narrator-stage"><div class="narrator-orb"><i></i><i></i><i></i></div><h1>Listen to the tale</h1></div></section>`;
     return;
   }
   if (!view.me.seenRole) {
@@ -1915,7 +1915,7 @@ function renderDiscussion(view) {
   const action = view.privateAction?.type === 'discussion' ? view.privateAction : null;
   app.innerHTML = `<section class="screen ${action ? 'has-dock' : ''}">${gameHeader(view)}${phaseHeader(view)}
     ${whisperMarkup(view, {compact: true})}
-    ${action ? `<div class="day-stage"><div class="ready-ring"><strong>${action.readyCount}</strong><span>of ${action.total} ready for judgement</span></div></div>${dock(`<button class="btn ${action.ready ? 'secondary' : ''}" data-action="day-ready" data-ready="${action.ready ? 'false' : 'true'}">${action.ready ? '✓ Ready · tap to keep debating' : 'I am ready to vote'}</button>`)}` : ''}
+    ${action ? dock(`<button class="btn ${action.ready ? 'secondary' : ''}" data-action="day-ready" data-ready="${action.ready ? 'false' : 'true'}">${action.ready ? '✓ Ready · tap to keep debating' : 'I am ready to vote'}</button>`, `<div class="dock-note">${action.readyCount} of ${action.total} ready for judgement</div>`) : ''}
   </section>`;
 }
 
@@ -1944,7 +1944,7 @@ function renderGameOver(view) {
 
 function renderNarratorWait(view) {
   const [title] = PHASE_META[view.phase] || ['The tale continues'];
-  app.innerHTML = `<section class="screen centered">${gameHeader(view)}<div class="narrator-stage"><div class="narrator-orb"><i></i><i></i><i></i></div><h1>${esc(title)}</h1></div></section>`;
+  app.innerHTML = `<section class="screen">${gameHeader(view)}<div class="narrator-stage"><div class="narrator-orb"><i></i><i></i><i></i></div><h1>${esc(title)}</h1></div></section>`;
 }
 
 function renderGame() {
@@ -1994,12 +1994,13 @@ function renderModal() {
   }
 }
 
-// The diorama lives behind the whole screen. It hides during focused private
-// actions (target grids, card flips) and re-renders only when its content
-// actually changes, so its animations never restart on ordinary broadcasts.
-function villageVisible(view) {
+// The town square lives in the middle of the screen. It hides on screens
+// that need full focus (card flips, target grids, the dawn reveal) and
+// re-renders only when its content actually changes, so the crowd's idle
+// sway never restarts on ordinary broadcasts.
+function squareVisible(view) {
   if (!view) return false;
-  if (view.phase === 'lobby') return true;
+  if (['lobby', 'dawn', 'day-result', 'game-over'].includes(view.phase)) return false;
   if (view.phase === 'role-reveal') return Boolean(view.me?.seenRole);
   const action = view.privateAction || {};
   const focused = action.type && !action.done && view.phaseReady !== false
@@ -2010,11 +2011,24 @@ function villageVisible(view) {
 function updateVillageLayer() {
   if (!villageRoot) return;
   const view = mode ? currentView : null;
-  const html = view && villageVisible(view) ? villageScene(view) : '';
+  const html = view && squareVisible(view) ? townSquare(view) : '';
   if (html === lastVillageHtml) return;
   lastVillageHtml = html;
   villageRoot.innerHTML = html;
 }
+
+// Tap a villager to see their name for a moment.
+let spriteNameTimer = null;
+villageRoot?.addEventListener('click', event => {
+  const sprite = event.target.closest('.sprite');
+  if (!sprite) return;
+  sound('tap');
+  vibrate(10);
+  for (const named of villageRoot.querySelectorAll('.sprite.named')) named.classList.remove('named');
+  sprite.classList.add('named');
+  clearTimeout(spriteNameTimer);
+  spriteNameTimer = setTimeout(() => sprite.classList.remove('named'), 2600);
+});
 
 function render() {
   try {

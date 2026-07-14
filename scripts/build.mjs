@@ -62,6 +62,7 @@ const assetNames = [
 ];
 await Promise.all(assetNames.map(name => cp(join(assets, name), join(dist, 'assets', name))));
 await cp(join(assets, 'sfx'), join(dist, 'assets', 'sfx'), {recursive: true});
+await cp(join(assets, 'sprites'), join(dist, 'assets', 'sprites'), {recursive: true});
 
 // The narrator voice pack is generated (scripts/generate_voice_pack.py), not
 // committed; ship it whenever it exists so deploys gain the recorded voice.

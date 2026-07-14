@@ -4,9 +4,9 @@ Moonfall is a mobile-first, around-the-table adaptation of the classic Werewolve
 
 Nobody sits out as a Storyteller. Every joined person receives a character card, while the host phone also acts as the automatic room voice. Its narration gates the turn: a role's controls stay hidden until the spoken wake cue finishes, and a completed action triggers the sleep cue and next phase automatically. Debate advances through an all-player ready check, ballots close when every living player has voted, and Werewolves choose privately on their own phones until the pack reaches unanimous consensus.
 
-### The living village
+### The town square
 
-Every screen looks onto the same procedurally drawn village, and the village is the game board. Each character owns a cottage: its window glows while they live, goes dark and is boarded the morning they die, claw-marks stain a door the pack broke, and a cross joins the churchyard for every soul the tale claims. Fog thickens and colour drains as the body count grows, the sky turns with each phase — lantern dusk in the lobby, deep night while roles wake, ember red if the pack wins — and the dead watch the same lanes through a ghost's veil. Lovers alone see a faint red thread joining their two houses. Nothing is a canned animation; the scenery is driven entirely by real game state, so the village remembers what actually happened.
+Every character stands in the middle of the screen as a painted sprite, and each phone dresses the crowd by what its owner truly knows. Your own sprite wears your real role; werewolves see their packmates as wolves; the Seer permanently sees the true form of everyone her visions have touched; the dead become ghosts that stay where they stood, their identity revealed once the village turns their card; lovers see a heart above both bound souls on their phones alone; the Sheriff's badge shines for everyone — and everybody else simply looks like a villager. Tap a character to see their name. The crowd is driven entirely by real game state, so the square remembers exactly who fell and what they turned out to be.
 
 ### Night whispers
 

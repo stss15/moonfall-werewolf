@@ -65,6 +65,7 @@ export function makeState({roomCode, coordinatorId, coordinatorName = 'Host'}) {
     lastDeaths: [],
     chronicle: [],
     whispers: {},
+    visions: {},
     nightResult: {healed: false, poisoned: false},
     lastVote: null,
     winner: null,
@@ -211,6 +212,7 @@ export function startGame(state, rng = Math.random) {
   state.lastDeaths = [];
   state.chronicle = [];
   state.whispers = {};
+  state.visions = {};
   state.nightResult = {healed: false, poisoned: false};
   state.lastVote = null;
   state.winner = null;
@@ -612,6 +614,7 @@ export function resetToLobby(state) {
   state.lastDeaths = [];
   state.chronicle = [];
   state.whispers = {};
+  state.visions = {};
   state.nightResult = {healed: false, poisoned: false};
   state.lastVote = null;
   state.winner = null;
@@ -670,6 +673,10 @@ export function applyPlayerCommand(state, actorId, type, payload = {}) {
     if (!state.players[target]?.alive || target === actorId || target === state.storytellerId) return {ok: false, error: 'Choose another living character.'};
     state.actions.seerTarget = target;
     state.actions.seerRevealed = true;
+    // The Seer's knowledge is permanent: from now on her own phone shows
+    // this soul's true form in the town square.
+    state.visions = state.visions || {};
+    state.visions[target] = state.players[target].role;
   } else if (type === 'seer-done') {
     error = commandRoleGuard(state, actorId, 'seer', 'night-seer');
     if (error) return {ok: false, error};
@@ -832,6 +839,10 @@ export function viewFor(state, seatId, {coordinator = false} = {}) {
       seenRole: Boolean(state.actions.seen[seatId]),
       loverId,
       whisper: (state.whispers || {})[seatId] || null,
+      // Private world-knowledge for the town square: the Seer's accumulated
+      // visions, and a werewolf's awareness of the rest of the pack.
+      visions: own.role === 'seer' ? clone(state.visions || {}) : null,
+      pack: own.role === 'werewolf' ? roleIds(state, 'werewolf', false).filter(id => id !== seatId) : null,
       storyteller: false,
       tableVoice: coordinator,
       sheriff: seatId === state.sheriffId
