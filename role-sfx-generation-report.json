@@ -62,13 +62,20 @@
       "seconds": 2.5,
       "character_cost_header": 25.0,
       "size_bytes": 40586
+    },
+    {
+      "slot": "lovers",
+      "variant": "01",
+      "seconds": 3.0,
+      "character_cost_header": 30.0,
+      "size_bytes": 48945
     }
   ],
-  "credits_before_incremental_run": 5944.0,
+  "credits_before_incremental_run": 5969.0,
   "free_limit": 10000,
   "reserve": 600,
-  "incremental_billed_headers_total": 25.0,
-  "generated_variant_count": 9,
+  "incremental_billed_headers_total": 30.0,
+  "generated_variant_count": 10,
   "planned_variant_count": 30,
   "complete": false
 }
