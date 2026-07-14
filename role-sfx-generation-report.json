@@ -13,13 +13,20 @@
       "seconds": 4.0,
       "character_cost_header": 40.0,
       "size_bytes": 65245
+    },
+    {
+      "slot": "revive",
+      "variant": "01",
+      "seconds": 3.0,
+      "character_cost_header": 30.0,
+      "size_bytes": 48945
     }
   ],
-  "credits_before_incremental_run": 5734.0,
+  "credits_before_incremental_run": 5774.0,
   "free_limit": 10000,
   "reserve": 600,
-  "incremental_billed_headers_total": 40.0,
-  "generated_variant_count": 2,
+  "incremental_billed_headers_total": 30.0,
+  "generated_variant_count": 3,
   "planned_variant_count": 30,
   "complete": false
 }
