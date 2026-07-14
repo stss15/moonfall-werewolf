@@ -42,7 +42,8 @@ jobs:
             ROLE_SFX_ONLY="$effect" ROLE_SFX_NO_GIT=1 python scripts/generate_role_sfx_incremental.py 2>&1 | tee role-sfx-last-run.log
             status=${PIPESTATUS[0]}
             set -e
-            git add role-sfx-last-run.log role-sfx-generation-report.json 2>/dev/null || true
+            git add role-sfx-last-run.log
+            git add role-sfx-generation-report.json 2>/dev/null || true
             git add assets/role-sfx 2>/dev/null || true
             if ! git diff --cached --quiet; then
               git commit -m "Add ${effect/:/ role SFX variant }"
@@ -84,7 +85,8 @@ jobs:
             ROLE_SFX_ONLY="$effect" ROLE_SFX_NO_GIT=1 python scripts/generate_role_sfx_incremental.py 2>&1 | tee role-sfx-last-run.log
             status=${PIPESTATUS[0]}
             set -e
-            git add role-sfx-last-run.log role-sfx-generation-report.json 2>/dev/null || true
+            git add role-sfx-last-run.log
+            git add role-sfx-generation-report.json 2>/dev/null || true
             git add assets/role-sfx 2>/dev/null || true
             if ! git diff --cached --quiet; then
               git commit -m "Add ${effect/:/ role SFX variant }"
