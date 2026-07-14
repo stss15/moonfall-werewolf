@@ -60,17 +60,28 @@ def usage_credits(key: str) -> float:
         'end_time': now_ms,
         'interval_seconds': 86400,
     }
-    request = urllib.request.Request(
-        'https://api.elevenlabs.io/v1/workspace/analytics/query/usage-by-product-over-time',
-        data=json.dumps(payload).encode(),
-        headers={'xi-api-key': key, 'content-type': 'application/json'},
-        method='POST',
-    )
-    with urllib.request.urlopen(request, timeout=60) as response:
-        usage = json.loads(response.read())
-    columns = usage.get('columns', [])
-    usage_index = columns.index('total_usage')
-    return sum(float(row[usage_index] or 0) for row in usage.get('rows', []))
+    last_error = None
+    for attempt in range(1, 6):
+        request = urllib.request.Request(
+            'https://api.elevenlabs.io/v1/workspace/analytics/query/usage-by-product-over-time',
+            data=json.dumps(payload).encode(),
+            headers={'xi-api-key': key, 'content-type': 'application/json'},
+            method='POST',
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=60) as response:
+                usage = json.loads(response.read())
+            columns = usage.get('columns', [])
+            usage_index = columns.index('total_usage')
+            return sum(float(row[usage_index] or 0) for row in usage.get('rows', []))
+        except urllib.error.HTTPError as error:
+            last_error = error
+            if error.code != 429 or attempt == 5:
+                raise
+            delay = int(error.headers.get('Retry-After') or attempt * 12)
+            print(f'usage check rate limited; waiting {delay}s')
+            time.sleep(delay)
+    raise last_error
 
 
 def load_json(path: Path, fallback: dict) -> dict:
@@ -84,13 +95,6 @@ def save_state(manifest: dict, report: dict) -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     PACK_PATH.write_text(json.dumps(manifest, indent=2) + '\n')
     REPORT_PATH.write_text(json.dumps(report, indent=2) + '\n')
-
-
-def commit_effect(slot: str, variant: str, filename: str) -> None:
-    run('git', 'add', f'assets/role-sfx/{filename}', str(PACK_PATH), str(REPORT_PATH))
-    run('git', 'commit', '-m', f'Add {slot} role SFX variant {variant}')
-    run('git', 'pull', '--rebase', 'origin', 'main')
-    run('git', 'push')
 
 
 def generate_effect(key: str, slot: str, variant: str, seconds: float, prompt: str, final: Path) -> float:
@@ -141,8 +145,17 @@ def main() -> None:
     if not key:
         raise SystemExit('Repository secret ELEVENLABS_API_KEY is missing')
 
-    run('git', 'config', 'user.name', 'github-actions[bot]')
-    run('git', 'config', 'user.email', '41898282+github-actions[bot]@users.noreply.github.com')
+    only_effect = os.environ.get('ROLE_SFX_ONLY', '').strip()
+    no_git = os.environ.get('ROLE_SFX_NO_GIT', '') == '1'
+    effects = EFFECTS
+    if only_effect:
+        effects = [item for item in EFFECTS if f'{item[0]}:{item[1]}' == only_effect]
+        if not effects:
+            raise SystemExit(f'Unknown ROLE_SFX_ONLY value: {only_effect}')
+
+    if not no_git:
+        run('git', 'config', 'user.name', 'github-actions[bot]')
+        run('git', 'config', 'user.email', '41898282+github-actions[bot]@users.noreply.github.com')
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     manifest = load_json(PACK_PATH, {'version': 1, 'variants': {}})
@@ -158,7 +171,7 @@ def main() -> None:
     report['reserve'] = RESERVE
     print(f'ElevenLabs usage before incremental run: {starting_usage:.0f}/{FREE_LIMIT}')
 
-    for slot, variant, seconds, prompt in EFFECTS:
+    for slot, variant, seconds, prompt in effects:
         filename = f'{slot}-{variant}.mp3'
         final = OUT_DIR / filename
         existing = manifest['variants'].get(slot, [])
@@ -188,9 +201,13 @@ def main() -> None:
         })
         report['incremental_billed_headers_total'] = local_billed
         save_state(manifest, report)
-        print(f'generated {filename}; billed header={billed:.0f}; committing immediately')
-        commit_effect(slot, variant, filename)
-        time.sleep(5)
+        print(f'generated {filename}; billed header={billed:.0f}')
+        if not no_git:
+            run('git', 'add', str(final), str(PACK_PATH), str(REPORT_PATH))
+            run('git', 'commit', '-m', f'Add {slot} role SFX variant {variant}')
+            run('git', 'pull', '--rebase', 'origin', 'main')
+            run('git', 'push')
+        time.sleep(3)
 
     report['generated_variant_count'] = sum(len(files) for files in manifest['variants'].values())
     report['planned_variant_count'] = len(EFFECTS)
