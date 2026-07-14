@@ -36,6 +36,8 @@ const RECONNECT_DELAY_MS = 180;
 const app = document.querySelector('#app');
 const toastRoot = document.querySelector('#toast-root');
 const modalRoot = document.querySelector('#modal-root');
+const villageRoot = document.querySelector('#village');
+let lastVillageHtml = null;
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'}[char]));
 const cleanCode = value => String(value || '').toUpperCase().replace(/[^A-Z2-9]/g, '').slice(0, 6);
 const initials = name => String(name || '?').trim().split(/\s+/).slice(0, 2).map(word => word[0]).join('').toUpperCase();
@@ -1666,7 +1668,6 @@ function renderLobby(view) {
   app.innerHTML = `<section class="screen ${isHost ? 'has-dock' : ''}">
     ${gameHeader(view)}
     <div class="panel ornate center"><div class="eyebrow">Share this code</div><div class="room-code">${esc(view.roomCode)}</div><div class="qr-wrap" aria-label="QR code that joins village ${esc(view.roomCode)}">${inviteQrSvg()}</div><p class="muted small">Scan with a phone camera to join instantly · ${Object.keys(view.players).length} gathered</p><div class="button-row"><button class="btn mini secondary" data-action="copy-code">Copy code</button><button class="btn mini ghost" data-action="share-room">Share invite</button></div></div>
-    ${villageScene(view, {caption: 'A cottage lights for every soul who joins the village.'})}
     <div class="panel compact"><div class="eyebrow">The circle</div><h3>${Object.keys(view.players).length} of ${MAX_PEOPLE} places</h3>${playerList(view, {kickable: isHost})}</div>
     ${isHost ? `<div class="panel">
       <div class="eyebrow">Choose the tale</div><h2>Build the deck</h2>
@@ -1685,7 +1686,7 @@ function renderRoleReveal(view) {
   const seenCount = Object.values(view.players).filter(player => player.ready).length;
   const total = Object.keys(view.players).length;
   if (!view.phaseReady) {
-    app.innerHTML = `<section class="screen centered">${gameHeader(view)}<div class="narrator-stage"><div class="narrator-orb"><i></i><i></i><i></i></div><div class="eyebrow">The automatic narrator</div><h1>Listen to the tale</h1></div></section>`;
+    app.innerHTML = `<section class="screen centered">${gameHeader(view)}<div class="narrator-stage"><div class="narrator-orb"><i></i><i></i><i></i></div><h1>Listen to the tale</h1></div></section>`;
     return;
   }
   if (!view.me.seenRole) {
@@ -1696,7 +1697,7 @@ function renderRoleReveal(view) {
     return;
   }
   app.innerHTML = `<section class="screen">${gameHeader(view)}${phaseHeader(view)}
-    <div class="sleep-card"><div>${villageScene(view)}<h2>Your card is sealed</h2><p>Close your eyes when night falls. Your phone pulses when the tale needs you.</p><div class="progress-track"><i style="width:${Math.round(seenCount / total * 100)}%"></i></div><span class="badge green">${seenCount} of ${total} ready</span></div></div>
+    <div class="sleep-card"><div><h2>Your card is sealed</h2><p>Close your eyes when night falls. Your phone pulses when the tale needs you.</p><div class="progress-track"><i style="width:${Math.round(seenCount / total * 100)}%"></i></div><span class="badge green">${seenCount} of ${total} ready</span></div></div>
   </section>`;
 }
 
@@ -1709,7 +1710,7 @@ function sleepMessage(view, custom = null) {
     'night-wolves': 'The pack',
     'night-witch': 'The Witch'
   }[view.phase] || 'Another soul';
-  return `<section class="screen">${gameHeader(view)}${phaseHeader(view)}<div class="sleep-card"><div>${villageScene(view)}<h2>${esc(custom?.title || 'Keep your eyes closed')}</h2><p>${esc(custom?.text || `${phaseRole} is awake.`)}</p><div class="eyes">— ◡ —</div></div></div></section>`;
+  return `<section class="screen">${gameHeader(view)}${phaseHeader(view)}<div class="sleep-card"><div><h2>${esc(custom?.title || 'Keep your eyes closed')}</h2><p>${esc(custom?.text || `${phaseRole} is awake.`)}</p><div class="eyes">— ◡ —</div></div></div></section>`;
 }
 
 function renderThief(view, action) {
@@ -1837,29 +1838,42 @@ function renderPrivateAction(view) {
   return false;
 }
 
-// Each cause of death gets its own scene-setting line, so a forest kill, a
-// bitter cup and the village gallows all read differently. The village
-// remembers these moments; the cards only confirm them.
-const DEATH_FLAVOR = {
-  'the Werewolves': 'Their door stood open to the cold. Deep claw-marks crossed the threshold.',
-  'the Witch’s poison': 'They lay as if asleep, an untouched cup beside the bed — faintly bitter.',
-  'a broken heart': 'No wound was found. Only a hand stretched toward a cottage across the lane.',
-  'the village vote': 'The square emptied slowly afterwards. Nobody met anyone’s eyes.',
-  'caught peeking': 'Curiosity opened one eye too many beneath the hunting moon.'
-};
+// The claw overlay: three tapered slashes drawn across the fallen card.
+function clawOverlay() {
+  return `<svg class="death-claw" viewBox="0 0 100 150" aria-hidden="true">
+    <defs><linearGradient id="clawg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#e0554f"/><stop offset=".5" stop-color="#8e1622"/><stop offset="1" stop-color="#45060f"/>
+    </linearGradient></defs>
+    <g transform="rotate(-16 50 75)">
+      <path class="slash s1" d="M24,18 C30,52 34,92 30,128 C27,96 23,56 20,22 Z" fill="url(#clawg)"/>
+      <path class="slash s2" d="M50,12 C57,50 60,94 55,134 C51,98 47,54 45,16 Z" fill="url(#clawg)"/>
+      <path class="slash s3" d="M76,20 C81,54 84,92 80,126 C76,94 73,58 71,24 Z" fill="url(#clawg)"/>
+    </g>
+  </svg>`;
+}
 
-function deathFlavor(cause) {
-  if (DEATH_FLAVOR[cause]) return DEATH_FLAVOR[cause];
-  if (String(cause).endsWith('final shot')) return 'One last shot rang across the rooftops before the silence returned.';
-  return 'The village will speak of this morning for years.';
+// One cinematic frame per death: the fallen character's full card, marked by
+// its cause — claw-rent for the pack, a poison haze for the Witch, a heavy
+// pall for the gallows and grief. The narrator carries the story aloud.
+function deathHero(death, index, staged) {
+  const role = ROLES[death.role] || ROLES.villager;
+  const wolfKill = death.cause === 'the Werewolves' || death.cause === 'caught peeking';
+  const poison = death.cause === 'the Witch’s poison';
+  const variant = wolfKill ? 'rent' : poison ? 'hexed' : 'mourned';
+  return `<div class="death-hero ${variant} ${staged ? 'staged' : ''}" style="--stage:${index}">
+    <div class="death-frame">
+      <img src="${role.image}" alt="${esc(role.name)} card">
+      ${wolfKill ? clawOverlay() : ''}
+      ${poison ? '<div class="death-haze"></div>' : ''}
+      <div class="death-pall"></div>
+      <div class="death-plate"><strong>${esc(death.name)}</strong><span>${esc(role.name)} · claimed by ${esc(death.cause)}</span></div>
+    </div>
+  </div>`;
 }
 
 function deathsMarkup(view, {staged = false} = {}) {
-  if (!view.lastDeaths?.length) return `<div class="no-deaths ${staged ? 'staged' : ''}"><b>☀</b><h2>Nobody died</h2><p>The village wakes intact—but suspicion survived the night.</p></div>`;
-  return `<div class="death-reveal">${view.lastDeaths.map((death, index) => {
-    const role = ROLES[death.role] || ROLES.villager;
-    return `<div class="death-card ${staged ? 'staged' : ''}" style="--stage:${index}"><img src="${role.image}" alt="${esc(role.name)}"><div><h3>${esc(death.name)}</h3><p class="death-flavor">${esc(deathFlavor(death.cause))}</p><p>Claimed by ${esc(death.cause)} · revealed as <strong>${esc(role.name)}</strong>.</p></div></div>`;
-  }).join('')}</div>`;
+  if (!view.lastDeaths?.length) return `<div class="no-deaths ${staged ? 'staged' : ''}"><b>☀</b><h2>Nobody died</h2><p>${esc(morningLine(view))}</p></div>`;
+  return `<div class="death-reveal">${view.lastDeaths.map((death, index) => deathHero(death, index, staged)).join('')}</div>`;
 }
 
 // The private whisper: sealed on the card face, opened only by its owner.
@@ -1887,33 +1901,28 @@ function tallyMarkup(view) {
 function renderDead(view) {
   const role = ROLES[view.me.role] || ROLES.villager;
   app.innerHTML = `<section class="screen">${gameHeader(view)}${phaseHeader(view)}
-    ${villageScene(view, {caption: 'You drift above the lane now. The living cannot hear you.'})}
     ${whisperMarkup(view, {compact: true})}
     <div class="panel compact center"><div class="eyebrow">A silent spirit</div><h2>${esc(role.name)}</h2><p class="muted small" style="margin:0">Watch. Do not speak, signal or vote.</p></div></section>`;
 }
 
 function renderDawn(view) {
-  app.innerHTML = `<section class="screen">${gameHeader(view)}${phaseHeader(view)}
-    ${villageScene(view, {caption: morningLine(view)})}
+  app.innerHTML = `<section class="screen dawn-screen">${gameHeader(view)}${phaseHeader(view)}
     ${deathsMarkup(view, {staged: ui.phaseFresh})}
-    ${whisperMarkup(view)}
   </section>`;
 }
 
 function renderDiscussion(view) {
   const action = view.privateAction?.type === 'discussion' ? view.privateAction : null;
   app.innerHTML = `<section class="screen ${action ? 'has-dock' : ''}">${gameHeader(view)}${phaseHeader(view)}
-    ${villageScene(view)}
     ${whisperMarkup(view, {compact: true})}
-    ${action ? `<div class="ready-ring"><strong>${action.readyCount}</strong><span>of ${action.total} ready for judgement</span></div>${dock(`<button class="btn ${action.ready ? 'secondary' : ''}" data-action="day-ready" data-ready="${action.ready ? 'false' : 'true'}">${action.ready ? '✓ Ready · tap to keep debating' : 'I am ready to vote'}</button>`)}` : ''}
+    ${action ? `<div class="day-stage"><div class="ready-ring"><strong>${action.readyCount}</strong><span>of ${action.total} ready for judgement</span></div></div>${dock(`<button class="btn ${action.ready ? 'secondary' : ''}" data-action="day-ready" data-ready="${action.ready ? 'false' : 'true'}">${action.ready ? '✓ Ready · tap to keep debating' : 'I am ready to vote'}</button>`)}` : ''}
   </section>`;
 }
 
 function renderDayResult(view) {
   const tied = view.lastVote?.leaders?.length > 1;
-  app.innerHTML = `<section class="screen">${gameHeader(view)}${phaseHeader(view, {title: tied ? 'The vote is tied' : 'The village has spoken', subtitle: tied ? 'By the classic rule, nobody is eliminated.' : 'The sealed tally is now revealed.'})}
-    ${villageScene(view)}
-    <div class="panel">${tallyMarkup(view)}</div>${deathsMarkup(view, {staged: ui.phaseFresh})}</section>`;
+  app.innerHTML = `<section class="screen">${gameHeader(view)}${phaseHeader(view, {title: tied ? 'The vote is tied' : 'The village has spoken', subtitle: tied ? 'By the classic rule, nobody is eliminated.' : ''})}
+    <div class="panel compact">${tallyMarkup(view)}</div>${deathsMarkup(view, {staged: ui.phaseFresh})}</section>`;
 }
 
 function renderGameOver(view) {
@@ -1923,8 +1932,7 @@ function renderGameOver(view) {
     : winner.team === 'village' ? 'Morning holds. One by one, the boarded windows will open again.'
     : winner.team === 'lovers' ? 'Two lit windows remain, facing one another across the empty lane.'
     : 'The village stands silent beneath the moon.';
-  app.innerHTML = `<section class="screen ${view.coordinator ? 'has-dock' : ''}">${gameHeader(view)}<div class="game-over-hero"><div class="victory-moon">${symbol}</div><div class="eyebrow">Final revelation</div><h1>${esc(winner.title)}</h1><p>${esc(winner.text)}</p></div>
-    ${villageScene(view, {caption: epilogue})}
+  app.innerHTML = `<section class="screen ${view.coordinator ? 'has-dock' : ''}">${gameHeader(view)}<div class="game-over-hero"><div class="victory-moon">${symbol}</div><div class="eyebrow">Final revelation</div><h1>${esc(winner.title)}</h1><p>${esc(winner.text || epilogue)}</p></div>
     <div class="final-grid">${Object.values(view.players).map(player => {
       const roleId = player.storyteller ? 'storyteller' : player.role;
       const role = ROLES[roleId] || ROLES.villager;
@@ -1936,7 +1944,7 @@ function renderGameOver(view) {
 
 function renderNarratorWait(view) {
   const [title] = PHASE_META[view.phase] || ['The tale continues'];
-  app.innerHTML = `<section class="screen centered">${gameHeader(view)}<div class="narrator-stage"><div class="narrator-orb"><i></i><i></i><i></i></div><div class="eyebrow">Automatic narrator</div><h1>${esc(title)}</h1><span class="narrator-live">● Narrating now</span></div></section>`;
+  app.innerHTML = `<section class="screen centered">${gameHeader(view)}<div class="narrator-stage"><div class="narrator-orb"><i></i><i></i><i></i></div><h1>${esc(title)}</h1></div></section>`;
 }
 
 function renderGame() {
@@ -1986,12 +1994,35 @@ function renderModal() {
   }
 }
 
+// The diorama lives behind the whole screen. It hides during focused private
+// actions (target grids, card flips) and re-renders only when its content
+// actually changes, so its animations never restart on ordinary broadcasts.
+function villageVisible(view) {
+  if (!view) return false;
+  if (view.phase === 'lobby') return true;
+  if (view.phase === 'role-reveal') return Boolean(view.me?.seenRole);
+  const action = view.privateAction || {};
+  const focused = action.type && !action.done && view.phaseReady !== false
+    && !['discussion', 'little-girl'].includes(action.type);
+  return !focused;
+}
+
+function updateVillageLayer() {
+  if (!villageRoot) return;
+  const view = mode ? currentView : null;
+  const html = view && villageVisible(view) ? villageScene(view) : '';
+  if (html === lastVillageHtml) return;
+  lastVillageHtml = html;
+  villageRoot.innerHTML = html;
+}
+
 function render() {
   try {
     updateHaptics(mode ? currentView : null);
     if (!mode) renderHome();
     else if (mode === 'guest' && !currentView) renderConnecting();
     else renderGame();
+    updateVillageLayer();
     renderModal();
     if (ui.phaseFresh) {
       ui.phaseFresh = false;

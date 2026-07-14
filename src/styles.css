@@ -42,16 +42,16 @@ body:after{
   content:"";position:fixed;inset:0;z-index:-2;pointer-events:none;
   background:radial-gradient(circle at 50% 12%,rgba(100,127,196,.22),transparent 34%),linear-gradient(180deg,transparent 55%,rgba(0,0,0,.58));
 }
-/* Day truly arrives: a heavy painted-sky wash sits over the night photograph
-   so only its texture survives — the moonlit scene reads as morning light. */
+/* Daylight: the painted night artwork stays — a translucent tint and a lift
+   in brightness turn its moonlight into morning without hiding the art. */
 body[data-phase="dawn"]:before{background:
-  linear-gradient(180deg,rgba(88,50,92,.9),rgba(219,139,84,.84) 44%,rgba(64,36,48,.9) 78%,rgba(24,14,22,.94)),
-  url("assets/table-bg.webp") center top/cover no-repeat;filter:saturate(.95) brightness(1.2)}
-body[data-phase="dawn"]:after{background:radial-gradient(circle at 50% 16%,rgba(255,196,120,.3),transparent 42%),linear-gradient(180deg,transparent 55%,rgba(20,8,14,.5))}
+  linear-gradient(180deg,rgba(146,74,110,.5),rgba(240,142,84,.44) 42%,rgba(52,26,36,.5)),
+  url("assets/table-bg.webp") center top/cover no-repeat;filter:saturate(1.02) brightness(1.42) sepia(.14)}
+body[data-phase="dawn"]:after{background:radial-gradient(circle at 50% 12%,rgba(255,182,110,.32),transparent 44%),linear-gradient(180deg,transparent 52%,rgba(20,8,14,.5))}
 body[data-phase="sheriff-vote"]:before,body[data-phase="day-discussion"]:before,body[data-phase="day-vote"]:before,body[data-phase="day-result"]:before{background:
-  linear-gradient(180deg,rgba(116,158,198,.92),rgba(214,199,160,.85) 50%,rgba(74,72,54,.9) 80%,rgba(28,26,22,.94)),
-  url("assets/table-bg.webp") center top/cover no-repeat;filter:saturate(.9) brightness(1.28)}
-body[data-phase="sheriff-vote"]:after,body[data-phase="day-discussion"]:after,body[data-phase="day-vote"]:after,body[data-phase="day-result"]:after{background:radial-gradient(circle at 50% 12%,rgba(255,236,180,.26),transparent 38%),linear-gradient(180deg,transparent 58%,rgba(22,20,12,.48))}
+  linear-gradient(180deg,rgba(255,216,140,.52),rgba(255,202,124,.3) 40%,rgba(74,56,32,.42)),
+  url("assets/table-bg.webp") center top/cover no-repeat;filter:saturate(.92) brightness(1.62) sepia(.24)}
+body[data-phase="sheriff-vote"]:after,body[data-phase="day-discussion"]:after,body[data-phase="day-vote"]:after,body[data-phase="day-result"]:after{background:radial-gradient(circle at 50% 10%,rgba(255,240,190,.34),transparent 40%),linear-gradient(180deg,transparent 56%,rgba(26,20,10,.44))}
 button,input,select{font:inherit}
 button{color:inherit}
 button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--gold-2);outline-offset:3px}
@@ -129,7 +129,7 @@ h1,h2,h3,.display{font-family:Georgia,"Times New Roman",serif}
 .app-install-card{width:100%;display:grid;grid-template-columns:38px 1fr 18px;gap:11px;align-items:center;margin:13px 0 4px;padding:12px 13px;border:1px solid rgba(223,183,85,.3);border-radius:15px;background:linear-gradient(145deg,rgba(57,36,69,.76),rgba(10,9,17,.78));text-align:left;color:var(--ink);box-shadow:0 10px 28px rgba(0,0,0,.3)}
 .app-install-card>span:first-child{width:38px;height:38px;display:grid;place-items:center;border-radius:11px;background:linear-gradient(145deg,#8a58ad,#34203f);border:1px solid rgba(255,226,143,.34);color:var(--gold-2);font-size:20px}.app-install-card strong{display:block;font-family:Georgia,serif;font-size:15px}.app-install-card small{display:block;color:var(--muted);font-size:9px;line-height:1.4;margin-top:2px}.app-install-card b{color:var(--gold);font-size:22px}
 .resume-banner{display:flex;align-items:center;gap:12px;padding:13px 14px;border:1px solid rgba(110,207,155,.3);background:rgba(20,55,43,.35);border-radius:15px;margin:10px 0}.resume-banner div{flex:1}.resume-banner strong{display:block;color:#b8f5d4}
-.game-top{display:flex;align-items:center;gap:10px;margin-bottom:12px;position:relative;z-index:4}
+.game-top{display:flex;align-items:center;gap:10px;margin-bottom:12px;position:relative;z-index:4;padding:8px 10px;border-radius:18px;background:rgba(5,5,12,.55);border:1px solid rgba(255,255,255,.06);backdrop-filter:blur(10px);box-shadow:0 8px 26px rgba(0,0,0,.3)}
 .mini-mark{width:48px;height:48px;object-fit:cover;object-position:center;border-radius:50%;border:1px solid rgba(223,183,85,.43);box-shadow:0 4px 18px #000}
 .top-copy{min-width:0;flex:1}.top-copy strong{display:block;font-family:Georgia,serif;font-size:19px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.top-copy span{color:var(--muted);font-size:10px;letter-spacing:.1em;text-transform:uppercase}
 .connection{display:inline-flex;align-items:center;gap:6px;font-size:10px;color:var(--muted);padding:7px 9px;border:1px solid rgba(255,255,255,.1);border-radius:999px;background:rgba(4,5,10,.54)}
@@ -146,7 +146,7 @@ h1,h2,h3,.display{font-family:Georgia,"Times New Roman",serif}
 .card-face{position:absolute;inset:0;backface-visibility:hidden;border-radius:22px;overflow:hidden;border:1px solid rgba(255,223,135,.58);background:#100b16}.card-face.back{transform:rotateY(0)}.card-face.front{transform:rotateY(180deg)}.card-face img{width:100%;height:100%;object-fit:cover}.card-face.front:after{content:"";position:absolute;inset:0;box-shadow:inset 0 0 30px rgba(0,0,0,.48);pointer-events:none}
 .card-title-overlay{position:absolute;left:9%;right:9%;bottom:7%;padding:14px 12px 12px;background:linear-gradient(180deg,rgba(13,9,18,.1),rgba(8,6,12,.94) 34%);border-top:1px solid rgba(223,183,85,.35);text-align:center}.card-title-overlay strong{font-family:Georgia,serif;font-size:26px;color:var(--gold-2);text-shadow:0 2px 8px #000}.card-title-overlay span{display:block;color:#e2d7e4;font-size:10px;line-height:1.35;margin-top:5px}
 .tap-hint{text-align:center;color:var(--gold-2);font-size:11px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;animation:hint 1.8s ease-in-out infinite}@keyframes hint{50%{opacity:.48}}
-.sleep-card{display:grid;place-items:center;text-align:center;min-height:calc(100svh - 250px);padding:24px}.sleep-card img{width:min(54vw,230px);aspect-ratio:2/3;object-fit:cover;border-radius:18px;border:1px solid rgba(223,183,85,.38);box-shadow:0 18px 50px #000;transform:rotate(-1deg)}.sleep-card h2{font-size:30px;margin:22px 0 7px}.sleep-card p{color:var(--muted);max-width:350px;line-height:1.5}.sleep-card .eyes{font-size:28px;color:var(--violet);letter-spacing:.3em;margin-left:.3em}
+.sleep-card{display:grid;place-items:center;text-align:center;min-height:calc(56svh - 190px);padding:5vh 24px 24px}.sleep-card img{width:min(54vw,230px);aspect-ratio:2/3;object-fit:cover;border-radius:18px;border:1px solid rgba(223,183,85,.38);box-shadow:0 18px 50px #000;transform:rotate(-1deg)}.sleep-card h2{font-size:30px;margin:22px 0 7px}.sleep-card p{color:var(--muted);max-width:350px;line-height:1.5}.sleep-card .eyes{font-size:28px;color:var(--violet);letter-spacing:.3em;margin-left:.3em}
 .progress-track{height:7px;border-radius:999px;background:rgba(0,0,0,.45);overflow:hidden;margin:12px 0}.progress-track i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#8653ad,#e9bd5b);box-shadow:0 0 12px rgba(194,154,239,.5);transition:width .4s ease}
 .cue{padding:18px 17px;border:1px solid rgba(223,183,85,.32);border-radius:18px;background:linear-gradient(145deg,rgba(65,39,76,.66),rgba(9,8,15,.74));font-family:Georgia,serif;font-size:18px;line-height:1.45;text-align:center;color:#f3e9d9}.cue:before,.cue:after{content:"✦";color:var(--gold);font-size:10px;display:block;margin:0 0 8px}.cue:after{margin:8px 0 0}
 .story-status{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin:12px 0}.stat{padding:12px;border:1px solid rgba(255,255,255,.08);border-radius:13px;background:rgba(4,4,9,.44)}.stat span{display:block;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.08em}.stat strong{display:block;color:var(--gold-2);font-family:Georgia,serif;font-size:18px;margin-top:4px}
@@ -154,6 +154,7 @@ h1,h2,h3,.display{font-family:Georgia,"Times New Roman",serif}
 .choice-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin:14px 0}.choice{min-height:68px;border:1px solid rgba(255,255,255,.11);border-radius:15px;background:linear-gradient(145deg,rgba(35,24,44,.82),rgba(8,8,14,.86));padding:10px;text-align:left;display:flex;align-items:center;gap:9px}.choice .avatar{width:38px;height:38px}.choice .copy{min-width:0;flex:1}.choice .copy strong{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.choice .copy span{display:block;color:var(--muted);font-size:9px;margin-top:3px}.choice.selected{border-color:var(--gold);box-shadow:inset 0 0 0 1px rgba(223,183,85,.48),0 0 19px rgba(223,183,85,.1)}.choice:disabled{opacity:.28}
 .target-table{grid-template-columns:repeat(3,minmax(0,1fr));align-items:start}.target-card{display:block;min-height:0;padding:6px;text-align:center;overflow:hidden}.target-card-art{position:relative;display:block;width:100%;aspect-ratio:2/3;border-radius:10px;overflow:hidden;border:1px solid rgba(223,183,85,.28);box-shadow:0 9px 18px rgba(0,0,0,.38)}.target-card-art img{width:100%;height:100%;object-fit:cover;filter:brightness(.8)}.target-card-art:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,transparent 55%,rgba(4,3,7,.62))}.target-card-art b{position:absolute;z-index:2;right:6px;bottom:5px;width:25px;height:25px;display:grid;place-items:center;border-radius:50%;background:rgba(12,8,17,.88);border:1px solid rgba(223,183,85,.45);color:var(--gold-2);font-size:10px}.target-card .copy{display:block;padding:8px 2px 4px}.target-card .copy strong{font-family:Georgia,serif;font-size:14px}.target-card .copy span{font-size:10px;line-height:1.3;min-height:26px}.target-card.selected .target-card-art{border-color:var(--gold-2);box-shadow:0 0 0 2px rgba(223,183,85,.42),0 0 26px rgba(223,183,85,.24)}
 .no-kill-choice{width:100%;min-height:64px;margin:8px 0 14px}.no-kill-moon{width:42px;height:42px;display:grid;place-items:center;border-radius:50%;background:radial-gradient(circle,#e7d99a,#6c6239 65%,#222);color:#141016;font-size:23px;box-shadow:0 0 18px rgba(231,217,154,.2)}
+.day-stage{min-height:30svh;display:grid;place-content:center}
 .ready-ring{width:154px;height:154px;margin:0 auto 18px;border:1px solid rgba(223,183,85,.36);border-radius:50%;display:grid;place-content:center;text-align:center;background:radial-gradient(circle,rgba(83,51,99,.76),rgba(9,8,15,.82) 68%);box-shadow:0 0 35px rgba(124,74,164,.18)}.ready-ring strong{font-family:Georgia,serif;font-size:48px;color:var(--gold-2);line-height:.9}.ready-ring span{font-size:9px;color:var(--muted);margin-top:9px;text-transform:uppercase;letter-spacing:.08em}
 .narrator-stage{min-height:70svh;display:grid;place-content:center;text-align:center;padding:30px 24px}.narrator-stage h1{font-size:clamp(38px,11vw,56px);line-height:.96;margin:12px 0}.narrator-stage p{max-width:360px;color:var(--muted);font-family:Georgia,serif;line-height:1.55;margin:0 auto}.narrator-live{display:inline-flex;justify-self:center;margin-top:18px;padding:8px 11px;border:1px solid rgba(110,207,155,.25);border-radius:999px;color:#b9f2d4;font-size:9px;text-transform:uppercase;letter-spacing:.12em}.narrator-orb{width:126px;height:126px;margin:0 auto 24px;border-radius:50%;display:flex;align-items:center;justify-content:center;gap:7px;background:radial-gradient(circle,rgba(117,72,147,.88),rgba(18,13,27,.92) 66%);border:1px solid rgba(223,183,85,.4);box-shadow:0 0 50px rgba(124,74,164,.34),inset 0 0 30px rgba(255,232,168,.1)}.narrator-orb i{display:block;width:7px;height:40px;border-radius:99px;background:linear-gradient(#fff0ae,#a673c9);animation:narrator-wave .8s ease-in-out infinite}.narrator-orb i:nth-child(2){height:64px;animation-delay:-.24s}.narrator-orb i:nth-child(3){animation-delay:-.48s}@keyframes narrator-wave{50%{transform:scaleY(.36);opacity:.55}}
 .auto-narrator-note{display:flex;align-items:center;gap:12px;margin:16px 0 10px;padding:13px;border:1px solid rgba(110,207,155,.2);border-radius:15px;background:rgba(13,39,31,.28)}.auto-narrator-note>span{width:42px;height:42px;display:grid;place-items:center;border-radius:50%;background:#24152f;color:var(--gold-2)}.auto-narrator-note strong{display:block}.auto-narrator-note p{font-size:10px;line-height:1.4;color:var(--muted);margin:3px 0 0}
@@ -166,7 +167,6 @@ h1,h2,h3,.display{font-family:Georgia,"Times New Roman",serif}
 .potions{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin:14px 0}.potion{min-height:100px;border:1px solid rgba(255,255,255,.12);border-radius:16px;background:rgba(6,6,12,.58);padding:13px;text-align:center}.potion b{display:block;font-size:28px;margin-bottom:5px}.potion strong{display:block}.potion span{display:block;color:var(--muted);font-size:9px;margin-top:4px}.potion.selected{border-color:var(--gold);background:linear-gradient(145deg,rgba(79,47,92,.72),rgba(10,9,16,.75))}.potion.used{text-decoration:line-through;opacity:.36}
 .victim-banner{text-align:center;padding:14px;border:1px solid rgba(186,86,102,.3);border-radius:15px;background:linear-gradient(145deg,rgba(92,24,37,.4),rgba(7,7,13,.55));margin:10px 0}.victim-banner span{display:block;color:#d9cbd0;font-size:10px;text-transform:uppercase;letter-spacing:.1em}.victim-banner strong{display:block;font-family:Georgia,serif;font-size:24px;color:#ffc7ce;margin-top:4px}
 .badge{display:inline-flex;align-items:center;gap:5px;border:1px solid rgba(223,183,85,.26);background:rgba(24,17,28,.7);border-radius:999px;padding:6px 9px;color:var(--gold-2);font-size:10px}.badge.green{border-color:rgba(110,207,155,.28);color:#b9f2d4}.badge.red{border-color:rgba(190,65,83,.38);color:#ffc1ca}
-.death-reveal{display:grid;gap:11px;margin:14px 0}.death-card{display:grid;grid-template-columns:74px 1fr;gap:13px;align-items:center;border:1px solid rgba(190,65,83,.3);border-radius:16px;background:rgba(31,9,16,.52);padding:8px}.death-card img{width:74px;aspect-ratio:2/3;object-fit:cover;border-radius:10px;filter:grayscale(.38) brightness(.7)}.death-card h3{font-size:20px;margin:0 0 4px;color:#f2d6d9}.death-card p{font-size:10px;color:var(--muted);margin:0;line-height:1.4}.death-card strong{color:var(--gold-2)}
 .no-deaths{padding:30px 16px;text-align:center}.no-deaths b{font-size:49px;display:block;margin-bottom:10px}.no-deaths h2{font-size:29px;margin-bottom:7px}.no-deaths p{color:var(--muted)}
 .look-up{text-align:center;min-height:calc(100svh - 260px);display:grid;place-content:center;padding:28px}.look-up .sun{width:90px;height:90px;border-radius:50%;margin:0 auto 20px;background:radial-gradient(circle at 40% 35%,#fff4bd,#d69d42 48%,#70431c);box-shadow:0 0 35px rgba(231,176,73,.45);animation:sunrise 3s ease-in-out infinite}@keyframes sunrise{50%{box-shadow:0 0 55px rgba(231,176,73,.62);transform:translateY(-4px)}}.look-up h2{font-size:32px;margin-bottom:8px}.look-up p{color:var(--muted);line-height:1.5}
 .tally{display:grid;gap:10px;margin:15px 0}.tally-row{display:grid;grid-template-columns:minmax(80px,1fr) 2fr 27px;gap:8px;align-items:center;font-size:11px}.tally-row>span:first-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.tally-bar{height:8px;border-radius:999px;background:#08070d;overflow:hidden}.tally-bar i{display:block;height:100%;background:linear-gradient(90deg,#7e4ca6,#e1b958);border-radius:inherit}.tally-row b{color:var(--gold-2);text-align:right}
@@ -188,13 +188,9 @@ h1,h2,h3,.display{font-family:Georgia,"Times New Roman",serif}
 @keyframes screen-in{from{opacity:0;transform:translateY(14px) scale(.992)}}
 #phase-fx{position:fixed;inset:0;z-index:70;pointer-events:none;opacity:0}
 #phase-fx.nightfall{background:radial-gradient(circle at 50% -12%,rgba(24,28,66,.92),rgba(2,2,9,.97) 62%);animation:phase-veil 2.5s ease both}
-#phase-fx.nightfall:before{content:"";position:absolute;left:50%;top:16%;width:96px;height:96px;margin-left:-48px;border-radius:50%;background:radial-gradient(circle at 38% 34%,#fffbe9,#ddd6a4 52%,#8f8963);box-shadow:0 0 70px 22px rgba(240,240,200,.34);animation:fx-moonrise 2.5s ease both}
 #phase-fx.nightfall:after{content:"";position:absolute;inset:0;background:radial-gradient(1.5px 1.5px at 18% 32%,#fff8,transparent 60%),radial-gradient(1.5px 1.5px at 72% 22%,#fff7,transparent 60%),radial-gradient(1.5px 1.5px at 42% 12%,#fff6,transparent 60%),radial-gradient(1.5px 1.5px at 86% 44%,#fff5,transparent 60%);animation:phase-veil 2.5s ease both}
 #phase-fx.dawnrise{background:linear-gradient(180deg,rgba(255,197,118,.6),rgba(148,72,88,.34) 52%,rgba(20,10,20,.15));animation:phase-veil 2.3s ease both}
-#phase-fx.dawnrise:before{content:"";position:absolute;left:50%;bottom:22%;width:120px;height:120px;margin-left:-60px;border-radius:50%;background:radial-gradient(circle at 42% 36%,#fff6c8,#f0b04e 55%,#a05c22);box-shadow:0 0 90px 30px rgba(255,190,90,.42);animation:fx-sunrise 2.3s ease both}
 @keyframes phase-veil{0%{opacity:0}22%{opacity:1}72%{opacity:1}100%{opacity:0}}
-@keyframes fx-moonrise{0%{transform:translateY(64px) scale(.82);opacity:0}38%{opacity:1}100%{transform:translateY(0) scale(1);opacity:1}}
-@keyframes fx-sunrise{0%{transform:translateY(70px) scale(.8);opacity:0}40%{opacity:1}100%{transform:translateY(0) scale(1);opacity:1}}
 /* ── Gold gilding & final shine ─────────────────────────────────────────── */
 .card-face{border:2px solid transparent;background:
   linear-gradient(#100b16,#100b16) padding-box,
@@ -230,183 +226,133 @@ h1,h2,h3,.display{font-family:Georgia,"Times New Roman",serif}
 .lover-face em{font-family:Georgia,serif;font-style:normal;font-size:30px;color:#ffc2d6}
 .lover-face span{color:var(--muted);font-size:12px;line-height:1.5}
 .lover-face.chosen{background:linear-gradient(165deg,#341328 0%,#12060f 70%)}
-/* ── Phase sky: one moon, many moods ────────────────────────────────────── */
-#sky{position:fixed;left:50%;top:34px;width:170px;height:170px;margin-left:-85px;z-index:-1;pointer-events:none;opacity:0;transition:opacity 1.6s ease;filter:blur(1px)}
-#sky i{position:absolute;inset:22px;border-radius:50%;background:radial-gradient(circle at 38% 34%,#fdfaf0,#cfc9b0 55%,#8d8770);box-shadow:0 0 52px 14px rgba(230,228,200,.26);transition:background 1.6s ease,box-shadow 1.6s ease}
-body[data-phase="role-reveal"] #sky,body[data-phase^="setup-"] #sky,body[data-phase^="night-"] #sky,body[data-phase="resolution"] #sky,body[data-phase="dawn"] #sky,body[data-phase="sheriff-vote"] #sky,body[data-phase^="day-"] #sky{opacity:.9}
-body[data-phase="night-wolves"] #sky i,body[data-phase="resolution"] #sky i{background:radial-gradient(circle at 38% 34%,#ffd0b8,#c2402c 54%,#571209);box-shadow:0 0 68px 22px rgba(200,55,35,.44)}
-body[data-phase="setup-cupid"] #sky i,body[data-phase="setup-lovers"] #sky i{background:radial-gradient(circle at 38% 34%,#ffe9f0,#e08fb2 55%,#8a3a5f);box-shadow:0 0 58px 16px rgba(233,120,160,.32)}
-body[data-phase="night-seer"] #sky i{background:radial-gradient(circle at 38% 34%,#f3ecff,#a189dd 55%,#493180);box-shadow:0 0 58px 16px rgba(158,128,228,.34)}
-body[data-phase="night-witch"] #sky i{background:radial-gradient(circle at 38% 34%,#eefbe8,#87b47e 55%,#2c5136);box-shadow:0 0 58px 16px rgba(115,190,130,.3)}
-body[data-phase="dawn"] #sky i,body[data-phase="sheriff-vote"] #sky i,body[data-phase^="day-"] #sky i{background:radial-gradient(circle at 40% 35%,#fff6c9,#eab54c 55%,#9a601f);box-shadow:0 0 74px 24px rgba(238,180,80,.4)}
-/* Under the bright daytime wash the big sky orb shrinks out of the header's
-   way, and the header copy switches to ink so it stays legible. */
-body[data-phase="sheriff-vote"] #sky,body[data-phase^="day-"] #sky{top:4px;width:108px;height:108px;margin-left:-54px;opacity:.7}
-body[data-phase="sheriff-vote"] .top-copy strong,body[data-phase^="day-"] .top-copy strong{color:#2e2517;text-shadow:0 1px 2px rgba(255,248,225,.55)}
-body[data-phase="sheriff-vote"] .top-copy span,body[data-phase^="day-"] .top-copy span{color:#4a4030;text-shadow:0 1px 2px rgba(255,248,225,.5)}
+/* ── Phase glow: the screen itself breathes the active colour ───────────
+   No second moon fights the artwork: a soft pulsing aura around the screen
+   edges says whose hour it is — blood for the pack, violet for the Seer,
+   rose for Cupid, green for the Witch, amber for daylight. */
+#glow{position:fixed;inset:0;z-index:-1;pointer-events:none;opacity:0;transition:opacity 1.4s ease;animation:glow-pulse 3.6s ease-in-out infinite;--glow:rgba(223,183,85,.34)}
+#glow:before{content:"";position:absolute;inset:0;background:radial-gradient(120% 55% at 50% -14%,var(--glow),transparent 62%)}
+#glow:after{content:"";position:absolute;inset:0;background:radial-gradient(130% 46% at 50% 112%,var(--glow),transparent 58%);opacity:.55}
+@keyframes glow-pulse{50%{opacity:.45}}
+body[data-phase="role-reveal"] #glow,body[data-phase^="setup-"] #glow,body[data-phase^="night-"] #glow,body[data-phase="resolution"] #glow,body[data-phase="dawn"] #glow,body[data-phase="sheriff-vote"] #glow,body[data-phase^="day-"] #glow,body[data-phase="game-over"] #glow{opacity:.9}
+body[data-phase="night-wolves"] #glow,body[data-phase="resolution"] #glow{--glow:rgba(196,52,38,.4)}
+body[data-phase="setup-cupid"] #glow,body[data-phase="setup-lovers"] #glow{--glow:rgba(230,106,156,.32)}
+body[data-phase="night-seer"] #glow{--glow:rgba(150,112,232,.34)}
+body[data-phase="night-witch"] #glow{--glow:rgba(104,190,132,.3)}
+body[data-phase="setup-thief"] #glow{--glow:rgba(223,183,85,.3)}
+body[data-phase="dawn"] #glow{--glow:rgba(255,172,92,.36)}
+body[data-phase="sheriff-vote"] #glow,body[data-phase^="day-"] #glow{--glow:rgba(255,214,130,.3)}
+body[data-phase="game-over"] #glow{--glow:rgba(223,183,85,.36)}
 /* Coloured night vignettes so the whole screen breathes with the phase. */
 body[data-phase="night-wolves"]:after,body[data-phase="resolution"]:after{background:radial-gradient(circle at 50% 6%,rgba(190,45,32,.24),transparent 44%),linear-gradient(180deg,transparent 52%,rgba(22,1,0,.64))}
 body[data-phase="setup-cupid"]:after,body[data-phase="setup-lovers"]:after{background:radial-gradient(circle at 50% 6%,rgba(226,100,150,.17),transparent 42%),linear-gradient(180deg,transparent 55%,rgba(0,0,0,.58))}
 body[data-phase="night-seer"]:after{background:radial-gradient(circle at 50% 6%,rgba(140,105,220,.19),transparent 42%),linear-gradient(180deg,transparent 55%,rgba(0,0,0,.58))}
 body[data-phase="night-witch"]:after{background:radial-gradient(circle at 50% 6%,rgba(90,180,120,.15),transparent 42%),linear-gradient(180deg,transparent 55%,rgba(0,0,0,.6))}
-/* ── The living village ──────────────────────────────────────────────────
-   A procedurally drawn scene acting as the shared game board. Palette and
-   light are keyed to data-mood; house states are keyed to real game events. */
-.village-stage{position:relative;margin:12px 0;border-radius:20px;overflow:hidden;border:1px solid rgba(223,183,85,.34);box-shadow:0 18px 48px rgba(0,0,0,.5),inset 0 0 0 1px rgba(255,255,255,.03);background:#05060d}
-.village-stage svg{display:block;width:100%;height:auto;filter:saturate(calc(1 - var(--wear,0)*.8)) brightness(calc(1 - var(--wear,0)*.22));transition:filter 1.4s ease}
-.village-stage:after{content:"";position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse 120% 90% at 50% 30%,transparent 55%,rgba(2,2,8,.4)),linear-gradient(180deg,rgba(0,0,0,.12),transparent 22%)}
-.village-stage figcaption{position:absolute;z-index:2;left:10px;right:10px;bottom:8px;text-align:center;font-family:Georgia,serif;font-style:italic;font-size:11px;line-height:1.4;color:#efe3cf;text-shadow:0 2px 8px #000,0 0 14px rgba(0,0,0,.9)}
-.village-stage[data-ghost="1"] svg{filter:saturate(.28) brightness(.82) hue-rotate(-12deg)}
-/* sky, sun, moon, clouds & birds */
-.vg-s0,.vg-s1,.vg-g0,.vg-g1{transition:stop-color 1.6s ease}
-.vg-s0{stop-color:#111739}.vg-s1{stop-color:#06070f}
-.vg-g0{stop-color:#131427}.vg-g1{stop-color:#08080f}
-.vg-stars circle{fill:#fff6d8;opacity:.75;animation:vg-twinkle 3.4s ease-in-out infinite alternate;animation-delay:var(--tw,0s);transition:opacity 1.4s ease}
-@keyframes vg-twinkle{to{opacity:.18}}
-.vg-moon circle{fill:#ece5cc;transition:opacity 1.4s ease}
-.vg-moon .vg-crater{fill:#cfc6a8}
-.vg-sun{fill:#ffdf8f;opacity:0;transition:opacity 1.4s ease}
-.vg-glow{opacity:.5;transition:opacity 1.4s ease}
-.vg-cloud{fill:rgba(196,206,236,.07);transition:fill 1.6s ease}
-.vg-cloud.c1{animation:vg-cloud-drift 46s ease-in-out infinite alternate}
-.vg-cloud.c2{animation:vg-cloud-drift 62s ease-in-out infinite alternate-reverse}
-.vg-cloud.c3{animation:vg-cloud-drift 54s ease-in-out infinite alternate}
-@keyframes vg-cloud-drift{to{transform:translateX(22px)}}
-.vg-birds{stroke:#2b3046;stroke-width:.9;fill:none;stroke-linecap:round;opacity:0;transition:opacity 1.4s ease,stroke 1.6s ease}
-/* land, trees & landmarks */
+/* ── The living village: full-bleed silhouette diorama ──────────────────
+   Pinned to the foot of the viewport behind the content. It draws no sky of
+   its own — the painted night artwork above it is the sky — so it reads as
+   part of the same world. Every mark on it is real game state. */
+#village{position:fixed;left:0;right:0;bottom:0;height:min(40svh,360px);z-index:-1;pointer-events:none}
+#village .village-stage{position:absolute;inset:0;margin:0}
+#village svg{position:absolute;inset:0;width:100%;height:100%;filter:saturate(calc(1 - var(--wear,0)*.7)) brightness(calc(1 - var(--wear,0)*.18));transition:filter 1.4s ease}
+.village-stage{opacity:0;animation:village-in 1.6s ease .1s both}
+@keyframes village-in{to{opacity:1}}
+.village-stage figcaption{position:absolute;z-index:2;left:16px;right:16px;bottom:calc(var(--safe-bottom) + 4px);text-align:center;font-family:Georgia,serif;font-style:italic;font-size:11.5px;line-height:1.4;color:#efe3cf;text-shadow:0 2px 8px #000,0 0 14px rgba(0,0,0,.9)}
+.village-stage[data-ghost="1"] svg{filter:saturate(.3) brightness(.85) hue-rotate(-14deg)}
+/* haze where silhouettes meet the painted sky */
+.vg-h0,.vg-h1{transition:stop-color 1.6s ease}
+.vg-h0{stop-color:#0a0a16}.vg-h1{stop-color:#07070f}
+/* silhouette layers */
 .vg-hill{transition:fill 1.6s ease}
-.vg-hill.far{fill:#0d1024}.vg-hill.near{fill:#10132b}
-.vg-treeline polygon,.vg-treeline rect{fill:#0a0d1e;transition:fill 1.6s ease}
-.vg-pine polygon,.vg-pine rect{fill:#0c0f20;transition:fill 1.6s ease}
-.vg-pine.deep polygon,.vg-pine.deep rect{fill:#080a18}
-.vg-lane{fill:rgba(209,181,132,.12);transition:fill 1.6s ease}
-.vg-stone{fill:rgba(214,193,150,.16);transition:fill 1.6s ease}
-.vg-shadow{fill:rgba(0,0,0,.3)}
-.vg-church .vg-nave,.vg-church .vg-tower{fill:#1a1d33;transition:fill 1.6s ease}
-.vg-church .vg-naveroof,.vg-church .vg-spire{fill:#232741;transition:fill 1.6s ease}
-.vg-church .vg-cross{stroke:#8f86a8;stroke-width:1.1;stroke-linecap:round;transition:stroke 1.6s ease}
-.vg-church .vg-cwin{fill:#e8b45c;opacity:.9;transition:fill 1.6s ease,opacity 1.6s ease}
-.vg-church .vg-cdoor{fill:#0d0a16;transition:fill 1.6s ease}
-.vg-grave line{stroke:#2c3050;stroke-width:1.1;stroke-linecap:round;transition:stroke 1.6s ease}
-.vg-mill .vg-milltower{fill:#1a1d33;transition:fill 1.6s ease}
-.vg-mill .vg-millcap{fill:#232741;transition:fill 1.6s ease}
-.vg-mill .vg-milldoor{fill:#0d0a16}
-.vg-mill .vg-sails line{stroke:#232741;stroke-width:1.3;stroke-linecap:round;transition:stroke 1.6s ease}
-.vg-mill .vg-hub{fill:#3a3f60;transition:fill 1.6s ease}
-.vg-mill .vg-sails{animation:vg-sails 40s linear infinite;transform-box:fill-box;transform-origin:center}
+.vg-hill.far{fill:rgba(13,13,28,.72)}.vg-hill.near{fill:rgba(9,9,20,.88)}
+.vg-treeline polygon,.vg-treeline rect{fill:rgba(10,11,24,.8);transition:fill 1.6s ease}
+.vg-pine polygon,.vg-pine rect{fill:#0a0b18;transition:fill 1.6s ease}
+.vg-pine.deep polygon,.vg-pine.deep rect{fill:#060712}
+.vg-ground{fill:#07070f;transition:fill 1.6s ease}
+.vg-lane{fill:rgba(206,178,128,.09);transition:fill 1.6s ease}
+.vg-cbody{fill:#0e0d1c;transition:fill 1.6s ease}
+.vg-cross{stroke:#9a90b4;stroke-width:1.3;stroke-linecap:round;transition:stroke 1.6s ease}
+.vg-cwin{fill:#f0bc62;opacity:.92;transition:fill 1.6s ease,opacity 1.6s ease}
+.vg-cdoor{fill:#050409}
+.vg-wellpost{stroke:#0e0d1c;stroke-width:1.4;stroke-linecap:round;transition:stroke 1.6s ease}
+.vg-grave line{stroke:#3c3f60;stroke-width:1.3;stroke-linecap:round;transition:stroke 1.6s ease}
+.vg-sails line{stroke:#121122;stroke-width:1.7;stroke-linecap:round;transition:stroke 1.6s ease}
+.vg-hub{fill:#232342;transition:fill 1.6s ease}
+.vg-sails{animation:vg-sails 44s linear infinite;transform-box:fill-box;transform-origin:center}
 @keyframes vg-sails{to{transform:rotate(360deg)}}
-.vg-well .vg-wellbase{fill:#1c1f36;transition:fill 1.6s ease}
-.vg-well .vg-wellroof{fill:#252945;transition:fill 1.6s ease}
-.vg-well .vg-wellpost,.vg-well .vg-wellrope{stroke:#252945;stroke-width:1;stroke-linecap:round;transition:stroke 1.6s ease}
 /* cottages */
-.vg-body{fill:#2b2340;transition:fill 1.6s ease}
-.vg-plinth{fill:#1c1730;transition:fill 1.6s ease}
-.vg-roof{fill:#3d2f54;transition:fill 1.6s ease}
-.vg-roof.v1{fill:#453054}.vg-roof.v2{fill:#35304f}
-.vg-eave{stroke:#171226;stroke-width:.8;transition:stroke 1.6s ease}
-.vg-chimney{fill:#221c38;transition:fill 1.6s ease}
-.vg-chimcap{fill:#191430;transition:fill 1.6s ease}
-.vg-door{fill:#150f22;transition:fill 1.6s ease}
-.vg-knob{fill:#8b7440}
-.vg-bush{fill:#131a2c;transition:fill 1.6s ease}
-.vg-winhalo{fill:#ffd98a;opacity:.14;transition:opacity 1.6s ease}
-.vg-win{fill:#ffd98a;animation:vg-flicker 3.1s ease-in-out infinite alternate;animation-delay:var(--fd,0s);transition:fill 1.6s ease}
-@keyframes vg-flicker{to{opacity:.62}}
-.vg-mull{stroke:rgba(20,12,6,.55);stroke-width:.5;fill:none}
-.vg-house.dead .vg-win{fill:#0c0a13;animation:none}
+.vg-body{fill:#100e1f;transition:fill 1.6s ease}
+.vg-roof{fill:#161327;transition:fill 1.6s ease}
+.vg-rim{stroke:rgba(196,180,236,.16);stroke-width:.9;stroke-linecap:round;transition:stroke 1.6s ease}
+.vg-chimney{fill:#0e0c1c;transition:fill 1.6s ease}
+.vg-door{fill:#050409;transition:fill 1.6s ease}
+.vg-winhalo{fill:#ffca6e;opacity:.16;transition:opacity 1.6s ease}
+.vg-win{fill:#ffd486;animation:vg-flicker 3.1s ease-in-out infinite alternate;animation-delay:var(--fd,0s);transition:fill 1.6s ease}
+@keyframes vg-flicker{to{opacity:.6}}
+.vg-mull{stroke:rgba(24,14,6,.6);stroke-width:.7;fill:none}
+.vg-house.dead .vg-win{fill:#0a0912;animation:none}
 .vg-house.dead .vg-winhalo{opacity:0}
-.vg-house.dead .vg-body{fill:#1c1729}.vg-house.dead .vg-roof{fill:#241d33}.vg-house.dead .vg-plinth{fill:#151126}
-.vg-boards line{stroke:#4d3d29;stroke-width:1.5;stroke-linecap:round}
-.vg-claw{stroke:#8e232e;stroke-width:.9;stroke-linecap:round;fill:none}
-.vg-smoke circle{fill:rgba(206,204,216,.24)}
-.vg-smoke{animation:vg-smoke 5s linear infinite;animation-delay:var(--sd,0s);transform-box:fill-box;transform-origin:center bottom}
-@keyframes vg-smoke{0%{transform:translateY(2px);opacity:0}25%{opacity:.85}100%{transform:translateY(-9px);opacity:0}}
-.vg-name{font:900 5px Georgia,serif;fill:rgba(244,231,205,.55);text-anchor:middle;transition:fill 1.6s ease}
-.vg-house.dead .vg-name{fill:rgba(244,231,205,.26)}
-.vg-omen{fill:rgba(198,48,40,.32);animation:vg-omen 2s ease-in-out infinite;transform-box:fill-box;transform-origin:center}
-@keyframes vg-omen{50%{opacity:.5;transform:scale(1.16)}}
-.vg-thread{fill:none;stroke:#ff6e8f;stroke-width:.8;opacity:.42;stroke-linecap:round;filter:drop-shadow(0 0 2px rgba(255,110,143,.6))}
+.vg-boards line{stroke:#54432c;stroke-width:2;stroke-linecap:round}
+.vg-claw{stroke:#a3283a;stroke-width:1.3;stroke-linecap:round;fill:none;filter:drop-shadow(0 0 2px rgba(163,40,58,.6))}
+.vg-smoke circle{fill:rgba(206,204,216,.2)}
+.vg-smoke{animation:vg-smoke 5.5s linear infinite;animation-delay:var(--sd,0s);transform-box:fill-box;transform-origin:center bottom}
+@keyframes vg-smoke{0%{transform:translateY(3px);opacity:0}25%{opacity:.8}100%{transform:translateY(-13px);opacity:0}}
+.vg-name{font:900 7px Georgia,serif;fill:rgba(244,231,205,.44);text-anchor:middle;transition:fill 1.6s ease}
+.vg-house.dead .vg-name{fill:rgba(244,231,205,.2)}
+.vg-omen{fill:rgba(206,54,44,.3);animation:vg-omen 2s ease-in-out infinite;transform-box:fill-box;transform-origin:center}
+@keyframes vg-omen{50%{opacity:.5;transform:scale(1.14)}}
+.vg-thread{fill:none;stroke:#ff6e8f;stroke-width:1.1;opacity:.42;stroke-linecap:round;filter:drop-shadow(0 0 3px rgba(255,110,143,.6))}
 .vg-wisp{fill:rgba(196,214,255,.5);animation:vg-wisp 4.2s ease-in-out infinite;animation-delay:var(--wd,0s)}
-@keyframes vg-wisp{0%,100%{opacity:0;transform:translateY(0)}50%{opacity:.7;transform:translateY(-4px)}}
-.vg-fog ellipse{fill:#9fb0d8;transition:fill 1.6s ease}
+@keyframes vg-wisp{0%,100%{opacity:0;transform:translateY(0)}50%{opacity:.7;transform:translateY(-6px)}}
+.vg-fog ellipse{fill:#8b9cc8;transition:fill 1.6s ease}
 .vg-fog .f1{animation:vg-fog1 17s ease-in-out infinite alternate}
 .vg-fog .f2{animation:vg-fog2 23s ease-in-out infinite alternate}
 .vg-fog .f3{animation:vg-fog1 20s ease-in-out infinite alternate-reverse}
-@keyframes vg-fog1{to{transform:translateX(16px)}}
-@keyframes vg-fog2{to{transform:translateX(-20px)}}
+@keyframes vg-fog1{to{transform:translateX(18px)}}
+@keyframes vg-fog2{to{transform:translateX(-22px)}}
 .vg-ember{fill:#ff9d5c;animation:vg-ember 3.6s linear infinite;animation-delay:var(--ed,0s)}
-@keyframes vg-ember{0%{opacity:0;transform:translateY(4px)}30%{opacity:.9}100%{opacity:0;transform:translateY(-26px)}}
-/* mood: dusk (the gathering) */
-.village-stage[data-mood="dusk"] .vg-s0{stop-color:#39264e}.village-stage[data-mood="dusk"] .vg-s1{stop-color:#b8663f}
-.village-stage[data-mood="dusk"] .vg-g0{stop-color:#241c31}.village-stage[data-mood="dusk"] .vg-g1{stop-color:#120d18}
-.village-stage[data-mood="dusk"] .vg-stars circle{opacity:.3}
-.village-stage[data-mood="dusk"] .vg-hill.far{fill:#2a2038}.village-stage[data-mood="dusk"] .vg-hill.near{fill:#1e1830}
-.village-stage[data-mood="dusk"] .vg-treeline polygon,.village-stage[data-mood="dusk"] .vg-treeline rect{fill:#241b30}
-.village-stage[data-mood="dusk"] .vg-pine polygon,.village-stage[data-mood="dusk"] .vg-pine rect{fill:#191323}
-.village-stage[data-mood="dusk"] .vg-cloud{fill:rgba(255,178,132,.16)}
-/* mood: dawn */
-.village-stage[data-mood="dawn"] .vg-s0{stop-color:#503058}.village-stage[data-mood="dawn"] .vg-s1{stop-color:#dd8f52}
-.village-stage[data-mood="dawn"] .vg-g0{stop-color:#3a2c38}.village-stage[data-mood="dawn"] .vg-g1{stop-color:#181119}
-.village-stage[data-mood="dawn"] .vg-stars circle{opacity:.12}
-.village-stage[data-mood="dawn"] .vg-moon circle{opacity:0}
-.village-stage[data-mood="dawn"] .vg-sun{opacity:.95}
-.village-stage[data-mood="dawn"] .vg-hill.far{fill:#3c2c44}.village-stage[data-mood="dawn"] .vg-hill.near{fill:#2b2136}
-.village-stage[data-mood="dawn"] .vg-treeline polygon,.village-stage[data-mood="dawn"] .vg-treeline rect{fill:#34253c}
-.village-stage[data-mood="dawn"] .vg-pine polygon,.village-stage[data-mood="dawn"] .vg-pine rect{fill:#231a2c}
-.village-stage[data-mood="dawn"] .vg-win{fill:#e7bd7d;opacity:.8}
-.village-stage[data-mood="dawn"] .vg-cloud{fill:rgba(255,205,160,.3)}
-.village-stage[data-mood="dawn"] .vg-fog ellipse{fill:#d9b48f}
-/* mood: day */
-.village-stage[data-mood="day"] .vg-s0{stop-color:#7ba3c6}.village-stage[data-mood="day"] .vg-s1{stop-color:#d8c9a4}
-.village-stage[data-mood="day"] .vg-g0{stop-color:#5d5f45}.village-stage[data-mood="day"] .vg-g1{stop-color:#3a3c2d}
-.village-stage[data-mood="day"] .vg-stars circle{opacity:0}
-.village-stage[data-mood="day"] .vg-moon circle{opacity:0}
-.village-stage[data-mood="day"] .vg-sun{opacity:1}
-.village-stage[data-mood="day"] .vg-cloud{fill:rgba(255,255,255,.65)}
-.village-stage[data-mood="day"] .vg-birds{opacity:.8;stroke:#3d4452}
-.village-stage[data-mood="day"] .vg-hill.far{fill:#4c5a49}.village-stage[data-mood="day"] .vg-hill.near{fill:#3c4a3c}
-.village-stage[data-mood="day"] .vg-treeline polygon,.village-stage[data-mood="day"] .vg-treeline rect{fill:#3a4a3a}
-.village-stage[data-mood="day"] .vg-pine polygon,.village-stage[data-mood="day"] .vg-pine rect{fill:#2c3a2e}
-.village-stage[data-mood="day"] .vg-pine.deep polygon,.village-stage[data-mood="day"] .vg-pine.deep rect{fill:#25332a}
-.village-stage[data-mood="day"] .vg-body{fill:#8a6f5c}.village-stage[data-mood="day"] .vg-plinth{fill:#6a5344}
-.village-stage[data-mood="day"] .vg-roof{fill:#7d5138}.village-stage[data-mood="day"] .vg-roof.v1{fill:#8a5c3c}.village-stage[data-mood="day"] .vg-roof.v2{fill:#6f4c39}
-.village-stage[data-mood="day"] .vg-eave{stroke:#4a3626}
-.village-stage[data-mood="day"] .vg-chimney,.village-stage[data-mood="day"] .vg-chimcap{fill:#5f4a3c}
-.village-stage[data-mood="day"] .vg-door{fill:#3c2b20}
-.village-stage[data-mood="day"] .vg-bush{fill:#3f5438}
-.village-stage[data-mood="day"] .vg-win{fill:#33313f;animation:none}
+@keyframes vg-ember{0%{opacity:0;transform:translateY(5px)}30%{opacity:.9}100%{opacity:0;transform:translateY(-34px)}}
+/* mood: dusk — lobby lanterns against the sunset edge of the art */
+.village-stage[data-mood="dusk"] .vg-hill.far{fill:rgba(38,26,44,.7)}
+.village-stage[data-mood="dusk"] .vg-hill.near{fill:rgba(24,17,32,.88)}
+.village-stage[data-mood="dusk"] .vg-win,.village-stage[data-mood="dusk"] .vg-cwin{fill:#ffc873}
+/* mood: dawn — silhouettes warm at the edges */
+.village-stage[data-mood="dawn"] .vg-hill.far{fill:rgba(56,32,44,.66)}
+.village-stage[data-mood="dawn"] .vg-hill.near{fill:rgba(34,20,30,.86)}
+.village-stage[data-mood="dawn"] .vg-body{fill:#1c1224}.village-stage[data-mood="dawn"] .vg-roof{fill:#241628}
+.village-stage[data-mood="dawn"] .vg-rim{stroke:rgba(255,178,110,.34)}
+.village-stage[data-mood="dawn"] .vg-win{fill:#e8b26e;opacity:.75}
+.village-stage[data-mood="dawn"] .vg-fog ellipse{fill:#d9a781}
+.village-stage[data-mood="dawn"] .vg-h0{stop-color:#1e1218}.village-stage[data-mood="dawn"] .vg-h1{stop-color:#140b10}
+/* mood: day — warm umber silhouettes against the brightened art */
+.village-stage[data-mood="day"] .vg-hill.far{fill:rgba(56,52,36,.6)}
+.village-stage[data-mood="day"] .vg-hill.near{fill:rgba(40,36,24,.84)}
+.village-stage[data-mood="day"] .vg-treeline polygon,.village-stage[data-mood="day"] .vg-treeline rect{fill:rgba(44,44,28,.8)}
+.village-stage[data-mood="day"] .vg-pine polygon,.village-stage[data-mood="day"] .vg-pine rect{fill:#252718}
+.village-stage[data-mood="day"] .vg-pine.deep polygon,.village-stage[data-mood="day"] .vg-pine.deep rect{fill:#1c1e12}
+.village-stage[data-mood="day"] .vg-ground{fill:#201e14}
+.village-stage[data-mood="day"] .vg-body,.village-stage[data-mood="day"] .vg-cbody,.village-stage[data-mood="day"] .vg-chimney{fill:#2e2418}
+.village-stage[data-mood="day"] .vg-roof{fill:#3a2c1a}
+.village-stage[data-mood="day"] .vg-rim{stroke:rgba(255,236,180,.4)}
+.village-stage[data-mood="day"] .vg-win{fill:#171420;animation:none}
 .village-stage[data-mood="day"] .vg-winhalo{opacity:0}
-.village-stage[data-mood="day"] .vg-house.dead .vg-body{fill:#4f4441}.village-stage[data-mood="day"] .vg-house.dead .vg-roof{fill:#514138}.village-stage[data-mood="day"] .vg-house.dead .vg-plinth{fill:#3e3531}
-.village-stage[data-mood="day"] .vg-church .vg-nave,.village-stage[data-mood="day"] .vg-church .vg-tower{fill:#8f8a7a}
-.village-stage[data-mood="day"] .vg-church .vg-naveroof,.village-stage[data-mood="day"] .vg-church .vg-spire{fill:#5c5347}
-.village-stage[data-mood="day"] .vg-church .vg-cross{stroke:#4c463c}
-.village-stage[data-mood="day"] .vg-church .vg-cwin{fill:#2c3040;opacity:1}
-.village-stage[data-mood="day"] .vg-church .vg-cdoor{fill:#3a3228}
-.village-stage[data-mood="day"] .vg-grave line{stroke:#5c6152}
-.village-stage[data-mood="day"] .vg-mill .vg-milltower{fill:#7c6a54}
-.village-stage[data-mood="day"] .vg-mill .vg-millcap{fill:#54462f}
-.village-stage[data-mood="day"] .vg-mill .vg-sails line{stroke:#4c4232}
-.village-stage[data-mood="day"] .vg-mill .vg-hub{fill:#392f22}
-.village-stage[data-mood="day"] .vg-well .vg-wellbase{fill:#6f6a5c}
-.village-stage[data-mood="day"] .vg-well .vg-wellroof{fill:#54462f}
-.village-stage[data-mood="day"] .vg-well .vg-wellpost,.village-stage[data-mood="day"] .vg-well .vg-wellrope{stroke:#54462f}
-.village-stage[data-mood="day"] .vg-fog ellipse{fill:#cfd3c2}
-.village-stage[data-mood="day"] .vg-lane{fill:rgba(199,173,124,.5)}
-.village-stage[data-mood="day"] .vg-stone{fill:rgba(120,104,74,.5)}
-.village-stage[data-mood="day"] .vg-name{fill:rgba(24,20,14,.6)}
-/* mood: ember (the pack has won) */
-.village-stage[data-mood="ember"] .vg-s0{stop-color:#43111a}.village-stage[data-mood="ember"] .vg-s1{stop-color:#983320}
-.village-stage[data-mood="ember"] .vg-g0{stop-color:#2a1214}.village-stage[data-mood="ember"] .vg-g1{stop-color:#120708}
-.village-stage[data-mood="ember"] .vg-stars circle{opacity:.1}
-.village-stage[data-mood="ember"] .vg-moon circle{fill:#e8a184}
-.village-stage[data-mood="ember"] .vg-win{fill:#1d0e12;animation:none}
+.village-stage[data-mood="day"] .vg-cwin{fill:#171420;opacity:1}
+.village-stage[data-mood="day"] .vg-grave line{stroke:#5c5844}
+.village-stage[data-mood="day"] .vg-sails line{stroke:#2e2418}
+.village-stage[data-mood="day"] .vg-hub{fill:#443724}
+.village-stage[data-mood="day"] .vg-wellpost{stroke:#2e2418}
+.village-stage[data-mood="day"] .vg-cross{stroke:#57503e}
+.village-stage[data-mood="day"] .vg-fog ellipse{fill:#cabf9c}
+.village-stage[data-mood="day"] .vg-lane{fill:rgba(206,178,128,.24)}
+.village-stage[data-mood="day"] .vg-name{fill:rgba(255,244,214,.5)}
+.village-stage[data-mood="day"] .vg-h0{stop-color:#231e12}.village-stage[data-mood="day"] .vg-h1{stop-color:#16130c}
+/* mood: ember — the pack owns the lanes */
+.village-stage[data-mood="ember"] .vg-hill.far{fill:rgba(44,14,18,.7)}
+.village-stage[data-mood="ember"] .vg-hill.near{fill:rgba(28,9,12,.88)}
+.village-stage[data-mood="ember"] .vg-win,.village-stage[data-mood="ember"] .vg-cwin{fill:#170a0e;animation:none}
 .village-stage[data-mood="ember"] .vg-winhalo{opacity:0}
-.village-stage[data-mood="ember"] .vg-hill.far{fill:#26101a}.village-stage[data-mood="ember"] .vg-hill.near{fill:#1c0d15}
-.village-stage[data-mood="ember"] .vg-treeline polygon,.village-stage[data-mood="ember"] .vg-treeline rect{fill:#200d14}
-.village-stage[data-mood="ember"] .vg-pine polygon,.village-stage[data-mood="ember"] .vg-pine rect{fill:#180a10}
-.village-stage[data-mood="ember"] .vg-cloud{fill:rgba(220,110,70,.12)}
-.village-stage[data-mood="ember"] .vg-fog ellipse{fill:#a06452}
-.sleep-card .village-stage{width:100%;margin:0 0 18px}
+.village-stage[data-mood="ember"] .vg-rim{stroke:rgba(255,120,80,.3)}
+.village-stage[data-mood="ember"] .vg-fog ellipse{fill:#9c5844}
 /* ── Night whispers ─────────────────────────────────────────────────────── */
 .whisper{width:100%;display:flex;gap:12px;align-items:center;text-align:left;margin:12px 0;padding:14px 15px;border:1px solid rgba(223,183,85,.34);border-radius:16px;background:linear-gradient(150deg,rgba(52,38,29,.82),rgba(15,11,14,.9) 68%);box-shadow:0 12px 34px rgba(0,0,0,.4),inset 0 1px rgba(255,236,190,.07);transition:border-color .3s ease,transform .12s ease}
 .whisper:active{transform:scale(.985)}
@@ -420,9 +366,30 @@ body[data-phase="night-witch"]:after{background:radial-gradient(circle at 50% 6%
 .whisper:not(.open) .whisper-copy span{font-size:11.5px;color:var(--muted);font-style:normal;font-family:Inter,ui-sans-serif,sans-serif}
 .whisper.compact{padding:11px 13px;margin:8px 0}
 .whisper.compact .whisper-mark{width:36px;height:36px;font-size:15px}
-/* ── Cinematic dawn staging ─────────────────────────────────────────────── */
-.death-card.staged{animation:death-in .8s cubic-bezier(.2,.7,.2,1) both;animation-delay:calc(1.1s + var(--stage,0)*1.3s)}
-.no-deaths.staged{animation:death-in .9s ease both;animation-delay:.9s}
-@keyframes death-in{from{opacity:0;transform:translateY(16px) scale(.97)}}
-.death-flavor{font-family:Georgia,serif;font-style:italic;color:#e6cdc4!important;font-size:11.5px!important;margin:0 0 5px!important}
+/* ── The dawn reveal: one card, one story ──────────────────────────────── */
+.dawn-screen{display:flex;flex-direction:column}
+.death-reveal{display:grid;gap:26px;justify-items:center;margin:4vh 0 12px}
+.death-hero{width:min(72vw,300px)}
+.death-hero.staged{animation:death-in 1.1s cubic-bezier(.2,.7,.2,1) both;animation-delay:calc(1.2s + var(--stage,0)*2.2s)}
+@keyframes death-in{from{opacity:0;transform:translateY(22px) scale(.94)}}
+.death-frame{position:relative;aspect-ratio:2/3;border-radius:22px;overflow:hidden;border:2px solid transparent;background:
+  linear-gradient(#100b16,#100b16) padding-box,
+  linear-gradient(145deg,#f4dc8d 0%,#8a6a24 22%,#ffe9a3 45%,#6e5318 68%,#e9c96f 100%) border-box;
+  box-shadow:0 30px 80px rgba(0,0,0,.72),0 0 44px rgba(160,40,40,.14)}
+.death-frame img{width:100%;height:100%;object-fit:cover;filter:saturate(.82) brightness(.86)}
+.death-pall{position:absolute;inset:0;background:radial-gradient(120% 90% at 50% 20%,transparent 42%,rgba(6,2,6,.62)),linear-gradient(180deg,rgba(10,4,8,.24),transparent 30%,rgba(6,2,6,.7) 82%)}
+.death-haze{position:absolute;inset:0;background:radial-gradient(90% 70% at 50% 62%,rgba(96,190,120,.3),transparent 70%);mix-blend-mode:screen;animation:haze-breathe 3.4s ease-in-out infinite}
+@keyframes haze-breathe{50%{opacity:.55}}
+.death-claw{position:absolute;inset:0;width:100%;height:100%;filter:drop-shadow(0 2px 5px rgba(0,0,0,.7))}
+.death-claw .slash{opacity:0;transform:scaleY(0);transform-box:fill-box;transform-origin:top center}
+.staged .death-claw .slash{animation:slash-cut .3s cubic-bezier(.6,0,.8,1) both}
+.death-hero:not(.staged) .death-claw .slash{opacity:.94;transform:none}
+.staged .death-claw .s1{animation-delay:calc(2.4s + var(--stage,0)*2.2s)}
+.staged .death-claw .s2{animation-delay:calc(2.55s + var(--stage,0)*2.2s)}
+.staged .death-claw .s3{animation-delay:calc(2.7s + var(--stage,0)*2.2s)}
+@keyframes slash-cut{from{opacity:0;transform:scaleY(0)}60%{opacity:1}to{opacity:.94;transform:scaleY(1)}}
+.death-plate{position:absolute;left:7%;right:7%;bottom:6%;padding:12px 10px;text-align:center;background:linear-gradient(180deg,rgba(10,6,12,.32),rgba(6,4,9,.92) 46%);border-top:1px solid rgba(223,183,85,.4);border-radius:10px}
+.death-plate strong{display:block;font-family:Georgia,serif;font-size:24px;color:#f4e2d2;text-shadow:0 2px 9px #000}
+.death-plate span{display:block;margin-top:4px;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:#cbb59a}
+.no-deaths.staged{animation:death-in 1s ease both;animation-delay:1s}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
