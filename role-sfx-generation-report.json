@@ -83,13 +83,20 @@
       "seconds": 2.0,
       "character_cost_header": 20.0,
       "size_bytes": 33062
+    },
+    {
+      "slot": "wolves",
+      "variant": "02",
+      "seconds": 4.0,
+      "character_cost_header": 40.0,
+      "size_bytes": 65245
     }
   ],
-  "credits_before_incremental_run": 6019.0,
+  "credits_before_incremental_run": 6039.0,
   "free_limit": 10000,
   "reserve": 600,
-  "incremental_billed_headers_total": 20.0,
-  "generated_variant_count": 12,
+  "incremental_billed_headers_total": 40.0,
+  "generated_variant_count": 13,
   "planned_variant_count": 30,
   "complete": false
 }

@@ -2,7 +2,8 @@
   "version": 1,
   "variants": {
     "wolves": [
-      "wolves-01.mp3"
+      "wolves-01.mp3",
+      "wolves-02.mp3"
     ],
     "death": [
       "death-01.mp3"
