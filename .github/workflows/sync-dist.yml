@@ -1,4 +1,4 @@
-name: Sync production dist to main
+name: Sync production dist to main with role SFX
 
 on:
   workflow_dispatch:
@@ -35,11 +35,12 @@ jobs:
       - run: npm test
       - name: Build current production app including committed ElevenLabs assets
         run: npm run build
-      - name: Verify ElevenLabs packs reached dist
+      - name: Verify all ElevenLabs packs reached dist
         run: |
           test -f dist/assets/voice/pack.json
           test -f dist/assets/ambience/pack.json
-          echo "Voice and ambience manifests are present in dist."
+          test -f dist/assets/role-sfx/pack.json
+          echo "Voice, ambience and role SFX manifests are present in dist."
       - name: Commit production dist to main
         run: |
           git config user.name "github-actions[bot]"
@@ -49,6 +50,6 @@ jobs:
             echo "dist is already current."
             exit 0
           fi
-          git commit -m "Sync production dist with premium audio"
+          git commit -m "Sync production dist with premium role SFX"
           git pull --rebase origin main
           git push
