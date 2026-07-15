@@ -2,6 +2,7 @@ import {joinRoom, selfId} from 'trystero';
 import {
   advanceFromDawn,
   applyPlayerCommand,
+  endSession,
   isCoordinator,
   makeState,
   nextNight,
@@ -9,12 +10,15 @@ import {
   resetToLobby,
   setPreset,
   startGame,
+  startNextRound,
   storytellerAdvance,
+  upgradeState,
   updateSettings,
   viewFor
 } from './engine.js';
 import {PHASE_META, PRESETS, ROLES, SPECIAL_ROLE_IDS, STORY_CUES} from './roles.js';
 import {morningLine, townSquare} from './village.js';
+import {cupidCinematic, deathCinematic, hunterCinematic, seerCinematic} from './cutscene.js';
 import {narrate, narrationSupported, stopNarration} from './narrator.js';
 import {initVoicePack, playVoicePack, stopVoicePack, voicePackCovers, voicePackEngine, voicePackReady, warmVoicePack} from './voicepack.js';
 import qrFactory from 'qrcode-generator';
@@ -28,7 +32,7 @@ const NAME_KEY = 'moonfall:last-name';
 const SOUND_KEY = 'moonfall:sound-enabled';
 const VOICE_KEY = 'moonfall:voice-enabled';
 const AMBIENCE_KEY = 'moonfall:ambience-enabled';
-const APP_VERSION = '2.8.0';
+const APP_VERSION = '3.0.0';
 const RELAY_REDUNDANCY = 7;
 const STALE_CONNECTION_MS = 25000;
 const RECONNECT_DELAY_MS = 180;
@@ -37,6 +41,7 @@ const app = document.querySelector('#app');
 const toastRoot = document.querySelector('#toast-root');
 const modalRoot = document.querySelector('#modal-root');
 const villageRoot = document.querySelector('#village');
+const sceneFxRoot = document.querySelector('#scene-fx');
 let lastVillageHtml = null;
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'}[char]));
 const cleanCode = value => String(value || '').toUpperCase().replace(/[^A-Z2-9]/g, '').slice(0, 6);
@@ -112,6 +117,8 @@ const ui = {
   transitionFrom: null,
   phaseFresh: false,
   modal: null,
+  cupidLoosed: false,
+  sceneBusy: null,
   busy: false
 };
 
@@ -218,7 +225,25 @@ function toast(text, type = '') {
 }
 
 function vibrate(pattern = 24) {
+  // A buzzing phone can betray a private wake or confirm across a quiet
+  // table. Live Moonfall therefore uses visual feedback only; the home screen
+  // may still use the device's ordinary tactile tap response.
+  if (mode) return;
   try { navigator.vibrate?.(pattern); } catch { /* no-op */ }
+}
+
+let sceneFxClear = null;
+function playSceneAction(kind, target = null, duration = 1100) {
+  if (!sceneFxRoot || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+  const node = target?.closest?.('.sprite') || target;
+  const rect = node?.getBoundingClientRect?.();
+  sceneFxRoot.style.setProperty('--fx-x', `${rect ? rect.left + rect.width / 2 : innerWidth / 2}px`);
+  sceneFxRoot.style.setProperty('--fx-y', `${rect ? rect.top + rect.height / 2 : innerHeight / 2}px`);
+  sceneFxRoot.className = '';
+  void sceneFxRoot.offsetWidth;
+  sceneFxRoot.className = kind;
+  clearTimeout(sceneFxClear);
+  sceneFxClear = setTimeout(() => { sceneFxRoot.className = ''; }, duration);
 }
 
 function unlockAudio(force = false) {
@@ -380,7 +405,7 @@ function premiumVariant(slot) {
 // HARD RULE — the storyteller device is the only speaker. Every other phone
 // in a live game is silent no matter which handler asks for audio, so no tap,
 // confirm or kill effect can ever leak a player's secret from their own
-// pocket. Feedback on player phones is visual and haptic only.
+// pocket. Feedback on player phones is visual only.
 function deviceMaySpeak() {
   if (!mode) return true;                    // home screen previews
   return Boolean(currentView && isTableVoice(currentView));
@@ -832,9 +857,11 @@ function scheduleNarratorAutomation() {
       const phaseCueLead = {'setup-thief': 2100, 'setup-cupid': 2700, 'setup-lovers': 2500, 'night-seer': 2300, 'night-wolves': 4800, 'night-witch': 2700, 'sheriff-vote': 2100, 'day-vote': 1900, resolution: 2700};
       const deathReveal = (phase === 'dawn' || phase === 'day-result') && Boolean(view.lastDeaths?.length);
       const healedReveal = phase === 'dawn' && Boolean(view.nightResult?.healed) && !deathReveal;
-      const delay = opening.ids?.[0] === 'nightfall' ? 2300 : deathReveal ? 4300 : healedReveal ? 3500 : phase === 'dawn' ? 850 : phaseCueLead[phase] || 350;
+      // Dawn visuals begin with the wake line, then collapse and true-form
+      // reveal on the following recorded clips. There is no dead-air card wait.
+      const delay = opening.ids?.[0] === 'nightfall' ? 2300 : deathReveal ? 650 : healedReveal ? 900 : phase === 'dawn' ? 650 : phaseCueLead[phase] || 350;
       await playNarratorSequence(opening.ids, opening.text, {delay});
-      if (phase === 'dawn' || phase === 'day-result') await sleep(phase === 'day-result' ? 1600 : 900);
+      if (phase === 'dawn' || phase === 'day-result') await sleep(Math.max(900, (view.lastDeaths?.length || 0) * 700));
     } else {
       const [id, text] = SLEEP_CUES[phase] || [null, ''];
       if (id) await playNarratorSequence([id], text, {delay: 180});
@@ -1043,17 +1070,10 @@ document.addEventListener('pointerdown', () => {
 
 let lastWakePulseKey = null;
 
-// When a night action opens on this phone, a firm double pulse tells its
-// owner to wake without a sound or a lifted screen. (The lovers no longer
-// need a private cue: everyone flips an identical fate card together.)
+// Deliberately empty: private haptics can be heard or felt across a table and
+// become a role/timing side channel. The narrator alone calls each wake.
 function updateHaptics(view) {
-  const action = view?.privateAction;
-  const awake = Boolean(action?.type) && !action.done && view.phaseReady !== false;
-  if (!awake) return;
-  const key = `${view.phaseSerial}:${action.type}`;
-  if (key === lastWakePulseKey) return;
-  lastWakePulseKey = key;
-  vibrate([70, 70, 70]);
+  void view;
 }
 
 function phaseChanged(view) {
@@ -1069,9 +1089,12 @@ function phaseChanged(view) {
   ui.witchHeal = Boolean(view.privateAction?.draft?.heal);
   ui.witchPoisonTarget = view.privateAction?.draft?.poisonTarget || null;
   ui.poisonOpen = false;
+  ui.cupidLoosed = false;
+  ui.sceneBusy = null;
   ui.whisperOpen = false;
   ui.headerOpen = false;
   document.body.dataset.phase = view.phase;
+  document.body.dataset.outcome = view.winner?.team || '';
   ui.phaseFresh = true;
   updateAmbience(view);
   if (view.phase === 'role-reveal' && isTableVoice(view) && voiceEnabled && voicePackReady()) {
@@ -1081,13 +1104,6 @@ function phaseChanged(view) {
     transitionSound(view, previous);
     const fx = phaseFxFor(view, previous);
     if (fx) playPhaseFx(fx);
-    // Haptics carry the turn structure for closed eyes: one soft pulse as the
-    // village falls asleep, a long daybreak pattern on every phone at dawn.
-    const enteringNight = (previous === 'role-reveal' || previous === 'day-result') && (view.phase.startsWith('setup-') || view.phase.startsWith('night-'));
-    if (view.phase === 'dawn') vibrate([50, 80, 50, 80, 160]);
-    else if (enteringNight) vibrate(35);
-    else if (view.phase === 'resolution') vibrate([35, 45, 70]);
-    else vibrate(20);
   }
   scheduleNarratorAutomation();
 }
@@ -1336,6 +1352,10 @@ function processCommand(actorId, type, payload = {}) {
     if (type === 'host:settings') result = updateSettings(serverState, payload);
     if (type === 'host:preset') result = setPreset(serverState, payload.preset) ? {ok: true} : result;
     if (type === 'host:start') result = startGame(serverState, agentTest ? () => 0 : Math.random);
+    if (type === 'host:next-round') result = startNextRound(serverState, agentTest ? () => 0 : Math.random);
+    if (type === 'host:between-rounds') { resetToLobby(serverState, {preserveSession: true}); result = {ok: true}; }
+    if (type === 'host:end-session') result = endSession(serverState);
+    if (type === 'host:clear-session') { resetToLobby(serverState); result = {ok: true}; }
     if (type === 'host:reset') { resetToLobby(serverState); result = {ok: true}; }
     if (type === 'host:remove') result = removePlayer(payload.seatId);
   }
@@ -1403,7 +1423,7 @@ async function createVillage(name) {
 }
 
 function runTestAgents() {
-  if (!agentTest || !serverState || !identity || ['lobby', 'game-over'].includes(serverState.phase)) return;
+  if (!agentTest || !serverState || !identity || ['lobby', 'game-over', 'session-over'].includes(serverState.phase)) return;
   const botIds = Object.keys(serverState.players).filter(id => id.startsWith('test-agent-'));
   for (const botId of botIds) {
     const view = viewFor(serverState, botId);
@@ -1499,6 +1519,7 @@ function resumeVillage(code) {
   }
   const upgradedFromStoryteller = Number(restored.schema || 0) < 3;
   if (upgradedFromStoryteller) resetToLobby(restored);
+  upgradeState(restored);
   restored.actions.dayReady ||= {};
   restored.phaseReady = typeof restored.phaseReady === 'boolean' ? restored.phaseReady : restored.phase === 'lobby';
   restored.phaseSerial = Number(restored.phaseSerial || 0);
@@ -1822,11 +1843,12 @@ function renderThief(view, action) {
 function renderCupid(view, action) {
   const selected = ui.cupidChoices;
   app.innerHTML = stageScreen(view, {
-    cls: 'awake-screen awake-cupid',
+    cls: `awake-screen awake-cupid ${ui.cupidLoosed ? 'is-loosed' : ''}`,
     rail: `<div class="rail-emblem cupid">♥</div>
       <div class="heart-slots"><b class="${selected[0] ? 'filled' : ''}">♥</b><b class="${selected[1] ? 'filled' : ''}">♥</b></div>
       ${selected.map(id => `<div class="rail-chip"><b>♥</b><strong>${esc(view.players[id]?.name || '')}</strong></div>`).join('')}`,
-    foot: `<button class="btn" data-action="submit-cupid" ${selected.length === 2 ? '' : 'disabled'}>Bind these hearts</button>`
+    foot: `<button class="btn" data-action="submit-cupid" ${selected.length === 2 && !ui.sceneBusy ? '' : 'disabled'}>${ui.cupidLoosed ? 'The arrow flies…' : 'Loose the arrow'}</button>`,
+    extra: cupidCinematic(view, selected, {loosed: ui.cupidLoosed})
   });
 }
 
@@ -1859,10 +1881,12 @@ function renderSeer(view, action) {
     return;
   }
   const target = view.players[action.target];
-  app.innerHTML = `<section class="screen stage-screen awake-screen awake-seer">${gameHeader(view)}${stageStrip(view, target?.name || 'The vision')}
-    <div class="deal-stage"><div class="role-peek">${roleCard(action.result, ui.seerFlipped, {label: true, tapAction: 'flip-seer'})}</div></div>
-    ${!ui.seerFlipped ? '<div class="stage-foot"><div class="tap-hint">Turn the card</div></div>' : '<div class="stage-foot"><button class="btn" data-action="seer-done">Return the card</button></div>'}
-  </section>`;
+  app.innerHTML = stageScreen(view, {
+    title: target?.name || 'The vision',
+    cls: 'awake-screen awake-seer vision-open',
+    extra: seerCinematic(view, action),
+    foot: '<button class="btn" data-action="seer-done">Seal the vision · close your eyes</button>'
+  });
 }
 
 function renderWolves(view, action) {
@@ -1887,12 +1911,13 @@ function renderWitch(view, action) {
   const victim = action.victim ? view.players[action.victim] : null;
   const poisonOpen = ui.poisonOpen || Boolean(ui.witchPoisonTarget);
   app.innerHTML = stageScreen(view, {
-    cls: 'awake-screen awake-witch',
+    cls: `awake-screen awake-witch ${ui.sceneBusy === 'witch' ? 'is-casting' : ''}`,
     rail: `<div class="rail-chip doomed"><b>☠</b><strong>${victim ? esc(victim.name) : 'No victim tonight'}</strong></div>
-      <button class="potion rail-potion ${ui.witchHeal ? 'selected' : ''} ${action.potions.heal ? '' : 'used'}" data-action="toggle-heal" ${!action.potions.heal || !victim ? 'disabled' : ''}><b>✚</b><strong>Heal</strong></button>
-      <button class="potion rail-potion ${poisonOpen ? 'selected' : ''} ${action.potions.poison ? '' : 'used'}" data-action="open-poison" ${!action.potions.poison ? 'disabled' : ''}><b>⚗</b><strong>Poison</strong>${ui.witchPoisonTarget ? `<span>${esc(view.players[ui.witchPoisonTarget]?.name || '')}</span>` : ''}</button>
+      <button class="potion rail-potion heal ${ui.witchHeal ? 'selected' : ''} ${action.potions.heal ? '' : 'used'}" data-action="toggle-heal" ${!action.potions.heal || !victim || ui.sceneBusy ? 'disabled' : ''}><img src="assets/sprites/props/potion-green.png" alt=""><strong>Save</strong><span>${ui.witchHeal ? 'Selected' : 'Healing draught'}</span></button>
+      <button class="potion rail-potion poison ${poisonOpen ? 'selected' : ''} ${action.potions.poison ? '' : 'used'}" data-action="open-poison" ${!action.potions.poison || ui.sceneBusy ? 'disabled' : ''}><img src="assets/sprites/props/potion-red.png" alt=""><strong>Poison</strong>${ui.witchPoisonTarget ? `<span>${esc(view.players[ui.witchPoisonTarget]?.name || '')}</span>` : '<span>Choose a soul</span>'}</button>
       ${action.potions.poison && poisonOpen ? '<button class="btn ghost mini" data-action="clear-poison">No poison</button>' : ''}`,
-    foot: '<button class="btn" data-action="submit-witch">Seal the choice</button>'
+    foot: `<button class="btn" data-action="submit-witch" ${ui.sceneBusy ? 'disabled' : ''}>${ui.sceneBusy ? 'The bottles answer…' : 'Seal the choice'}</button>`,
+    extra: `<div class="witch-magic" aria-hidden="true"><i></i><i></i><i></i><i></i></div>`
   });
 }
 
@@ -1909,8 +1934,11 @@ function renderPending(view, action) {
   const hunter = action.type === 'hunter';
   app.innerHTML = stageScreen(view, {
     title: hunter ? 'One final shot' : 'Name your successor',
-    rail: `<div class="rail-emblem">${hunter ? '⌖' : '✹'}</div>
-      ${hunter ? '<button class="btn ghost mini" data-action="resolve-pending" data-id="">Lower the weapon</button>' : ''}`
+    cls: hunter ? 'awake-screen awake-hunter' : 'awake-screen awake-sheriff',
+    rail: hunter
+      ? '<div class="rail-note hunter-note">Tap any living soul. The shot is public at dawn.</div><button class="btn ghost mini" data-action="resolve-pending" data-id="">Lower the weapon</button>'
+      : '<img class="successor-badge" src="assets/sprites/props/badge.png" alt="Sheriff badge"><div class="rail-note">Pass the badge to one living soul.</div>',
+    extra: hunter ? hunterCinematic() : ''
   });
 }
 
@@ -1992,6 +2020,20 @@ function tallyMarkup(view) {
   return `<div class="tally">${rows.map(([id, count]) => `<div class="tally-row"><span>${esc(view.players[id]?.name || 'Unknown')}</span><span class="tally-bar"><i style="width:${Math.round(count / max * 100)}%"></i></span><b>${count}</b></div>`).join('')}</div>`;
 }
 
+function scoreboardMarkup(view, {final = false} = {}) {
+  const scores = Object.values(view.session?.scores || {}).sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
+  const resultMap = new Map((view.session?.lastRound?.results || []).map(result => [result.id, result]));
+  if (!scores.length) return '';
+  return `<div class="scoreboard ${final ? 'final' : ''}">
+    <div class="score-head"><span>Table score</span><b>${final ? `${view.session.round} ${view.session.round === 1 ? 'hunt' : 'hunts'}` : `Round ${view.session.round}`}</b></div>
+    <div class="score-rows">${scores.map((score, index) => {
+      const result = resultMap.get(score.id);
+      const reasons = result?.reasons?.map(reason => `${reason.label} ${reason.points > 0 ? '+' : ''}${reason.points}`).join(' · ') || 'Carried from earlier hunts';
+      return `<div class="score-row"><span class="score-rank">${index + 1}</span><span class="score-name"><strong>${esc(score.name)}</strong><small>${esc(reasons)}</small></span>${result ? `<span class="score-delta ${result.delta >= 0 ? 'up' : 'down'}">${result.delta >= 0 ? '+' : ''}${result.delta}</span>` : ''}<b class="score-total">${score.total}</b></div>`;
+    }).join('')}</div>
+  </div>`;
+}
+
 function renderDead(view) {
   app.innerHTML = stageScreen(view, {
     rail: `${whisperMarkup(view, {compact: true})}<div class="rail-chip ghostly"><b>☽</b><strong>A silent spirit</strong></div>`
@@ -1999,9 +2041,11 @@ function renderDead(view) {
 }
 
 function renderDawn(view) {
-  app.innerHTML = `<section class="screen dawn-screen">${gameHeader(view)}${phaseHeader(view)}
-    ${deathsMarkup(view, {staged: ui.phaseFresh})}
-  </section>`;
+  app.innerHTML = stageScreen(view, {
+    title: view.lastDeaths?.length ? 'Dawn reveals the fallen' : 'The village wakes',
+    cls: 'dawn-screen public-cutscene',
+    extra: `<div class="public-cinema">${deathCinematic(view)}</div>`
+  });
 }
 
 function renderDiscussion(view) {
@@ -2015,8 +2059,12 @@ function renderDiscussion(view) {
 
 function renderDayResult(view) {
   const tied = view.lastVote?.leaders?.length > 1;
-  app.innerHTML = `<section class="screen">${gameHeader(view)}${phaseHeader(view, {title: tied ? 'The vote is tied' : 'The village has spoken', subtitle: tied ? 'By the classic rule, nobody is eliminated.' : ''})}
-    <div class="panel compact">${tallyMarkup(view)}</div>${deathsMarkup(view, {staged: ui.phaseFresh})}</section>`;
+  app.innerHTML = stageScreen(view, {
+    title: tied ? 'The vote is tied' : 'The village has spoken',
+    cls: 'public-cutscene judgement-cutscene',
+    rail: tallyMarkup(view),
+    extra: `<div class="public-cinema">${deathCinematic(view)}</div>`
+  });
 }
 
 function renderGameOver(view) {
@@ -2026,13 +2074,24 @@ function renderGameOver(view) {
     : winner.team === 'village' ? 'Morning holds. One by one, the boarded windows will open again.'
     : winner.team === 'lovers' ? 'Two lit windows remain, facing one another across the empty lane.'
     : 'The village stands silent beneath the moon.';
-  app.innerHTML = `<section class="screen ${view.coordinator ? 'has-dock' : ''}">${gameHeader(view)}<div class="game-over-hero"><div class="victory-moon">${symbol}</div><div class="eyebrow">Final revelation</div><h1>${esc(winner.title)}</h1><p>${esc(winner.text || epilogue)}</p></div>
-    <div class="final-grid">${Object.values(view.players).map(player => {
+  app.innerHTML = `<section class="screen game-over-screen ${view.coordinator ? 'has-dock' : ''}">${gameHeader(view)}<div class="game-over-hero"><div class="victory-moon">${symbol}</div><div class="eyebrow">Round ${view.session?.round || 1} complete</div><h1>${esc(winner.title)}</h1><p>${esc(winner.text || epilogue)}</p></div>
+    <div class="round-results"><div class="final-grid">${Object.values(view.players).map(player => {
       const roleId = player.storyteller ? 'storyteller' : player.role;
       const role = ROLES[roleId] || ROLES.villager;
       return `<div class="final-card ${player.alive ? '' : 'dead'}"><img src="${role.image}" alt="${esc(role.name)}"><div class="label"><strong>${esc(player.name)}</strong><span>${esc(role.name)}${player.sheriff ? ' · Sheriff' : ''}</span></div></div>`;
-    }).join('')}</div>
-    ${view.coordinator ? dock('<button class="btn" data-action="reset-game">Gather the cards · play again</button>') : ''}
+    }).join('')}</div>${scoreboardMarkup(view)}</div>
+    ${view.coordinator ? dock('<div class="session-actions"><button class="btn" data-action="next-round">Next hunt</button><button class="btn secondary" data-action="change-deck">Change deck</button><button class="btn secondary" data-action="end-session">End table</button></div>') : ''}
+  </section>`;
+}
+
+function renderSessionOver(view) {
+  const scores = Object.values(view.session?.scores || {}).sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
+  const podium = scores.slice(0, 3);
+  app.innerHTML = `<section class="screen session-over-screen ${view.coordinator ? 'has-dock' : ''}">${gameHeader(view)}
+    <div class="game-over-hero"><div class="victory-moon">✦</div><div class="eyebrow">The table closes</div><h1>Legends of Moonfall</h1><p>${view.session?.round || 0} ${(view.session?.round || 0) === 1 ? 'hunt' : 'hunts'} are written into the village chronicle.</p></div>
+    <div class="podium">${podium.map((score, index) => `<div class="podium-place place-${index + 1}"><span>${index + 1}</span><strong>${esc(score.name)}</strong><b>${score.total}</b></div>`).join('')}</div>
+    ${scoreboardMarkup(view, {final: true})}
+    ${view.coordinator ? dock('<button class="btn" data-action="clear-session">Gather a new village</button>') : ''}
   </section>`;
 }
 
@@ -2047,6 +2106,7 @@ function renderGame() {
   if (view.phase === 'lobby') return renderLobby(view);
   if (view.phase === 'role-reveal') return renderRoleReveal(view);
   if (view.phase === 'game-over') return renderGameOver(view);
+  if (view.phase === 'session-over') return renderSessionOver(view);
   const gated = view.phase.startsWith('setup-') || view.phase.startsWith('night-') || ['sheriff-vote', 'day-vote', 'resolution'].includes(view.phase);
   if (!view.phaseReady && gated) return renderNarratorWait(view);
   if (renderPrivateAction(view) !== false) return;
@@ -2095,7 +2155,6 @@ function renderModal() {
 function squareVisible(view) {
   if (!view) return false;
   const phase = view.phase;
-  if (['dawn', 'day-result', 'game-over'].includes(phase)) return false;
   if (phase === 'lobby') return true;
   if (phase === 'role-reveal') return Boolean(view.me?.seenRole);
   const night = phase.startsWith('setup-') || phase.startsWith('night-') || phase === 'resolution';
@@ -2146,7 +2205,7 @@ villageRoot?.addEventListener('click', event => {
   const select = mode ? squareSelection(currentView) : null;
   if (select && select.ids.has(id)) {
     vibrate(14);
-    handleAction(select.action, {dataset: {id, action: select.action}});
+    handleAction(select.action, sprite);
     return;
   }
   vibrate(10);
@@ -2264,13 +2323,24 @@ async function handleAction(action, element) {
     if (ui.cupidChoices.includes(id)) ui.cupidChoices = ui.cupidChoices.filter(choice => choice !== id);
     else if (ui.cupidChoices.length < 2) ui.cupidChoices.push(id);
     else { toast('Cupid can bind exactly two hearts.', 'error'); return; }
+    playSceneAction('heart-pick', element, 700);
     sound('select'); vibrate(16); queueRender();
   } else if (action === 'submit-cupid') {
+    if (ui.sceneBusy || ui.cupidChoices.length !== 2) return;
+    const serial = currentView?.phaseSerial;
+    ui.sceneBusy = 'cupid';
+    ui.cupidLoosed = true;
+    playSceneAction('cupid-loose', null, 1600);
+    queueRender();
+    await sleep(1450);
+    if (currentView?.phaseSerial !== serial || currentView?.phase !== 'setup-cupid') return;
     sendOwnCommand('player:cupid-choose', {choices: ui.cupidChoices});
   } else if (action === 'lovers-seen') {
     sendOwnCommand('player:lovers-seen');
   } else if (action === 'seer-choose') {
     sound('select');
+    playSceneAction('seer-flash', element, 850);
+    await sleep(260);
     sendOwnCommand('player:seer-choose', {target: id});
   } else if (action === 'flip-seer') {
     ui.seerFlipped = !ui.seerFlipped;
@@ -2285,6 +2355,7 @@ async function handleAction(action, element) {
     sendOwnCommand('player:seer-done');
   } else if (action === 'wolf-vote') {
     sound('select');
+    playSceneAction('wolf-pounce', element, 900);
     sendOwnCommand('player:wolf-vote', {target: id});
   } else if (action === 'wolf-no-kill') {
     sound('select');
@@ -2293,6 +2364,7 @@ async function handleAction(action, element) {
     if (confirm('Confirm that the Little Girl was physically caught peeking? She will replace the pack’s chosen victim.')) sendOwnCommand('player:little-girl-caught');
   } else if (action === 'toggle-heal') {
     ui.witchHeal = !ui.witchHeal;
+    playSceneAction(ui.witchHeal ? 'heal-bloom' : 'spell-clear', element, 900);
     sound('select'); vibrate(16); queueRender();
   } else if (action === 'open-poison') {
     ui.poisonOpen = true;
@@ -2300,15 +2372,25 @@ async function handleAction(action, element) {
   } else if (action === 'choose-poison') {
     ui.witchPoisonTarget = id;
     ui.poisonOpen = true;
+    playSceneAction('poison-mark', element, 1050);
     sound('select'); vibrate(16); queueRender();
   } else if (action === 'clear-poison') {
     ui.witchPoisonTarget = null;
     ui.poisonOpen = false;
     queueRender();
   } else if (action === 'submit-witch') {
+    if (ui.sceneBusy) return;
+    const serial = currentView?.phaseSerial;
+    ui.sceneBusy = 'witch';
+    playSceneAction(ui.witchHeal && ui.witchPoisonTarget ? 'witch-dual' : ui.witchHeal ? 'heal-bloom' : ui.witchPoisonTarget ? 'poison-mark' : 'spell-clear', null, 1300);
+    queueRender();
+    await sleep(1150);
+    if (currentView?.phaseSerial !== serial || currentView?.phase !== 'night-witch') return;
     sendOwnCommand('player:witch-submit', {heal: ui.witchHeal, poisonTarget: ui.witchPoisonTarget});
   } else if (action === 'cast-vote') {
     sound('decision');
+    playSceneAction('vote-token', element, 780);
+    await sleep(380);
     sendOwnCommand('player:cast-vote', {target: id});
   } else if (action === 'toggle-header') {
     sound('tap');
@@ -2323,8 +2405,19 @@ async function handleAction(action, element) {
     sound('select');
     sendOwnCommand('player:day-ready', {ready: element.dataset.ready !== 'false'});
   } else if (action === 'resolve-pending') {
-    sound(currentView?.privateAction?.type === 'hunter' ? 'hunter' : 'sheriff');
+    const hunter = currentView?.privateAction?.type === 'hunter';
+    sound(hunter ? 'hunter' : 'sheriff');
+    playSceneAction(hunter ? 'hunter-shot' : 'badge-pass', element, 1050);
+    await sleep(id ? 720 : 180);
     sendOwnCommand('player:resolve-pending', {target: id || null});
+  } else if (action === 'next-round') {
+    sendOwnCommand('host:next-round');
+  } else if (action === 'change-deck') {
+    sendOwnCommand('host:between-rounds');
+  } else if (action === 'end-session') {
+    if (confirm('Close this table and show the final Moonfall podium?')) sendOwnCommand('host:end-session');
+  } else if (action === 'clear-session') {
+    if (confirm('Clear these scores and gather a fresh village?')) sendOwnCommand('host:clear-session');
   } else if (action === 'reset-game') {
     if (confirm('Return every card to the deck and abandon the current tale?')) {
       ui.modal = null;

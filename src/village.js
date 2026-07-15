@@ -43,7 +43,8 @@ export function sheetSprite(roleId, {anim = 'idle', loop = true, speed = null, s
   const row = SHEET_ROWS[anim] ?? 0;
   const h = hashOf(seedText + sheet);
   const duration = speed || (anim === 'walk' ? 0.62 : 1.05 + (h % 40) / 100);
-  return `<span class="ss ${loop ? 'loop' : ''} ${anim === 'idle' ? 'breathe' : ''}"
+  const playback = loop ? 'loop' : anim === 'idle' ? '' : 'oneshot';
+  return `<span class="ss ${playback} ${anim === 'idle' ? 'breathe' : ''}"
     style="background-image:url('assets/sprites/sheets/${sheet}.webp');background-position:0% ${row * 25}%;--ssd:${duration.toFixed(2)}s;--ssdel:${((h >> 3) % 90) / 100}s"></span>`;
 }
 
@@ -79,6 +80,8 @@ export function townSquare(view, {select = null, arrivals = null} = {}) {
   const me = view.me;
   const seed = view.roomCode || 'MOONFALL';
   const freshIds = new Set((view.lastDeaths || []).map(death => death.id));
+  const freshOrder = new Map((view.lastDeaths || []).map((death, index) => [death.id, index]));
+  const cinematic = ['dawn', 'day-result'].includes(view.phase);
 
   // The crowd stands in staggered rows — nearer rows larger, every position
   // stable for the whole game so ghosts remain where they fell. Landscape
@@ -133,7 +136,7 @@ export function townSquare(view, {select = null, arrivals = null} = {}) {
     ].filter(Boolean).join(' ');
     const anim = dead ? 'idle' : arriving ? 'walk' : 'idle';
     return `<button class="${classes}" data-sprite="${escText(player.id)}"
-      style="left:${x.toFixed(1)}%;bottom:${bottom}%;--s:${scale};--sway:${(3.4 + (h % 21) / 10).toFixed(1)}s;--sd:${((h >> 4) % 30) / 10}s;z-index:${10 - row}" ${forbidden ? 'disabled' : ''}>
+      style="left:${x.toFixed(1)}%;bottom:${bottom}%;--s:${scale};--sway:${(3.4 + (h % 21) / 10).toFixed(1)}s;--sd:${((h >> 4) % 30) / 10}s;--fresh:${freshOrder.get(player.id) || 0};z-index:${10 - row}" ${forbidden ? 'disabled' : ''}>
       ${marks}
       ${picked ? '<i class="pick-ring" aria-hidden="true"></i>' : ''}
       ${sheetSprite(knownRole(view, player), {anim, loop: !dead, seedText: seed + player.id})}
@@ -141,7 +144,8 @@ export function townSquare(view, {select = null, arrivals = null} = {}) {
     </button>`;
   }).join('');
 
-  return `<div class="square ${selecting ? 'selecting named-all' : ''} ${!selecting && (select || view.phase === 'lobby') ? 'named-all' : ''}" data-mood="${moodFor(view)}" style="--base:${base}">${sprites}</div>`;
+  const squareClasses = ['square', cinematic ? 'cinematic' : '', selecting ? 'selecting named-all' : '', !selecting && (select || view.phase === 'lobby') ? 'named-all' : ''].filter(Boolean).join(' ');
+  return `<div class="${squareClasses}" data-mood="${moodFor(view)}" style="--base:${base}">${sprites}</div>`;
 }
 
 // One-line scene-setting for the dawn reveal, keyed to what actually

@@ -24,7 +24,7 @@ export function suggestedWolfCount(characterCount) {
 export function makeState({roomCode, coordinatorId, coordinatorName = 'Host'}) {
   const now = Date.now();
   return {
-    schema: 3,
+    schema: 4,
     roomCode,
     coordinatorId,
     storytellerId: null,
@@ -69,8 +69,38 @@ export function makeState({roomCode, coordinatorId, coordinatorName = 'Host'}) {
     nightResult: {healed: false, poisoned: false},
     lastVote: null,
     winner: null,
+    pendingWinner: null,
+    session: freshSession(),
+    roundFacts: freshRoundFacts(),
     log: [{kind: 'moon', text: 'A new village gathered beneath the moon.', at: now}]
   };
+}
+
+export function freshSession() {
+  return {round: 0, scores: {}, history: [], lastRound: null, ended: false};
+}
+
+export function freshRoundFacts() {
+  return {visions: [], heals: [], poisons: [], hunterShots: [], dayVotes: []};
+}
+
+// Saved villages from the previous release remain playable. The migration is
+// deliberately additive: no role, vote or in-progress resolution is changed.
+export function upgradeState(state) {
+  if (!state || typeof state !== 'object') return state;
+  state.schema = 4;
+  state.session ||= freshSession();
+  state.session.round = Number(state.session.round || 0);
+  state.session.scores ||= {};
+  state.session.history ||= [];
+  state.session.lastRound ||= null;
+  state.session.ended = Boolean(state.session.ended);
+  state.roundFacts ||= freshRoundFacts();
+  state.pendingWinner ||= null;
+  for (const key of ['visions', 'heals', 'poisons', 'hunterShots', 'dayVotes']) state.roundFacts[key] ||= [];
+  state.actions ||= freshActions();
+  state.actions.dayReady ||= {};
+  return state;
 }
 
 export function freshActions() {
@@ -122,7 +152,7 @@ function enterPhase(state, phase, {ready = false} = {}) {
 }
 
 export function narratorUnlock(state) {
-  if (['lobby', 'game-over'].includes(state.phase)) return {ok: false, error: 'There is no turn to open.'};
+  if (['lobby', 'game-over', 'session-over'].includes(state.phase)) return {ok: false, error: 'There is no turn to open.'};
   if (state.phaseReady) return {ok: true};
   state.phaseReady = true;
   touch(state);
@@ -176,30 +206,24 @@ export function buildDeck(characterCount, settings, rng = Math.random) {
   };
 }
 
-export function startGame(state, rng = Math.random) {
-  if (state.phase !== 'lobby') return {ok: false, error: 'This game has already begun.'};
-  const connected = allSeatIds(state).filter(id => state.players[id].connected !== false);
-  if (connected.length < 6) {
-    return {ok: false, error: 'Moonfall needs at least six players. Eight or more gives the classic balance.'};
-  }
-  for (const id of allSeatIds(state)) {
-    if (!connected.includes(id)) delete state.players[id];
-  }
-  // The narrator is automated on the coordinator phone. Nobody loses their
-  // character card or has to operate a separate Storyteller seat.
+function dealRound(state, characters, rng = Math.random) {
+  upgradeState(state);
   state.storytellerId = null;
-  const characters = connected;
   let deck;
   try {
     deck = buildDeck(characters.length, state.settings, rng);
   } catch (error) {
-    state.storytellerId = null;
     return {ok: false, error: error.message};
   }
   const seats = shuffle(characters, rng);
   seats.forEach((id, index) => {
     Object.assign(state.players[id], {role: deck.dealt[index], alive: true, ready: false});
+    state.session.scores[id] ||= {id, name: state.players[id].name, total: 0};
+    state.session.scores[id].name = state.players[id].name;
   });
+  state.session.round += 1;
+  state.session.lastRound = null;
+  state.session.ended = false;
   state.extraCards = deck.extras;
   state.night = 1;
   state.day = 0;
@@ -216,9 +240,37 @@ export function startGame(state, rng = Math.random) {
   state.nightResult = {healed: false, poisoned: false};
   state.lastVote = null;
   state.winner = null;
-  log(state, 'The Moonfall narrator took its place. Every gathered player received a character card.', 'story');
+  state.pendingWinner = null;
+  state.roundFacts = freshRoundFacts();
+  log(state, `Round ${state.session.round} begins. The Moonfall narrator dealt every gathered player a character card.`, 'story');
   touch(state);
   return {ok: true};
+}
+
+export function startGame(state, rng = Math.random) {
+  if (state.phase !== 'lobby') return {ok: false, error: 'This game has already begun.'};
+  upgradeState(state);
+  const connected = allSeatIds(state).filter(id => state.players[id].connected !== false);
+  if (connected.length < 6) {
+    return {ok: false, error: 'Moonfall needs at least six players. Eight or more gives the classic balance.'};
+  }
+  for (const id of allSeatIds(state)) {
+    if (!connected.includes(id)) delete state.players[id];
+  }
+  // The narrator is automated on the coordinator phone. Nobody loses their
+  // character card or has to operate a separate Storyteller seat.
+  return dealRound(state, connected, rng);
+}
+
+export function startNextRound(state, rng = Math.random) {
+  if (state.phase !== 'game-over') return {ok: false, error: 'Finish the current hunt before dealing again.'};
+  upgradeState(state);
+  const characters = characterIds(state);
+  if (characters.length < 6) return {ok: false, error: 'Moonfall needs at least six players.'};
+  if (characters.some(id => state.players[id]?.connected === false)) {
+    return {ok: false, error: 'Wait for every seated player to reconnect before the next hunt.'};
+  }
+  return dealRound(state, characters, rng);
 }
 
 function phaseHasLivingRole(state, roleId) {
@@ -318,6 +370,14 @@ function resolveNight(state) {
     healed: Boolean(victim && state.actions.witchDraft.heal),
     poisoned: Boolean(state.actions.witchDraft.poisonTarget)
   };
+  const witchId = playerByRole(state, 'witch', true);
+  if (witchId && victim && state.actions.witchDraft.heal) {
+    state.roundFacts.heals.push({actorId: witchId, targetId: victim, success: true});
+  }
+  if (witchId && state.actions.witchDraft.poisonTarget) {
+    const targetId = state.actions.witchDraft.poisonTarget;
+    state.roundFacts.poisons.push({actorId: witchId, targetId, targetRole: state.players[targetId]?.role || null});
+  }
   if (victim && !state.actions.witchDraft.heal) deaths.push({id: victim, cause: state.actions.littleGirlCaught ? 'caught peeking' : 'the Werewolves'});
   if (state.actions.witchDraft.poisonTarget) deaths.push({id: state.actions.witchDraft.poisonTarget, cause: 'the Witch’s poison'});
   if (state.actions.witchDraft.heal) state.potions.heal = false;
@@ -443,10 +503,9 @@ export function continueResolution(state) {
   state.lastDeaths = state.resolution.resolved;
   state.resolution = null;
   const winner = checkWinner(state);
-  if (winner) {
-    finishGame(state, winner);
-    return;
-  }
+  // Deaths must be witnessed before victory. Hold the terminal result through
+  // the public dawn/judgement scene, then open the scoreboard afterwards.
+  state.pendingWinner = winner || null;
   if (source === 'night') {
     state.day += 1;
     generateWhispers(state);
@@ -465,7 +524,10 @@ export function resolvePending(state, actorId, targetId = null, storytellerProxy
     return {ok: false, error: 'Choose a living character.'};
   }
   if (pending.type === 'hunter') {
-    if (targetId) state.resolution.queue.push({id: targetId, cause: `${state.players[pending.actorId].name}’s final shot`});
+    if (targetId) {
+      state.resolution.queue.push({id: targetId, cause: `${state.players[pending.actorId].name}’s final shot`});
+      state.roundFacts.hunterShots.push({actorId: pending.actorId, targetId, targetRole: state.players[targetId]?.role || null});
+    }
     log(state, targetId ? `${state.players[pending.actorId].name} fired one final shot.` : `${state.players[pending.actorId].name} lowered the final shot.`, 'death');
   } else if (pending.type === 'sheriff-successor') {
     state.sheriffId = targetId || null;
@@ -479,6 +541,12 @@ export function resolvePending(state, actorId, targetId = null, storytellerProxy
 
 export function advanceFromDawn(state) {
   if (state.phase !== 'dawn') return {ok: false, error: 'The village has not reached dawn.'};
+  if (state.pendingWinner) {
+    const winner = state.pendingWinner;
+    state.pendingWinner = null;
+    finishGame(state, winner);
+    return {ok: true};
+  }
   if (state.settings.sheriff && !state.sheriffId && state.day === 1) {
     enterPhase(state, 'sheriff-vote');
     state.electionCandidates = aliveIds(state);
@@ -556,7 +624,9 @@ export function closeDayVote(state) {
   const tally = tallyVotes(state, true);
   const max = Math.max(0, ...Object.values(tally));
   const leaders = max ? Object.keys(tally).filter(id => tally[id] === max) : [];
-  state.lastVote = {tally, leaders, max, eliminated: leaders.length === 1 ? leaders[0] : null};
+  const votes = clone(state.actions.votes || {});
+  state.lastVote = {tally, leaders, max, eliminated: leaders.length === 1 ? leaders[0] : null, votes};
+  state.roundFacts.dayVotes.push({votes, eliminatedId: state.lastVote.eliminated});
   state.actions.votes = {};
   if (leaders.length === 1) {
     beginResolution(state, [{id: leaders[0], cause: 'the village vote'}], 'day');
@@ -571,6 +641,12 @@ export function closeDayVote(state) {
 
 export function nextNight(state) {
   if (state.phase !== 'day-result') return {ok: false, error: 'Daylight has not ended.'};
+  if (state.pendingWinner) {
+    const winner = state.pendingWinner;
+    state.pendingWinner = null;
+    finishGame(state, winner);
+    return {ok: true};
+  }
   beginNight(state);
   return {ok: true};
 }
@@ -588,20 +664,94 @@ export function checkWinner(state) {
   }
   if (!alive.length) return {team: 'none', title: 'The Village Falls Silent', text: 'No soul survived the final chain of fate.'};
   if (!aliveWolves.length && aliveVillage.length) return {team: 'village', title: 'The Village Prevails', text: 'The last Werewolf has fallen.'};
-  if (!aliveVillage.length && aliveWolves.length) return {team: 'wolves', title: 'The Pack Devours the Dawn', text: 'No Villager remains alive.'};
+  // At parity the pack controls the vote and the remaining village can no
+  // longer stop it. This is the classic Werewolf terminal condition.
+  if (aliveWolves.length >= aliveVillage.length) return {team: 'wolves', title: 'The Pack Devours the Dawn', text: 'The Werewolves have reached parity and seized the village.'};
   return null;
+}
+
+export function scoreRound(state, winner = state.winner) {
+  upgradeState(state);
+  const round = Math.max(1, state.session.round || 1);
+  if (state.session.lastRound?.round === round) return state.session.lastRound;
+  const facts = state.roundFacts || freshRoundFacts();
+  const results = {};
+  const add = (id, points, label) => {
+    if (!state.players[id] || !points) return;
+    results[id] ||= {id, name: state.players[id].name, delta: 0, reasons: []};
+    results[id].delta += points;
+    results[id].reasons.push({label, points});
+  };
+  for (const id of characterIds(state)) {
+    const player = state.players[id];
+    results[id] = {id, name: player.name, delta: 0, reasons: []};
+    const won = winner?.team === 'lovers'
+      ? state.lovers.includes(id)
+      : winner?.team === 'wolves'
+        ? player.role === 'werewolf'
+        : winner?.team === 'village' && player.role !== 'werewolf';
+    if (won) add(id, 3, 'Team victory');
+    add(id, player.alive ? 2 : -1, player.alive ? 'Survived the hunt' : 'Fell before the end');
+    if (player.role === 'werewolf' && player.alive) add(id, 1, 'Living wolf');
+  }
+  const seenWolves = new Map();
+  for (const fact of facts.visions || []) {
+    if (fact.targetRole !== 'werewolf') continue;
+    const key = `${fact.actorId}:${fact.targetId}`;
+    if (!seenWolves.has(key)) seenWolves.set(key, fact);
+  }
+  for (const fact of seenWolves.values()) add(fact.actorId, 1, 'Seer found a Werewolf');
+  for (const fact of facts.heals || []) if (fact.success) add(fact.actorId, 1, 'Witch saved a life');
+  for (const fact of facts.poisons || []) if (fact.targetRole === 'werewolf') add(fact.actorId, 1, 'Witch poisoned a Werewolf');
+  for (const fact of facts.hunterShots || []) if (fact.targetRole === 'werewolf') add(fact.actorId, 2, 'Hunter struck a Werewolf');
+  if (state.lovers.length === 2 && state.lovers.every(id => state.players[id]?.alive)) {
+    for (const id of state.lovers) add(id, 2, 'Both lovers survived');
+  }
+  for (const ballot of facts.dayVotes || []) {
+    const eliminated = state.players[ballot.eliminatedId];
+    if (eliminated?.role !== 'werewolf') continue;
+    for (const [voterId, targetId] of Object.entries(ballot.votes || {})) {
+      if (targetId === ballot.eliminatedId) add(voterId, 1, 'Voted out a Werewolf');
+    }
+  }
+  for (const result of Object.values(results)) {
+    state.session.scores[result.id] ||= {id: result.id, name: result.name, total: 0};
+    state.session.scores[result.id].name = result.name;
+    state.session.scores[result.id].total += result.delta;
+    result.total = state.session.scores[result.id].total;
+  }
+  const snapshot = {
+    round,
+    winner: clone(winner),
+    results: Object.values(results).sort((a, b) => b.delta - a.delta || a.name.localeCompare(b.name)),
+    completedAt: Date.now()
+  };
+  state.session.lastRound = snapshot;
+  state.session.history.push(clone(snapshot));
+  return snapshot;
 }
 
 function finishGame(state, winner) {
   state.winner = winner;
+  scoreRound(state, winner);
   enterPhase(state, 'game-over', {ready: true});
   log(state, winner.title, 'victory');
   touch(state);
 }
 
-export function resetToLobby(state) {
+export function endSession(state) {
+  if (state.phase !== 'game-over') return {ok: false, error: 'Finish the hunt before ending the table.'};
+  upgradeState(state);
+  state.session.ended = true;
+  enterPhase(state, 'session-over', {ready: true});
+  log(state, `The table closed after ${state.session.round} ${state.session.round === 1 ? 'hunt' : 'hunts'}.`, 'victory');
+  touch(state);
+  return {ok: true};
+}
+
+export function resetToLobby(state, {preserveSession = false} = {}) {
   enterPhase(state, 'lobby', {ready: true});
-  state.schema = 3;
+  state.schema = 4;
   state.storytellerId = null;
   state.night = 0;
   state.day = 0;
@@ -618,6 +768,9 @@ export function resetToLobby(state) {
   state.nightResult = {healed: false, poisoned: false};
   state.lastVote = null;
   state.winner = null;
+  state.pendingWinner = null;
+  state.roundFacts = freshRoundFacts();
+  if (!preserveSession) state.session = freshSession();
   for (const player of Object.values(state.players)) Object.assign(player, {role: null, alive: true, ready: false});
   log(state, 'The cards returned to the deck. A new tale may begin.', 'moon');
   touch(state);
@@ -677,6 +830,7 @@ export function applyPlayerCommand(state, actorId, type, payload = {}) {
     // this soul's true form in the town square.
     state.visions = state.visions || {};
     state.visions[target] = state.players[target].role;
+    state.roundFacts.visions.push({actorId, targetId: target, targetRole: state.players[target].role});
   } else if (type === 'seer-done') {
     error = commandRoleGuard(state, actorId, 'seer', 'night-seer');
     if (error) return {ok: false, error};
@@ -802,10 +956,11 @@ function narratorPanel(state) {
 }
 
 export function viewFor(state, seatId, {coordinator = false} = {}) {
+  upgradeState(state);
   const own = state.players[seatId];
   const publicPlayers = Object.fromEntries(allSeatIds(state).map(id => {
     const player = state.players[id];
-    const deadRole = state.phase === 'game-over' || (!player.alive && state.settings.revealRoles) ? player.role : null;
+    const deadRole = ['game-over', 'session-over'].includes(state.phase) || (!player.alive && state.settings.revealRoles) ? player.role : null;
     return [id, {
       id,
       name: player.name,
@@ -857,6 +1012,13 @@ export function viewFor(state, seatId, {coordinator = false} = {}) {
     nightResult: clone(state.nightResult || {healed: false, poisoned: false}),
     lastVote: clone(state.lastVote),
     winner: clone(state.winner),
+    session: {
+      round: state.session.round,
+      ended: state.session.ended,
+      scores: clone(state.session.scores),
+      lastRound: ['game-over', 'session-over'].includes(state.phase) ? clone(state.session.lastRound) : null,
+      history: state.phase === 'session-over' ? clone(state.session.history) : []
+    },
     log: clone(state.log.filter(entry => entry.kind !== 'secret').slice(-12))
   };
 }

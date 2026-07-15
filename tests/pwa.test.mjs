@@ -21,4 +21,6 @@ test('mobile shell is installable and requests standalone fullscreen display', a
   assert.match(template, /rel="manifest"/);
   assert.match(template, /apple-mobile-web-app-capable/);
   assert.match(serviceWorker, /addEventListener\('fetch'/);
+  assert.match(serviceWorker, /square-night\.webp/);
+  assert.match(serviceWorker, /potion-green\.png/);
 });

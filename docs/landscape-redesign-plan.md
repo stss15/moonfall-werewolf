@@ -7,6 +7,12 @@ scenario has a short visual vignette, and points accumulate across rounds
 until the host closes the table. It also permanently fixes the sound-leak
 problem by making the storyteller device the only speaker.
 
+**Implementation status (Moonfall 3.0): complete.** The paired day/night
+plates, nine transparent 4×5 character sheets, six hero props, public death
+director, private role vignettes, scoring, rematches and final podium now ship
+in the production build. Remaining items in this document are optional future
+garnish, not blockers.
+
 ---
 
 ## 1. The target experience (what a round feels like)
@@ -29,7 +35,7 @@ no panel of instructions — the scene *is* the interface.
   the speaker in the middle of the table.
 - **The pack wakes** → wolves see each other as wolves, prowling animation
   on. Each wolf taps a victim; agreement is shown by paw marks converging on
-  one person. Confirm is silent, haptic only.
+  one person. Confirm is silent and visual only.
 - **The Witch wakes** → the victim's sprite lies collapsed centre-stage.
   Two bottles float at the screen edge: green over the body to save (smoke
   swirl, the sprite gets back up), red onto anyone to poison. Or wave them
@@ -51,8 +57,9 @@ no panel of instructions — the scene *is* the interface.
   choice: *Next hunt* or *End the table*.
 
 Sound: everything above comes out of **one** phone — the host's — ideally on
-a Bluetooth speaker in the middle of the table. Player phones are silent
-(optional haptics only).
+a Bluetooth speaker in the middle of the table. Player phones are silent and
+do not vibrate during live play; even tactile timing could reveal a private
+wake across a quiet table.
 
 ---
 
@@ -233,9 +240,8 @@ Inside `sound()` itself (and `playVoicePack`/ambience, already mostly
 gated): **if this device is not the table voice, return immediately.**
 No per-call-site auditing to maintain; a new `sound()` call added next
 year cannot leak either.
-- Player feedback becomes haptic-only (`vibrate(…)` already exists) and
-  visual (selection glow). Haptics stay *off* during private night actions
-  — a buzzing phone on a wooden table is audible too.
+- Player feedback is visual-only (selection glow). Haptics stay *off* during
+  live play — a buzzing phone on a wooden table is audible too.
 - Host phone additionally plays *event* sounds for public moments, driven
   by state changes (as `phaseSound` does now), never by whose finger did it.
 - Settings gains one switch: **Table speaker — This device / Silent**
@@ -277,9 +283,9 @@ host's saved state so Resume keeps the running totals.
 | Lovers: both alive at round end | +2 each |
 | Village: your day-vote was cast against a wolf who got lynched | +1 |
 
-All computed in the engine at `game-over` from facts it already tracks
-(deaths, causes, visions, potions, votes) — no new in-round bookkeeping,
-so nothing new can leak mid-game. Reasons are stored so the scoreboard
+All computed in the engine at `game-over` from a host-only round fact ledger
+(deaths, causes, visions, potions, votes). That ledger is never included in a
+player view, so nothing new can leak mid-game. Reasons are stored so the scoreboard
 can *show why* ("Survived +2 · Your team won +3 · Lynched a wolf +1").
 
 ### 6.3 Round loop
@@ -296,20 +302,20 @@ can *show why* ("Survived +2 · Your team won +3 · Lynched a wolf +1").
 
 ## 7. What I need from you (asset shopping list)
 
-**Nothing is blocking.** Milestones M1–M4 ship on the current static
-sprites via puppet animation + procedural effects. Art upgrades slot in
-per-file whenever ready, in this priority order:
+**Nothing is blocking.** The production assets below are now present and wired.
 
 ### 7.1 Backgrounds (highest impact, smallest count)
 | Asset | Spec |
 |---|---|
-| Village square, landscape, night | ~2400×1080 WebP, ground plane across the lower third where the crowd stands, sky in upper half (day/dawn will be done with tint like today — a matching **day** plate is optional polish) |
+| Village square, landscape, night | Shipped: `assets/sprites/bg/square-night.webp` |
+| Matching daylight square | Shipped: `assets/sprites/bg/square-day.webp`; CSS crossfades the plates while the sky glows arc in opposite directions |
 | Optional: rooftops silhouette strip | for the wolves' victory scene, transparent, ~2400×400 |
 
 ### 7.2 Character sheets (the big ask — but incremental)
-For each role — werewolf, villager, seer, witch, cupid, little-girl,
-thief, sheriff, **hunter (currently borrows the villager sprite — needs
-their own)** — delivered per-animation, any subset welcome:
+All nine roles — werewolf, villager, seer, witch, cupid, little-girl,
+thief, sheriff and hunter — ship as transparent 4×5 WebP sheets. The
+Werewolf now has a chain-free death row and the Hunter has a dedicated
+crossbow sheet.
 
 | Animation | Frames | Notes |
 |---|---|---|
@@ -334,9 +340,8 @@ their own)** — delivered per-animation, any subset welcome:
   pipeline before you draw the rest.
 
 ### 7.3 Props (optional — all have procedural fallbacks I'll draw in code)
-Bow + nocked arrow, loose arrow, two potion bottles, sheriff badge,
-hunter's rifle flash, vote token, lantern. Each a single small transparent
-WebP (~128–256px). Skip any or all.
+Shipped as transparent PNG: heart arrow, green potion, red potion, crystal
+ball, Sheriff badge and vote token. Hunter muzzle/bolt light remains code-led.
 
 ### 7.4 Audio
 **Nothing needed.** Existing voice pack, ambience and stings cover the new
@@ -346,14 +351,14 @@ scenes; they just get routed to the storyteller device only.
 
 ## 8. Implementation milestones
 
-| # | Milestone | Contents | Depends on new art? |
+| # | Milestone | Contents | Status |
 |---|---|---|---|
-| M1 | **Silence & sideways** | `sound()` choke-point gate; haptics-only player feedback; manifest + orientation lock + rotate interstitial; landscape grid shell (stage / rails / phase strip) with existing screens re-homed | No |
-| M2 | **The square is the game** | tap-to-target on stage sprites for seer/wolves/witch/cupid/votes; confirm in action rail; delete target-card grids; strip instructional copy; one-time hint chips | No |
-| M3 | **Motion** | `sprites.js` (manifest + steps() + puppet fallbacks); effect emitter (arrow, hearts, tether, mist, smoke, slash, tokens, sparkles) | No |
-| M4 | **Cutscenes** | `cutscene.js` director + full scene catalogue wired to phase transitions, with audience/secrecy rules and uniform night timing | No |
-| M5 | **New art drop-in** | stitch script, pack.json, per-file replacement of puppets with sheets as art arrives | Yes (incremental) |
-| M6 | **The long hunt** | session scores in engine, scoring table, scoreboard + podium scenes, Next hunt / End table loop, Resume-safe session persistence | No |
+| M1 | **Silence & sideways** | audio choke point, zero private haptics, orientation lock/interstitial, landscape stage | Complete |
+| M2 | **The square is the game** | tap-to-target for every role, ballot and final interrupt | Complete |
+| M3 | **Motion** | 4×5 step sprites plus arrow, heart, mist, slash, token and spell effects | Complete |
+| M4 | **Cutscenes** | `cutscene.js` public/private catalogue driven by narrator-gated phases | Complete |
+| M5 | **New art drop-in** | nine sheets, paired world plates, registry and six transparent props | Complete |
+| M6 | **The long hunt** | parity win, score reasons/totals, editable between-round deck, rematch, podium and Resume persistence | Complete |
 
 Each milestone is independently shippable and testable at the five-agent
 local test table. Suggested order is as listed; M6 can be pulled earlier

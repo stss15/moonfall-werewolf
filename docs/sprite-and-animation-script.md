@@ -39,10 +39,10 @@ The nine sheets are drawn — they just need a clean technical export:
 
 1. **Transparent background** (current exports have an off-white paper
    background and dashed grid lines — both must go).
-2. Uniform cell grid: **512×512 px per cell → 2048×2560 px per sheet**,
+2. Uniform cell grid: **256×256 px per cell → 1024×1280 px per sheet**,
    WebP or PNG. Character centred horizontally in the cell.
 3. **Consistent baseline**: feet (or corpse) sit on the same y-line in
-   every standing/walking cell, roughly 32 px above the cell bottom.
+   every standing/walking cell, roughly 16 px above the cell bottom.
 4. Consistent scale across roles (the wolf being bulkier is good — same
    *world* scale, not same bounding box).
 5. Naming: `assets/sprites/sheets/<role>.webp` — `werewolf.webp`,
@@ -73,13 +73,10 @@ Row 3 on some sheets is a frame *sequence* and on others four distinct
 - **Thief**: brandish → dangle amulet → crouch → dagger flourish.
   Card swap = f2.
 
-### 1.3 Character art still missing / needing a redraw
-- **Werewolf `death` row (row 5) needs a redraw.** On the current wolf
-  sheet, row 5 collapses *wrapped in the purple lover-chains* — it
-  duplicates row 4's bound sequence, so the wolf has no plain death.
-  Until a chain-free death row lands, the game uses the chained one as a
-  placeholder for every wolf death (it reads oddly when a wolf who isn't
-  a lover dies). Every other role's death row is correct.
+### 1.3 Character art status
+- **Werewolf `death` row (row 5) is fixed.** It now plays a chain-free
+  wounded → kneel → collapse → corpse sequence. Row 4 remains the separate
+  purple lover-chain death.
 - The wolf's `act` howl frame also loses its painted moon in background
   extraction — harmless, since the game draws the sky moon itself.
 - Otherwise **all nine playable roles are covered.** (The Storyteller
@@ -100,8 +97,8 @@ Only *optional* extra character art, if you ever fancy it:
 
 | # | Asset | Spec | Priority |
 |---|---|---|---|
-| B1 | **Village square, night, landscape** | ~2400×1080 WebP. Ground plane across the lower third (where the crowd stands), buildings/houses *painted into* the backdrop (no separate house sprites needed), open sky in the upper half for moon/sun work. This replaces `table-bg.webp` as the game stage. | **Needed** — the one must-have new piece |
-| B2 | Village square, day plate | Same composition, daylight grade | Optional — dawn/day currently done with CSS colour-grading of the night plate, which already looks good |
+| B1 | **Village square, night, landscape** | `assets/sprites/bg/square-night.webp` | **Shipped** |
+| B2 | Village square, day plate | `assets/sprites/bg/square-day.webp`, crossfaded in CSS | **Shipped** |
 | B3 | Rooftop silhouette strip | ~2400×400, transparent | Optional — for the wolves-win vignette; fallback is a CSS silhouette gradient |
 | B4 | 2–3 foreground cutouts (house edge, tree, well) | transparent, ~600px | Optional — parallax depth on the stage; pure garnish |
 
@@ -367,27 +364,27 @@ the codebase and kept.
 The machine-readable version of this document lives at
 `assets/sprites/pack.json`: one entry per role sheet (grid, row map,
 fps), plus the prop and background lists with their code-fallback flags.
-The runtime (`sprites.js`, milestone M3) reads it at boot; **any missing
-file automatically falls back** to the current static sprite + puppet
-animation, so art can land file-by-file with no code changes.
+The runtime in `village.js` and `cutscene.js` follows it; **any missing
+optional file has a CSS/JS fallback**, so future garnish can land
+file-by-file without changing game rules.
 
 ---
 
 ## 8. The shopping list (everything, on one screen)
 
-**Rework (art exists, export only):**
-- [ ] 9 role sheets re-exported: transparent, no grid lines, 512px cells,
-      shared baseline → `assets/sprites/sheets/<role>.webp`
+**Rework (complete):**
+- [x] 9 role sheets: transparent, no grid lines, shared baseline →
+      `assets/sprites/sheets/<role>.webp`
 
-**New — needed:**
-- [ ] B1 village square night background, ~2400×1080
+**New — complete:**
+- [x] B1 night square and B2 matching day square
 
-**New — small props, high value:**
-- [ ] P1 heart-tipped arrow · P2 green potion · P3 red potion ·
+**New — small props, complete:**
+- [x] P1 heart-tipped arrow · P2 green potion · P3 red potion ·
       P4 crystal ball · P5 sheriff star · P6 vote token
 
 **Optional, any time, never blocking:**
-- [ ] B2 day plate · B3 rooftops · B4 parallax cutouts · P7 moon ·
+- [ ] B3 rooftops · B4 parallax cutouts · P7 moon ·
       P8 sun · P9 lovers vignette · per-role `cheer` row
 
 **Explicitly NOT needed (resolved in code):**

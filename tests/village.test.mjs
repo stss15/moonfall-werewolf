@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {morningLine, spriteFile, townSquare} from '../src/village.js';
+import {deathCinematic, seerCinematic} from '../src/cutscene.js';
 
 function fakeView(overrides = {}) {
   const players = {};
@@ -88,4 +89,24 @@ test('the morning line is keyed to what actually happened in the night', () => {
   const saved = fakeView({phase: 'dawn', nightResult: {healed: true, poisoned: false}});
   assert.match(morningLine(saved), /chimney/);
   assert.match(morningLine(fakeView({phase: 'dawn'})), /Frost/);
+});
+
+test('dawn falls anonymously before revealing each true role and cause', () => {
+  const view = fakeView({phase: 'dawn', lastDeaths: [
+    {id: 'ben', name: 'Ben', role: 'werewolf', cause: 'the Werewolves'},
+    {id: 'cleo', name: 'Cleo', role: 'witch', cause: 'a broken heart'}
+  ]});
+  const scene = deathCinematic(view);
+  assert.match(scene, /cinema-body disguise[\s\S]*sheets\/villager\.webp/);
+  assert.match(scene, /cinema-body truth[\s\S]*sheets\/werewolf\.webp/);
+  assert.match(scene, /cause-wolf/);
+  assert.match(scene, /cause-heart/);
+});
+
+test('the Seer vision evolves a villager silhouette into the private true form', () => {
+  const view = fakeView();
+  const scene = seerCinematic(view, {target: 'ben', result: 'werewolf'});
+  assert.match(scene, /crystal-ball\.png/);
+  assert.match(scene, /seer-form mortal[\s\S]*sheets\/villager\.webp/);
+  assert.match(scene, /seer-form true-form[\s\S]*sheets\/werewolf\.webp/);
 });

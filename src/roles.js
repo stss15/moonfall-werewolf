@@ -124,7 +124,8 @@ export const PHASE_META = {
   'day-discussion': ['The village debates', 'Truth and lies wear the same face.'],
   'day-vote': ['Cast your judgement', 'The ballot seals when the last vote falls.'],
   'day-result': ['Judgement falls', 'Night draws closer.'],
-  'game-over': ['The tale is ended', 'The final cards have been revealed.']
+  'game-over': ['The tale is ended', 'The final cards have been revealed.'],
+  'session-over': ['Legends of Moonfall', 'The table’s final scores are written.']
 };
 
 export const STORY_CUES = {
@@ -143,4 +144,3 @@ export const STORY_CUES = {
 };
 
 export const assetForRole = roleId => ROLES[roleId]?.image || ROLES.villager.image;
-

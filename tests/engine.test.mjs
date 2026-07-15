@@ -6,11 +6,15 @@ import {
   buildDeck,
   checkWinner,
   closeDayVote,
+  endSession,
   generateWhispers,
   makeState,
+  nextNight,
   narratorUnlock,
   resolvePending,
+  scoreRound,
   startGame,
+  startNextRound,
   storytellerAdvance,
   viewFor,
   wolvesHaveConsensus
@@ -136,6 +140,85 @@ test('a mixed living couple wins only when every other character is dead', () =>
   for (const id of ['ben', 'cleo', 'drew']) state.players[id].alive = false;
   const winner = checkWinner(state);
   assert.equal(winner.team, 'lovers');
+});
+
+test('the Werewolves win as soon as the living pack reaches parity', () => {
+  const state = fixture();
+  state.players.wolf.role = 'werewolf';
+  state.players.ada.role = 'werewolf';
+  state.players.drew.alive = false;
+  const winner = checkWinner(state);
+  assert.equal(winner.team, 'wolves');
+  assert.match(winner.text, /parity/i);
+});
+
+test('a terminal death is publicly revealed before the victory scoreboard opens', () => {
+  const state = fixture();
+  state.players.wolf.role = 'werewolf';
+  state.session.round = 1;
+  beginResolution(state, [{id: 'wolf', cause: 'the village vote'}], 'day');
+  assert.equal(state.phase, 'day-result');
+  assert.equal(state.winner, null);
+  assert.equal(state.pendingWinner.team, 'village');
+  assert.equal(nextNight(state).ok, true);
+  assert.equal(state.phase, 'game-over');
+  assert.equal(state.winner.team, 'village');
+});
+
+test('round scoring rewards team play, role skill, survival and lovers', () => {
+  const state = fixture(['Story', 'Wolf', 'Seer', 'Witch', 'Hunter', 'Ada', 'Ben']);
+  state.storytellerId = null;
+  state.players.story.role = 'villager';
+  state.players.wolf.role = 'werewolf';
+  state.players.seer.role = 'seer';
+  state.players.witch.role = 'witch';
+  state.players.hunter.role = 'hunter';
+  state.players.wolf.alive = false;
+  state.players.hunter.alive = false;
+  state.lovers = ['seer', 'witch'];
+  state.session.round = 1;
+  state.roundFacts = {
+    visions: [{actorId: 'seer', targetId: 'wolf', targetRole: 'werewolf'}],
+    heals: [{actorId: 'witch', targetId: 'ada', success: true}],
+    poisons: [{actorId: 'witch', targetId: 'wolf', targetRole: 'werewolf'}],
+    hunterShots: [{actorId: 'hunter', targetId: 'wolf', targetRole: 'werewolf'}],
+    dayVotes: [{eliminatedId: 'wolf', votes: {seer: 'wolf', witch: 'ada'}}]
+  };
+  const scored = scoreRound(state, {team: 'village', title: 'Village', text: 'Done'});
+  const byId = Object.fromEntries(scored.results.map(result => [result.id, result]));
+  assert.equal(byId.seer.delta, 9, 'victory + survival + vision + lover + correct vote');
+  assert.equal(byId.witch.delta, 9, 'victory + survival + both potions + lover');
+  assert.equal(byId.hunter.delta, 4, 'victory - death + wolf shot');
+  assert.equal(byId.wolf.delta, -1);
+  assert.equal(state.session.history.length, 1);
+  assert.equal(scoreRound(state, {team: 'village'}), scored, 'a round cannot be scored twice');
+});
+
+test('the next hunt keeps the table score and deals a fresh round', () => {
+  const state = fixture(['Host', 'A', 'B', 'C', 'D', 'E']);
+  assert.equal(startGame(state, () => 0).ok, true);
+  state.session.scores.a.total = 8;
+  state.phase = 'game-over';
+  state.winner = {team: 'village', title: 'Village', text: 'Done'};
+  assert.equal(startNextRound(state, () => 0).ok, true);
+  assert.equal(state.session.round, 2);
+  assert.equal(state.session.scores.a.total, 8);
+  assert.equal(state.phase, 'role-reveal');
+  assert.equal(Object.values(state.players).every(player => player.alive && player.role), true);
+});
+
+test('ending a session opens the public podium without exposing live round facts', () => {
+  const state = fixture();
+  state.phase = 'game-over';
+  state.session.round = 1;
+  state.session.scores.ada = {id: 'ada', name: 'Ada', total: 6};
+  state.session.lastRound = {round: 1, results: []};
+  assert.equal(endSession(state).ok, true);
+  const view = viewFor(state, 'ada');
+  assert.equal(view.phase, 'session-over');
+  assert.equal(view.session.ended, true);
+  assert.equal(view.session.scores.ada.total, 6);
+  assert.equal('roundFacts' in view, false);
 });
 
 test('full-game roles are revealed to everyone only after victory', () => {
