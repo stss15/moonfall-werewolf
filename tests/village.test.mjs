@@ -29,7 +29,7 @@ test('the square draws one animated sprite per character and living strangers al
   assert.equal((square.match(/data-sprite=/g) || []).length, 6);
   assert.equal((square.match(/sheets\/villager\.webp/g) || []).length, 5, 'every other living soul is dressed as a villager');
   assert.equal((square.match(/sheets\/werewolf\.webp/g) || []).length, 1, 'only your own phone shows your true form');
-  assert.match(square, /class="ss loop/, 'living characters play their sheet animation');
+  assert.doesNotMatch(square, /class="ss loop/, 'idle characters stand still — no walk-in-place frame cycling');
 });
 
 test('private knowledge dresses the crowd: pack sight and the Seer’s visions', () => {
@@ -80,6 +80,7 @@ test('the Sheriff’s badge is public, and tapping is wired for every sprite', (
   const square = townSquare(view);
   assert.equal((square.match(/mark badge/g) || []).length, 1);
   assert.equal((square.match(/data-sprite=/g) || []).length, 6);
+  assert.equal((square.match(/data-id=/g) || []).length, 6, 'every sprite carries the id the action handler reads');
   assert.match(square, /sprite-name/, 'names wait behind a tap');
 });
 

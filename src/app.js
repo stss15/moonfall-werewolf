@@ -1457,7 +1457,14 @@ function runTestAgents() {
       if (target) { command = 'player:wolf-vote'; payload = {target}; }
     } else if (action.type === 'witch') { command = 'player:witch-submit'; payload = {heal: false, poisonTarget: null}; }
     else if (action.type === 'discussion' && !action.ready) { command = 'player:day-ready'; payload = {ready: true}; }
-    else if (action.type === 'vote') { command = 'player:cast-vote'; payload = {target: action.candidates.find(id => id !== botId)}; }
+    else if (action.type === 'vote') {
+      // A lover's day vote against their partner is rejected by the engine,
+      // which would deadlock the ballot — the agent must pick someone else.
+      const target = action.candidates.find(id => id !== botId && id !== view.me.loverId)
+        || action.candidates.find(id => id !== botId);
+      command = 'player:cast-vote';
+      payload = {target};
+    }
     else if (action.type === 'hunter' || action.type === 'sheriff-successor') { command = 'player:resolve-pending'; payload = {target: action.candidates.find(id => id !== botId) || null}; }
     if (command) {
       setTimeout(() => {
