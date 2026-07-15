@@ -37,13 +37,15 @@ export const SHEET_ROWS = {idle: 0, walk: 1, act: 2, bound: 3, death: 4};
 
 // One animated cell of a character sheet. Loops drive background-position-x
 // through the four frames with steps(); the row is fixed inline. Browsers
-// without steps(jump-none) simply hold the first frame.
+// without steps(jump-none) simply hold the first frame. Idle characters hold
+// their first frame — a standing crowd must never look like it is walking in
+// place — so only walk and act rows ever cycle.
 export function sheetSprite(roleId, {anim = 'idle', loop = true, speed = null, seedText = ''} = {}) {
   const sheet = SPRITE_FOR[roleId] || 'villager';
   const row = SHEET_ROWS[anim] ?? 0;
   const h = hashOf(seedText + sheet);
   const duration = speed || (anim === 'walk' ? 0.62 : 1.05 + (h % 40) / 100);
-  const playback = loop ? 'loop' : anim === 'idle' ? '' : 'oneshot';
+  const playback = anim === 'idle' ? '' : loop ? 'loop' : 'oneshot';
   return `<span class="ss ${playback} ${anim === 'idle' ? 'breathe' : ''}"
     style="background-image:url('assets/sprites/sheets/${sheet}.webp');background-position:0% ${row * 25}%;--ssd:${duration.toFixed(2)}s;--ssdel:${((h >> 3) % 90) / 100}s"></span>`;
 }
@@ -135,7 +137,7 @@ export function townSquare(view, {select = null, arrivals = null} = {}) {
       arriving ? 'arrive' : ''
     ].filter(Boolean).join(' ');
     const anim = dead ? 'idle' : arriving ? 'walk' : 'idle';
-    return `<button class="${classes}" data-sprite="${escText(player.id)}"
+    return `<button class="${classes}" data-sprite="${escText(player.id)}" data-id="${escText(player.id)}"
       style="left:${x.toFixed(1)}%;bottom:${bottom}%;--s:${scale};--sway:${(3.4 + (h % 21) / 10).toFixed(1)}s;--sd:${((h >> 4) % 30) / 10}s;--fresh:${freshOrder.get(player.id) || 0};z-index:${10 - row}" ${forbidden ? 'disabled' : ''}>
       ${marks}
       ${picked ? '<i class="pick-ring" aria-hidden="true"></i>' : ''}

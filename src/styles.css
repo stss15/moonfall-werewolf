@@ -34,7 +34,7 @@ body{
    viewport. Controls may adapt inside their fixed rails, but the browser
    page itself never pans or scrolls beyond the phone screen. */
 body:not([data-phase="home"]){position:fixed;inset:0;height:100svh;height:100dvh;min-height:0;overflow:hidden}
-body:not([data-phase="home"]) #app{width:100%;height:100%;overflow:hidden}
+body:not([data-phase="home"]) #app{width:100%;height:100%;overflow:hidden auto}
 input,textarea{user-select:text;-webkit-user-select:text}
 img{-webkit-touch-callout:none;pointer-events:none}
 #world{position:fixed;inset:0;z-index:-5;overflow:hidden;pointer-events:none;background:#050711}
@@ -205,7 +205,11 @@ h1,h2,h3,.display{font-family:Georgia,"Times New Roman",serif}
 @media(orientation:landscape) and (max-height:540px){.screen{width:min(100%,760px)}.home{display:grid;grid-template-columns:.9fr 1.1fr;gap:14px;align-items:center}.brand-lockup img{width:95%}.flip-layout{display:grid;grid-template-columns:250px 1fr;gap:20px;align-items:center}.flip-layout .flip-wrap{width:230px;margin:0 auto}.screen.has-dock{padding-bottom:92px}.dock{width:min(100%,760px)}}
 .qr-wrap{width:min(46vw,168px);margin:12px auto 8px;padding:9px;border-radius:16px;background:#fff;border:1px solid rgba(223,183,85,.5);box-shadow:0 12px 34px rgba(0,0,0,.45),0 0 22px rgba(223,183,85,.12)}
 .qr-wrap svg{display:block;width:100%;height:auto;border-radius:6px}
-.screen.phase-enter{animation:screen-in .55s cubic-bezier(.22,.7,.25,1) both}
+/* No fill mode: a filled opacity/transform animation would leave the screen
+   as a permanent stacking context, trapping its z-indexed overlays (the dawn
+   cinema, the storyteller title) below the town-square layer so sprites
+   painted over them. The final keyframe equals the base state anyway. */
+.screen.phase-enter{animation:screen-in .55s cubic-bezier(.22,.7,.25,1)}
 @keyframes screen-in{from{opacity:0;transform:translateY(14px) scale(.992)}}
 #phase-fx{position:fixed;inset:0;z-index:70;pointer-events:none;opacity:0}
 #phase-fx.nightfall{background:radial-gradient(circle at 50% -12%,rgba(24,28,66,.92),rgba(2,2,9,.97) 62%);animation:phase-veil 2.5s ease both}
@@ -379,7 +383,7 @@ body[data-phase="night-witch"]:after{background:radial-gradient(circle at 50% 6%
 /* newcomers walk in from the edge of the square */
 .sprite.arrive{animation:arrive-walk 1.9s cubic-bezier(.3,.55,.3,1) both}
 @keyframes arrive-walk{from{transform:translateX(calc(-50% - 58vw));opacity:0}12%{opacity:1}to{transform:translateX(-50%);opacity:1}}
-.square.cinematic .sprite:not(.fresh) .ss{animation:ss-cycle var(--ssd,1.05s) steps(4,jump-none) infinite,crowd-recoil 1.9s ease-in-out infinite}
+.square.cinematic .sprite:not(.fresh) .ss{animation:crowd-recoil 1.9s ease-in-out infinite}
 .square.cinematic .sprite.fresh{opacity:0;animation:fresh-ghost-in 1.1s ease calc(3.5s + var(--fresh,0)*4.4s) both}
 @keyframes crowd-recoil{0%,100%{transform:translateY(0) rotate(0)}24%{transform:translateY(-2px) rotate(-1.2deg)}35%{transform:translateY(1px) rotate(1deg)}}
 @keyframes fresh-ghost-in{from{opacity:0;transform:translateX(-50%) translateY(16px)}to{opacity:.72;transform:translateX(-50%) translateY(-5px)}}
@@ -410,8 +414,13 @@ body[data-phase="night-witch"]:after{background:radial-gradient(circle at 50% 6%
 .phase-ribbon.strip h1{font-size:clamp(17px,5svh,26px);margin:2px 0 0;line-height:1}
 .phase-ribbon.strip .moon-number{font-size:9px}
 .stage-rail{position:fixed;z-index:17;right:calc(10px + env(safe-area-inset-right,0px));top:62px;bottom:72px;width:min(224px,27vw);
-  display:flex;flex-direction:column;justify-content:center;gap:8px;overflow:hidden;padding:2px;scrollbar-width:none}
+  display:flex;flex-direction:column;justify-content:flex-start;gap:8px;overflow:hidden auto;padding:2px;scrollbar-width:none}
 .stage-rail::-webkit-scrollbar{display:none}
+/* The rail scrolls when its controls outgrow the band — clipped, unreachable
+   options are never acceptable. Auto margins keep short content centred. */
+.stage-rail>*{flex:0 0 auto}
+.stage-rail>:first-child{margin-top:auto}
+.stage-rail>:last-child{margin-bottom:auto}
 .stage-foot{position:fixed;z-index:17;right:calc(10px + env(safe-area-inset-right,0px));bottom:calc(8px + env(safe-area-inset-bottom,0px));width:min(224px,27vw);text-align:center}
 .stage-foot .btn{width:100%}
 .stage-foot .tap-hint{padding:12px 4px}
@@ -488,7 +497,9 @@ body[data-phase="night-witch"]:after{background:radial-gradient(circle at 50% 6%
 .sleep-line{color:var(--muted);font-size:12px;line-height:1.5;margin:12px auto 0;max-width:320px}
 
 /* ── The storyteller speaks ────────────────────────────────────────────── */
-.storyteller-stage{min-height:100svh;display:grid;place-content:center;justify-items:center;text-align:center;gap:14px;padding:16px}
+/* Raised above the town square (z-index 1) so the crowd can never stand in
+   front of the spoken title; taps still fall through to the sprites below. */
+.storyteller-stage{position:relative;z-index:16;pointer-events:none;min-height:100svh;display:grid;place-content:center;justify-items:center;text-align:center;gap:14px;padding:16px}
 .storyteller-mark{width:min(34svh,180px);aspect-ratio:1;border-radius:50%;overflow:hidden;border:2px solid rgba(223,183,85,.55);
   box-shadow:0 0 46px rgba(124,74,164,.4),0 18px 50px #000;animation:teller-sway 4.6s ease-in-out infinite}
 .storyteller-mark img{width:100%;height:100%;object-fit:cover;object-position:top}
@@ -604,6 +615,11 @@ body[data-phase="night-witch"]:after{background:radial-gradient(circle at 50% 6%
   .session-over-screen .scoreboard{width:min(760px,90vw);margin:0 auto}
   .modal{max-height:92svh}
   .flip-layout{display:block}
+  /* Card-flip flow screens were laid out for portrait; sideways they must
+     fit a short viewport or the card (and its tap target) runs off-screen. */
+  .awake-lovers .flip-wrap,.awake-screen .role-peek .flip-wrap{width:calc(min(52svh,320px)*2/3);margin:8px auto 12px}
+  .mini-cards{grid-template-columns:repeat(2,minmax(0,calc(min(46svh,300px)*2/3)));justify-content:center}
+  .phase-ribbon h1{font-size:clamp(24px,7svh,36px)}
 }
 
 @media(prefers-reduced-motion:reduce){
