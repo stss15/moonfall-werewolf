@@ -8,10 +8,12 @@ const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, '..');
 
 test('mobile shell is installable and requests standalone fullscreen display', async () => {
-  const [manifestText, template, serviceWorker] = await Promise.all([
+  const [manifestText, template, serviceWorker, styles, app] = await Promise.all([
     readFile(join(root, 'src/manifest.webmanifest'), 'utf8'),
     readFile(join(root, 'src/template.html'), 'utf8'),
-    readFile(join(root, 'src/sw.js'), 'utf8')
+    readFile(join(root, 'src/sw.js'), 'utf8'),
+    readFile(join(root, 'src/styles.css'), 'utf8'),
+    readFile(join(root, 'src/app.js'), 'utf8')
   ]);
   const manifest = JSON.parse(manifestText);
   assert.equal(manifest.display, 'standalone');
@@ -23,4 +25,8 @@ test('mobile shell is installable and requests standalone fullscreen display', a
   assert.match(serviceWorker, /addEventListener\('fetch'/);
   assert.match(serviceWorker, /square-night\.webp/);
   assert.match(serviceWorker, /potion-green\.png/);
+  assert.match(styles, /body:not\(\[data-phase="home"\]\).*height:100dvh.*overflow:hidden/);
+  assert.match(styles, /\.screen\.stage-screen.*height:100dvh.*overflow:hidden/);
+  assert.match(app, /requestFullscreen/);
+  assert.match(app, /orientation\?\.lock\?\.\('landscape'\)/);
 });

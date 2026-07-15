@@ -949,6 +949,17 @@ async function toggleFullscreen() {
   }
 }
 
+async function enterImmersiveMode() {
+  if (!isMobileDevice()) return;
+  try {
+    if (!fullscreenElement()) {
+      const request = document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen;
+      if (request) await request.call(document.documentElement, {navigationUI: 'hide'});
+    }
+  } catch { /* Installed mode and iOS use the manifest fullscreen shell. */ }
+  try { await screen.orientation?.lock?.('landscape'); } catch { /* The portrait shield remains the fallback. */ }
+}
+
 async function installApp() {
   if (deferredInstallPrompt) {
     const prompt = deferredInstallPrompt;
@@ -2271,16 +2282,20 @@ async function handleAction(action, element) {
     queueRender();
   } else if (action === 'create-room') {
     sound('tap');
+    void enterImmersiveMode();
     createVillage(document.querySelector('#create-name')?.value || '');
   } else if (action === 'start-agent-test') {
     sound('tap');
     ui.modal = null;
+    void enterImmersiveMode();
     startAgentTest(document.querySelector('#create-name')?.value || document.querySelector('#join-name')?.value || '');
   } else if (action === 'join-room') {
     sound('tap');
+    void enterImmersiveMode();
     joinVillage(document.querySelector('#join-name')?.value || '', document.querySelector('#join-code')?.value || '');
   } else if (action === 'resume-room') {
     sound('tap');
+    void enterImmersiveMode();
     resumeVillage(element.dataset.code);
   } else if (action === 'copy-code') {
     sound('tap');
@@ -2306,6 +2321,7 @@ async function handleAction(action, element) {
     const next = roles.includes(roleId) ? roles.filter(id => id !== roleId) : [...roles, roleId];
     sendOwnCommand('host:settings', {roles: next});
   } else if (action === 'start-game') {
+    void enterImmersiveMode();
     sendOwnCommand('host:start');
   } else if (action === 'flip-role') {
     ui.roleFaceUp = !ui.roleFaceUp;
