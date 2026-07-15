@@ -3,8 +3,8 @@
   "version": 1,
   "sheet": {
     "grid": {"columns": 4, "rows": 5},
-    "cell": {"width": 512, "height": 512},
-    "baseline": 32,
+    "cell": {"width": 256, "height": 256},
+    "baseline": 0,
     "rowMap": [
       {"row": 1, "anim": "idle",  "frames": 4, "fps": 6, "mode": "loop"},
       {"row": 2, "anim": "walk",  "frames": 4, "fps": 8, "mode": "loop"},
@@ -14,7 +14,7 @@
     ]
   },
   "characters": {
-    "werewolf":    {"file": "sheets/werewolf.webp",    "actPoses": {"howl": 2, "pounce": 3, "claw": 4}},
+    "werewolf":    {"file": "sheets/werewolf.webp",    "actPoses": {"howl": 2, "pounce": 3, "claw": 4}, "note": "death row is chained (matches bound); a chain-free death redraw is wanted"},
     "villager":    {"file": "sheets/villager.webp",    "actPoses": {"lantern": 1, "kneel": 2, "wave": 3, "celebrate": 4}},
     "seer":        {"file": "sheets/seer.webp",        "actPoses": {"rune": 1, "gaze": 2, "cards": 3, "cast": 4}},
     "witch":       {"file": "sheets/witch.webp",       "actPoses": {"raise": 1, "conjure": 2, "pour": 3, "spiral": 4}},

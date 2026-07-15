@@ -22,12 +22,13 @@ function fakeView(overrides = {}) {
   };
 }
 
-test('the square draws one sprite per character and living strangers all look like villagers', () => {
+test('the square draws one animated sprite per character and living strangers all look like villagers', () => {
   const view = fakeView({me: {id: 'ada', alive: true, role: 'werewolf', loverId: null, visions: null, pack: []}});
   const square = townSquare(view);
   assert.equal((square.match(/data-sprite=/g) || []).length, 6);
-  assert.equal((square.match(/sprites\/villager\.webp/g) || []).length, 5, 'every other living soul is dressed as a villager');
-  assert.equal((square.match(/sprites\/werewolf\.webp/g) || []).length, 1, 'only your own phone shows your true form');
+  assert.equal((square.match(/sheets\/villager\.webp/g) || []).length, 5, 'every other living soul is dressed as a villager');
+  assert.equal((square.match(/sheets\/werewolf\.webp/g) || []).length, 1, 'only your own phone shows your true form');
+  assert.match(square, /class="ss loop/, 'living characters play their sheet animation');
 });
 
 test('private knowledge dresses the crowd: pack sight and the Seer’s visions', () => {
@@ -45,11 +46,24 @@ test('the dead become ghosts where they stood, revealed once the village turns t
   view.players.ben.role = 'werewolf';
   const square = townSquare(view);
   assert.match(square, /sprite ghost/);
-  assert.match(square, /sprites\/dead-werewolf\.webp/);
+  assert.match(square, /sheets\/werewolf\.webp/, 'a revealed ghost wears its true sheet');
   const hidden = fakeView();
   hidden.players.ben.alive = false;
   hidden.players.ben.role = null;
-  assert.match(townSquare(hidden), /sprites\/dead-villager\.webp/, 'an unrevealed corpse stays anonymous');
+  const hiddenSquare = townSquare(hidden);
+  assert.match(hiddenSquare, /sprite ghost/);
+  assert.doesNotMatch(hiddenSquare, /sheets\/werewolf\.webp/, 'an unrevealed corpse stays anonymous');
+});
+
+test('a selection context makes legal targets tappable and dims the rest', () => {
+  const view = fakeView({me: {id: 'ada', alive: true, role: 'seer', loverId: null, visions: null, pack: null}});
+  const select = {ids: new Set(['ben', 'cleo']), selected: ['ben'], action: 'seer-choose'};
+  const square = townSquare(view, {select});
+  assert.match(square, /square selecting named-all/);
+  assert.equal((square.match(/can-pick/g) || []).length, 2);
+  assert.match(square, /picked/);
+  assert.match(square, /pick-ring/);
+  assert.ok((square.match(/sprite [^"]*\boff\b/g) || []).length >= 3, 'non-targets stand dimmed');
 });
 
 test('the heart hangs only over the lovers, and only on their own phones', () => {

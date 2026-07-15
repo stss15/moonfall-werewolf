@@ -1,4 +1,4 @@
-const CACHE = 'moonfall-v12-role-audio';
+const CACHE = 'moonfall-v13-landscape-village';
 const SHELL = [
   './',
   './index.html',

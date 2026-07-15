@@ -73,10 +73,21 @@ Row 3 on some sheets is a frame *sequence* and on others four distinct
 - **Thief**: brandish → dangle amulet → crouch → dagger flourish.
   Card swap = f2.
 
-### 1.3 Character art still missing
-**None.** All nine playable roles are covered. (The Storyteller never
-stands in the square; the Hunter previously borrowed the villager sprite
-and now has his own crossbow sheet — that gap is closed.)
+### 1.3 Character art still missing / needing a redraw
+- **Werewolf `death` row (row 5) needs a redraw.** On the current wolf
+  sheet, row 5 collapses *wrapped in the purple lover-chains* — it
+  duplicates row 4's bound sequence, so the wolf has no plain death.
+  Until a chain-free death row lands, the game uses the chained one as a
+  placeholder for every wolf death (it reads oddly when a wolf who isn't
+  a lover dies). Every other role's death row is correct.
+- The wolf's `act` howl frame also loses its painted moon in background
+  extraction — harmless, since the game draws the sky moon itself.
+- Otherwise **all nine playable roles are covered.** (The Storyteller
+  never stands in the square; the Hunter previously borrowed the villager
+  sprite and now has his own crossbow sheet — that gap is closed. In
+  Moonfall's rules the Hunter fires his dying shot when his death is
+  revealed, choosing any living player to fall with him — the `act` row's
+  aim pose is his moment.)
 
 Only *optional* extra character art, if you ever fancy it:
 - A 6th row, `cheer`, 4 frames per role, for victory/scoreboard scenes.

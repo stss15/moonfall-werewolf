@@ -16,7 +16,7 @@ test('mobile shell is installable and requests standalone fullscreen display', a
   const manifest = JSON.parse(manifestText);
   assert.equal(manifest.display, 'standalone');
   assert.deepEqual(manifest.display_override, ['fullscreen', 'standalone']);
-  assert.equal(manifest.orientation, 'portrait-primary');
+  assert.equal(manifest.orientation, 'landscape');
   assert.ok(manifest.icons.some(icon => icon.sizes === '512x512' && icon.purpose === 'maskable'));
   assert.match(template, /rel="manifest"/);
   assert.match(template, /apple-mobile-web-app-capable/);

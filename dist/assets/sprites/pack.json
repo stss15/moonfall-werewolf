@@ -1,0 +1,48 @@
+{
+  "$comment": "Moonfall sprite/animation registry. Read by sprites.js at boot. Any file listed here that is missing on disk falls back automatically: character rows fall back to the static assets/sprites/<role>.webp with puppet (CSS) animation; props and backgrounds fall back to the procedural (CSS/JS) effect named in fallback. Full human-readable spec: docs/sprite-and-animation-script.md",
+  "version": 1,
+  "sheet": {
+    "grid": {"columns": 4, "rows": 5},
+    "cell": {"width": 256, "height": 256},
+    "baseline": 0,
+    "rowMap": [
+      {"row": 1, "anim": "idle",  "frames": 4, "fps": 6, "mode": "loop"},
+      {"row": 2, "anim": "walk",  "frames": 4, "fps": 8, "mode": "loop"},
+      {"row": 3, "anim": "act",   "frames": 4, "fps": 6, "mode": "poses"},
+      {"row": 4, "anim": "bound", "frames": 4, "fps": 6, "mode": "oneshot"},
+      {"row": 5, "anim": "death", "frames": 4, "fps": 6, "mode": "oneshot"}
+    ]
+  },
+  "characters": {
+    "werewolf":    {"file": "sheets/werewolf.webp",    "actPoses": {"howl": 2, "pounce": 3, "claw": 4}, "note": "death row is chained (matches bound); a chain-free death redraw is wanted"},
+    "villager":    {"file": "sheets/villager.webp",    "actPoses": {"lantern": 1, "kneel": 2, "wave": 3, "celebrate": 4}},
+    "seer":        {"file": "sheets/seer.webp",        "actPoses": {"rune": 1, "gaze": 2, "cards": 3, "cast": 4}},
+    "witch":       {"file": "sheets/witch.webp",       "actPoses": {"raise": 1, "conjure": 2, "pour": 3, "spiral": 4}},
+    "hunter":      {"file": "sheets/hunter.webp",      "actPoses": {"aim": 1, "lower": 2, "scout": 3, "startled": 4}},
+    "cupid":       {"file": "sheets/cupid.webp",       "actPoses": {"nock": 1, "draw": 2, "loose": 3, "hearts": 4}},
+    "thief":       {"file": "sheets/thief.webp",       "actPoses": {"brandish": 1, "amulet": 2, "crouch": 3, "flourish": 4}},
+    "little-girl": {"file": "sheets/little-girl.webp", "actPoses": {"peek": 1, "hug": 2, "hide": 3, "point": 4}},
+    "sheriff":     {"file": "sheets/sheriff.webp",     "actPoses": {"lantern": 1, "halt": 2, "badge": 3, "baton": 4}}
+  },
+  "derived": {
+    "corpse": {"from": "death", "frame": 4},
+    "ghost": {"from": "idle", "frame": 1, "treatment": "css-ghost"},
+    "revive": {"from": "death", "reverse": true}
+  },
+  "props": {
+    "arrow":        {"file": "props/arrow.webp",        "fallback": "js-arrow"},
+    "potion-green": {"file": "props/potion-green.webp", "fallback": "css-bottle-green"},
+    "potion-red":   {"file": "props/potion-red.webp",   "fallback": "css-bottle-red"},
+    "crystal-ball": {"file": "props/crystal-ball.webp", "fallback": "css-orb"},
+    "badge":        {"file": "props/badge.webp",        "fallback": "css-star"},
+    "vote-token":   {"file": "props/vote-token.webp",   "fallback": "css-token"},
+    "moon":         {"file": "props/moon.webp",         "fallback": "css-moon"},
+    "sun":          {"file": "props/sun.webp",          "fallback": "css-sun"},
+    "lovers-vignette": {"file": "props/lovers-vignette.webp", "fallback": "js-composite-lovers"}
+  },
+  "backgrounds": {
+    "square-night": {"file": "bg/square-night.webp", "fallback": "table-bg.webp"},
+    "square-day":   {"file": "bg/square-day.webp",   "fallback": "css-daygrade:square-night"},
+    "rooftops":     {"file": "bg/rooftops.webp",     "fallback": "css-silhouette"}
+  }
+}

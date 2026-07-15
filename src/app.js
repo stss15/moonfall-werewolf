@@ -377,8 +377,17 @@ function premiumVariant(slot) {
   return variants[Math.floor(Math.random() * variants.length)];
 }
 
+// HARD RULE — the storyteller device is the only speaker. Every other phone
+// in a live game is silent no matter which handler asks for audio, so no tap,
+// confirm or kill effect can ever leak a player's secret from their own
+// pocket. Feedback on player phones is visual and haptic only.
+function deviceMaySpeak() {
+  if (!mode) return true;                    // home screen previews
+  return Boolean(currentView && isTableVoice(currentView));
+}
+
 function sound(kind = 'tap', delay = 0) {
-  if (!soundEnabled) return;
+  if (!soundEnabled || !deviceMaySpeak()) return;
   const context = unlockAudio();
   if (!context) return;
   const at = context.currentTime + Math.max(0, delay);
@@ -906,7 +915,7 @@ async function toggleFullscreen() {
     const request = document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen;
     if (!request) throw new Error('unsupported');
     await request.call(document.documentElement, {navigationUI: 'hide'});
-    try { await screen.orientation?.lock?.('portrait-primary'); } catch { /* Orientation lock is optional. */ }
+    try { await screen.orientation?.lock?.('landscape'); } catch { /* Orientation lock is optional. */ }
   } catch {
     ui.modal = 'install';
     renderModal();
@@ -1539,6 +1548,8 @@ function leaveToHome() {
   stopAmbience();
 
   lastWakePulseKey = null;
+  seenInSquare.clear();
+  clearTimeout(arrivalTimer);
   narratorAutomationGeneration += 1;
   narratorAutomationKey = null;
   recentCommandIds.clear();
@@ -1587,6 +1598,82 @@ function dock(button, secondary = '') {
   return `<div class="dock">${secondary}${button}</div>`;
 }
 
+// ── The landscape stage ──────────────────────────────────────────────────
+// In-game screens are built around the town square: a compact phase strip
+// top-left, a narrow contextual rail on the right, one action dock at the
+// bottom. The crowd in the middle IS the interface; instructions live in
+// the narrator's voice, not on the screen.
+function stageStrip(view, override = null) {
+  const [title] = PHASE_META[view.phase] || ['Moonfall', ''];
+  const moonLabel = view.phase.startsWith('night') || view.phase.startsWith('setup') || view.phase === 'role-reveal' || view.phase === 'resolution'
+    ? `☾ Night ${Math.max(1, view.night)}`
+    : view.phase === 'lobby' ? '☾ The gathering' : `☼ Day ${Math.max(1, view.day)}`;
+  return `<div class="phase-ribbon strip"><span class="moon-number">${moonLabel}</span><h1>${esc(override || title)}</h1></div>`;
+}
+
+function stageScreen(view, {title = undefined, rail = '', foot = '', extra = '', cls = ''} = {}) {
+  return `<section class="screen stage-screen ${cls}">
+    ${gameHeader(view)}
+    ${title === null ? '' : stageStrip(view, title)}
+    ${rail ? `<div class="stage-rail">${rail}</div>` : ''}
+    ${foot ? `<div class="stage-foot">${foot}</div>` : ''}
+    ${extra}
+  </section>`;
+}
+
+// The narrator made visible: the storyteller character speaks, the village
+// listens. Replaces the abstract orb.
+function narratorStage(view, title) {
+  return `<section class="screen stage-screen">${gameHeader(view)}
+    <div class="storyteller-stage">
+      <div class="storyteller-mark"><img src="assets/storyteller.webp" alt="The storyteller"></div>
+      <div class="narrator-orb mini"><i></i><i></i><i></i></div>
+      <h1 class="storyteller-title">${esc(title)}</h1>
+    </div>
+  </section>`;
+}
+
+// Which characters in the square are tappable right now, and what a tap
+// means. One mapping shared by the render pass and the tap handler.
+function squareSelection(view) {
+  if (!view || view.phaseReady === false || !view.me) return null;
+  const action = view.privateAction || {};
+  if (action.done) return null;
+  const living = filter => Object.values(view.players).filter(player => player.alive && !player.storyteller && (!filter || filter(player))).map(player => player.id);
+  if (action.type === 'cupid') {
+    return {ids: new Set(living()), selected: ui.cupidChoices, action: 'choose-cupid'};
+  }
+  if (action.type === 'seer' && !action.target) {
+    return {ids: new Set(living(player => player.id !== view.me.id)), selected: [], action: 'seer-choose'};
+  }
+  if (action.type === 'werewolf') {
+    const wolves = new Set([view.me.id, ...(action.teammates || [])]);
+    const marks = {};
+    for (const target of Object.values(action.votes || {})) if (target) marks[target] = (marks[target] || 0) + 1;
+    const mine = action.votes?.[view.me.id];
+    return {ids: new Set(living(player => !wolves.has(player.id))), selected: mine ? [mine] : [], marks, action: 'wolf-vote'};
+  }
+  if (action.type === 'witch') {
+    const poisonOpen = ui.poisonOpen || Boolean(ui.witchPoisonTarget);
+    return {
+      ids: new Set(poisonOpen ? living() : []),
+      selected: ui.witchPoisonTarget ? [ui.witchPoisonTarget] : [],
+      victim: action.victim || null,
+      action: 'choose-poison'
+    };
+  }
+  if (action.type === 'vote') {
+    const disabled = new Set(!action.election && view.me.loverId ? [view.me.loverId] : []);
+    const ids = (action.candidates || []).filter(id => view.players[id]?.alive && !view.players[id].storyteller && !disabled.has(id));
+    return {ids: new Set(ids), selected: action.choice ? [action.choice] : [], disabled, action: 'cast-vote'};
+  }
+  if (action.type === 'hunter' || action.type === 'sheriff-successor') {
+    const ids = (action.candidates || []).filter(id => id !== view.me.id && view.players[id]?.alive);
+    return {ids: new Set(ids), selected: [], action: 'resolve-pending'};
+  }
+  return null;
+}
+
 function playerStatusText(player, view) {
   if (player.storyteller) return 'Storyteller';
   if (!player.alive) return player.role ? `Fallen ${ROLES[player.role]?.name || 'Villager'}` : 'Fallen';
@@ -1613,22 +1700,9 @@ function playerList(view, {kickable = false, reveal = false} = {}) {
   }).join('')}</div>`;
 }
 
-function choiceGrid(view, ids, {action, selected = [], disabled = [], note = null} = {}) {
-  const disabledSet = new Set(disabled);
-  return `<div class="choice-grid target-table">${ids.map(id => {
-    const player = view.players[id];
-    if (!player) return '';
-    const chosen = selected.includes(id);
-    const sub = note ? note(player, id) : player.sheriff ? 'Sheriff · double vote' : id === view.me.id ? 'You' : 'Living character';
-    return `<button class="choice target-card ${chosen ? 'selected' : ''}" data-action="${esc(action)}" data-id="${esc(id)}" ${disabledSet.has(id) ? 'disabled' : ''}>
-      <span class="target-card-art"><img src="assets/card-back.webp" alt="Face-down card for ${esc(player.name)}"><b>${chosen ? '✓' : esc(initials(player.name))}</b></span><span class="copy"><strong>${esc(player.name)}</strong><span>${esc(sub)}</span></span>
-    </button>`;
-  }).join('')}</div>`;
-}
-
-function roleCard(roleId, flipped, {label = true, tapAction = 'flip-role'} = {}) {
+function roleCard(roleId, flipped, {label = true, tapAction = 'flip-role', dealt = false} = {}) {
   const role = ROLES[roleId] || ROLES.villager;
-  return `<div class="flip-wrap">
+  return `<div class="flip-wrap ${dealt ? 'dealt' : ''}">
     <button class="flip-card ${flipped ? 'flipped' : ''}" data-action="${esc(tapAction)}" aria-label="${flipped ? `Hide ${esc(role.name)} card` : 'Reveal secret card'}">
       <span class="card-face back"><img src="assets/card-back.webp" alt="Face-down Moonfall card"></span>
       <span class="card-face front"><img src="${esc(role.image)}" alt="${esc(role.name)} card">${label ? `<span class="card-title-overlay"><strong>${esc(role.name)}</strong><span>${esc(role.rule)}</span></span>` : ''}</span>
@@ -1666,58 +1740,74 @@ function renderConnecting() {
   </section>`;
 }
 
+// The lobby IS the village: characters walk into the square as their owners
+// join. The invite sits top-left, the host's deck controls in the right
+// rail, and everyone watches the crowd assemble in the middle.
 function renderLobby(view) {
   const deck = view.lobbyDeck;
   const isHost = view.coordinator;
   const pack = view.settings.preset;
   const selectedRoles = view.settings.roles;
+  const count = Object.keys(view.players).length;
   const deckParts = [`${deck.wolves}× ${deck.wolves === 1 ? 'Werewolf' : 'Werewolves'}`, ...deck.specials.map(id => ROLES[id].name), deck.villagers ? `${deck.villagers}× Villager${deck.villagers === 1 ? '' : 's'}` : ''].filter(Boolean);
-  app.innerHTML = `<section class="screen ${isHost ? 'has-dock' : ''}">
-    ${gameHeader(view)}
-    <div class="panel ornate center"><div class="eyebrow">Share this code</div><div class="room-code">${esc(view.roomCode)}</div><div class="qr-wrap" aria-label="QR code that joins village ${esc(view.roomCode)}">${inviteQrSvg()}</div><p class="muted small">Scan with a phone camera to join instantly · ${Object.keys(view.players).length} gathered</p><div class="button-row"><button class="btn mini secondary" data-action="copy-code">Copy code</button><button class="btn mini ghost" data-action="share-room">Share invite</button></div></div>
-    <div class="panel compact"><div class="eyebrow">The circle</div><h3>${Object.keys(view.players).length} of ${MAX_PEOPLE} places</h3>${playerList(view, {kickable: isHost})}</div>
-    ${isHost ? `<div class="panel">
-      <div class="eyebrow">Choose the tale</div><h2>Build the deck</h2>
-      <div class="pack-grid">${Object.entries(PRESETS).map(([id, item]) => `<button class="pack-option ${pack === id ? 'active' : ''}" data-action="set-preset" data-preset="${id}"><span>${id === 'first' ? '☽' : id === 'classic' ? '◐' : '●'}</span><strong>${esc(item.name)}</strong><small>${item.roles.length} special</small></button>`).join('')}</div>
-      <p class="muted small">${esc(PRESETS[pack]?.description || 'Your own role collection.')}</p>
-      <div class="role-toggles">${SPECIAL_ROLE_IDS.map(id => `<button class="role-toggle ${selectedRoles.includes(id) ? 'active' : ''}" data-action="toggle-role" data-role="${id}"><img src="${ROLES[id].image}" alt=""><span>${esc(ROLES[id].name)}</span></button>`).join('')}</div>
-      <div class="button-row"><label class="field" style="margin:0"><span class="tiny muted">Werewolves</span><select class="input" id="wolf-setting"><option value="auto" ${view.settings.wolves === 'auto' ? 'selected' : ''}>Auto balance</option>${[1,2,3,4].map(n => `<option value="${n}" ${Number(view.settings.wolves) === n ? 'selected' : ''}>${n}</option>`).join('')}</select></label><label class="field" style="margin:0"><span class="tiny muted">Sheriff office</span><select class="input" id="sheriff-setting"><option value="true" ${view.settings.sheriff ? 'selected' : ''}>Included</option><option value="false" ${!view.settings.sheriff ? 'selected' : ''}>Not used</option></select></label></div>
-      <div class="deck-line ${deck.valid ? '' : 'error'}">${deck.valid ? deckParts.join(' · ') : Object.keys(view.players).length < 6 ? 'At least six players are needed. Every person receives a character card.' : 'Too many special roles for this village. Remove a role or invite more players.'}</div>
-    </div>` : `<div class="panel center"><div class="moon-loader"><span></span></div><h2 style="margin-top:18px">The deck is being prepared</h2><p class="muted">The host is choosing tonight’s roles. Keep this page open.</p></div>`}
-    ${isHost ? dock(`<button class="btn" data-action="start-game" ${deck.valid ? '' : 'disabled'}>Shuffle, deal & begin</button>`) : ''}
-  </section>`;
+  const invite = `<div class="lobby-invite panel ornate">
+    <div class="room-code">${esc(view.roomCode)}</div>
+    <div class="qr-wrap" aria-label="QR code that joins village ${esc(view.roomCode)}">${inviteQrSvg()}</div>
+    <p class="muted tiny center" style="margin:6px 0 8px">${count} of ${MAX_PEOPLE} places</p>
+    <div class="button-row"><button class="btn mini secondary" data-action="copy-code">Copy</button><button class="btn mini ghost" data-action="share-room">Share</button></div>
+  </div>`;
+  const rail = isHost ? `
+    <div class="pack-grid">${Object.entries(PRESETS).map(([id, item]) => `<button class="pack-option ${pack === id ? 'active' : ''}" data-action="set-preset" data-preset="${id}"><span>${id === 'first' ? '☽' : id === 'classic' ? '◐' : '●'}</span><strong>${esc(item.name)}</strong><small>${item.roles.length} special</small></button>`).join('')}</div>
+    <div class="role-toggles">${SPECIAL_ROLE_IDS.map(id => `<button class="role-toggle ${selectedRoles.includes(id) ? 'active' : ''}" data-action="toggle-role" data-role="${id}"><img src="${ROLES[id].image}" alt=""><span>${esc(ROLES[id].name)}</span></button>`).join('')}</div>
+    <div class="button-row"><label class="field" style="margin:0;flex:1"><span class="tiny muted">Werewolves</span><select class="input" id="wolf-setting"><option value="auto" ${view.settings.wolves === 'auto' ? 'selected' : ''}>Auto</option>${[1,2,3,4].map(n => `<option value="${n}" ${Number(view.settings.wolves) === n ? 'selected' : ''}>${n}</option>`).join('')}</select></label><label class="field" style="margin:0;flex:1"><span class="tiny muted">Sheriff</span><select class="input" id="sheriff-setting"><option value="true" ${view.settings.sheriff ? 'selected' : ''}>Yes</option><option value="false" ${!view.settings.sheriff ? 'selected' : ''}>No</option></select></label></div>
+    <div class="deck-line ${deck.valid ? '' : 'error'}">${deck.valid ? deckParts.join(' · ') : count < 6 ? 'At least six players are needed.' : 'Too many special roles for this village.'}</div>
+    <details class="ledger"><summary>Manage the circle</summary>${playerList(view, {kickable: true})}</details>`
+    : `<div class="rail-chip"><span class="moon-loader mini"><span></span></span><strong>The host prepares the deck</strong></div>`;
+  app.innerHTML = stageScreen(view, {
+    rail,
+    foot: isHost ? `<button class="btn" data-action="start-game" ${deck.valid ? '' : 'disabled'}>Shuffle, deal & begin</button>` : '',
+    extra: invite,
+    cls: 'lobby-screen'
+  });
 }
 
+// Your one card in the game: dealt from a deck fan, flipped with a lift,
+// sealed face-down — then you are a character in the square, not a card.
 function renderRoleReveal(view) {
-  const role = ROLES[view.me.role] || ROLES.villager;
   const seenCount = Object.values(view.players).filter(player => player.ready).length;
   const total = Object.keys(view.players).length;
   if (!view.phaseReady) {
-    app.innerHTML = `<section class="screen">${gameHeader(view)}<div class="narrator-stage"><div class="narrator-orb"><i></i><i></i><i></i></div><h1>Listen to the tale</h1></div></section>`;
+    app.innerHTML = narratorStage(view, 'The cards are dealt');
     return;
   }
   if (!view.me.seenRole) {
-    app.innerHTML = `<section class="screen ${ui.roleFaceUp ? 'has-dock' : ''}">${gameHeader(view)}${phaseHeader(view)}<div class="flip-layout">
-      ${roleCard(view.me.role, ui.roleFaceUp)}
-      <div>${!ui.roleFaceUp ? '<div class="tap-hint">Tap the card to reveal your fate</div>' : ''}</div>
-    </div>${ui.roleFaceUp ? dock('<button class="btn" data-action="seal-role">Seal my fate · face-down</button>') : ''}</section>`;
+    app.innerHTML = `<section class="screen stage-screen deal-screen">${gameHeader(view)}${stageStrip(view)}
+      <div class="deal-stage">
+        <div class="deal-deck" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+        ${roleCard(view.me.role, ui.roleFaceUp, {dealt: true})}
+      </div>
+      ${!ui.roleFaceUp ? '<div class="stage-foot"><div class="tap-hint">Tap the card</div></div>' : `<div class="stage-foot"><button class="btn" data-action="seal-role">Seal my fate</button></div>`}
+    </section>`;
     return;
   }
-  app.innerHTML = `<section class="screen">${gameHeader(view)}${phaseHeader(view)}
-    <div class="sleep-card"><div><h2>Your card is sealed</h2><p>Close your eyes when night falls. Your phone pulses when the tale needs you.</p><div class="progress-track"><i style="width:${Math.round(seenCount / total * 100)}%"></i></div><span class="badge green">${seenCount} of ${total} ready</span></div></div>
-  </section>`;
+  app.innerHTML = stageScreen(view, {
+    title: 'Your fate is sealed',
+    rail: `<div class="rail-chip"><b>✓</b><strong>${seenCount} of ${total} sealed</strong></div>
+      <div class="rail-note">☾ Close your eyes when night falls. Your phone pulses when the tale needs you.</div>`
+  });
 }
 
+// Eyes closed: an almost textless moonlit scene, identical on every phone,
+// so no glance across the table can read anything from a sleeping screen.
 function sleepMessage(view, custom = null) {
-  const phaseRole = {
-    'setup-thief': 'The Thief',
-    'setup-cupid': 'Cupid',
-    'setup-lovers': 'The lovers',
-    'night-seer': 'The Seer',
-    'night-wolves': 'The pack',
-    'night-witch': 'The Witch'
-  }[view.phase] || 'Another soul';
-  return `<section class="screen">${gameHeader(view)}${phaseHeader(view)}<div class="sleep-card"><div><h2>${esc(custom?.title || 'Keep your eyes closed')}</h2><p>${esc(custom?.text || `${phaseRole} is awake.`)}</p><div class="eyes">— ◡ —</div></div></div></section>`;
+  return `<section class="screen night-sleep">${gameHeader(view)}
+    <div class="sleep-scene" aria-hidden="true">
+      <div class="sleep-stars"></div>
+      <div class="sleep-moon"></div>
+      <div class="sleep-eyes">— ◡ —</div>
+      ${custom?.text ? `<p class="sleep-line">${esc(custom.text)}</p>` : ''}
+    </div>
+  </section>`;
 }
 
 function renderThief(view, action) {
@@ -1730,13 +1820,14 @@ function renderThief(view, action) {
 }
 
 function renderCupid(view, action) {
-  const candidates = Object.values(view.players).filter(player => !player.storyteller).map(player => player.id);
   const selected = ui.cupidChoices;
-  app.innerHTML = `<section class="screen awake-screen awake-cupid has-dock">${gameHeader(view)}${phaseHeader(view)}
-    <div class="lover-heart">♥</div>
-    ${choiceGrid(view, candidates, {action: 'choose-cupid', selected})}
-    ${dock(`<button class="btn" data-action="submit-cupid" ${selected.length === 2 ? '' : 'disabled'}>Bind ${selected.length === 2 ? `${esc(view.players[selected[0]].name)} & ${esc(view.players[selected[1]].name)}` : 'two hearts'}</button>`)}
-  </section>`;
+  app.innerHTML = stageScreen(view, {
+    cls: 'awake-screen awake-cupid',
+    rail: `<div class="rail-emblem cupid">♥</div>
+      <div class="heart-slots"><b class="${selected[0] ? 'filled' : ''}">♥</b><b class="${selected[1] ? 'filled' : ''}">♥</b></div>
+      ${selected.map(id => `<div class="rail-chip"><b>♥</b><strong>${esc(view.players[id]?.name || '')}</strong></div>`).join('')}`,
+    foot: `<button class="btn" data-action="submit-cupid" ${selected.length === 2 ? '' : 'disabled'}>Bind these hearts</button>`
+  });
 }
 
 // Everyone flips an identical fate card, so nobody can spot the lovers from
@@ -1761,70 +1852,66 @@ function renderLover(view, action) {
 
 function renderSeer(view, action) {
   if (!action.target) {
-    const candidates = Object.values(view.players).filter(player => player.alive && !player.storyteller && player.id !== view.me.id).map(player => player.id);
-    app.innerHTML = `<section class="screen awake-screen awake-seer">${gameHeader(view)}${phaseHeader(view, {title: 'The Seer wakes', subtitle: 'Whose truth will the vision show you?'})}${choiceGrid(view, candidates, {action: 'seer-choose'})}</section>`;
+    app.innerHTML = stageScreen(view, {
+      cls: 'awake-screen awake-seer',
+      rail: '<div class="rail-emblem seer">✦</div><div class="rail-note">One soul’s truth will be shown to you.</div>'
+    });
     return;
   }
   const target = view.players[action.target];
-  const result = ROLES[action.result] || ROLES.villager;
-  app.innerHTML = `<section class="screen awake-screen awake-seer ${ui.seerFlipped ? 'has-dock' : ''}">${gameHeader(view)}${phaseHeader(view, {title: target.name, subtitle: ui.seerFlipped ? `The vision reveals ${result.name}.` : 'Tap their card to reveal the truth.'})}
-    <div class="role-peek">${roleCard(action.result, ui.seerFlipped, {label: true, tapAction: 'flip-seer'})}</div>
-    ${!ui.seerFlipped ? '<div class="tap-hint">Turn over the chosen card</div>' : ''}
-    ${ui.seerFlipped ? dock('<button class="btn" data-action="seer-done">Return the card · fall asleep</button>') : ''}
+  app.innerHTML = `<section class="screen stage-screen awake-screen awake-seer">${gameHeader(view)}${stageStrip(view, target?.name || 'The vision')}
+    <div class="deal-stage"><div class="role-peek">${roleCard(action.result, ui.seerFlipped, {label: true, tapAction: 'flip-seer'})}</div></div>
+    ${!ui.seerFlipped ? '<div class="stage-foot"><div class="tap-hint">Turn the card</div></div>' : '<div class="stage-foot"><button class="btn" data-action="seer-done">Return the card</button></div>'}
   </section>`;
 }
 
 function renderWolves(view, action) {
   const wolves = [view.me.id, ...action.teammates];
-  const candidates = Object.values(view.players).filter(player => player.alive && !player.storyteller && !wolves.includes(player.id)).map(player => player.id);
   const myChoice = action.votes[view.me.id];
   const hasChoice = Object.prototype.hasOwnProperty.call(action.votes, view.me.id);
-  const teammateLines = wolves.map(id => {
-    const target = action.votes[id];
-    return `${view.players[id]?.name || 'Wolf'} → ${target === null ? 'spare the village' : target ? view.players[target]?.name : 'choosing…'}`;
+  app.innerHTML = stageScreen(view, {
+    title: 'The pack hunts',
+    cls: 'awake-screen awake-wolves',
+    rail: `<div class="wolf-pack rail-pack">${wolves.map(id => `<span class="wolf-chip">🐺 ${esc(view.players[id]?.name || 'Werewolf')}</span>`).join('')}</div>
+      ${action.consensus ? '<div class="badge green">✓ The pack agrees</div>' : '<div class="rail-note">🐾 marks show the pack’s choices. The hunt needs one shared victim.</div>'}
+      <button class="btn mini secondary ${hasChoice && myChoice === null ? 'selected-btn' : ''}" data-action="wolf-no-kill">☾ Spare the village${hasChoice && myChoice === null ? ' ✓' : ''}</button>
+      ${action.littleGirlInPlay ? `<button class="btn danger mini" data-action="little-girl-caught" ${action.littleGirlCaught ? 'disabled' : ''}>${action.littleGirlCaught ? 'The Little Girl was caught' : 'I caught the Little Girl'}</button>` : ''}`
   });
-  app.innerHTML = `<section class="screen awake-screen awake-wolves">${gameHeader(view)}${phaseHeader(view, {title: 'The pack hunts', subtitle: 'The night waits for one shared victim.'})}
-    <div class="wolf-pack">${wolves.map(id => `<span class="wolf-chip">🐺 ${esc(view.players[id]?.name || 'Werewolf')}</span>`).join('')}</div>
-    ${choiceGrid(view, candidates, {action: 'wolf-vote', selected: myChoice ? [myChoice] : [], note: (player, id) => Object.values(action.votes).filter(target => target === id).length ? `${Object.values(action.votes).filter(target => target === id).length} pack choice` : 'Possible victim'})}
-    <button class="choice no-kill-choice ${hasChoice && myChoice === null ? 'selected' : ''}" data-action="wolf-no-kill"><span class="no-kill-moon">☾</span><span class="copy"><strong>Spare the village</strong><span>Only unanimous mercy holds</span></span>${hasChoice && myChoice === null ? '<b>✓</b>' : ''}</button>
-    ${wolves.length > 1 || action.consensus ? `<div class="panel compact"><div class="eyebrow">Silent consensus</div>${teammateLines.map(line => `<div class="small muted" style="padding:3px 0">${esc(line)}</div>`).join('')}${action.consensus ? '<div class="badge green" style="margin-top:8px">✓ The pack agrees</div>' : ''}</div>` : ''}
-    ${action.littleGirlInPlay ? `<button class="btn danger wide" data-action="little-girl-caught" ${action.littleGirlCaught ? 'disabled' : ''}>${action.littleGirlCaught ? 'The Little Girl was caught' : 'I caught the Little Girl peeking'}</button>` : ''}
-  </section>`;
 }
 
 function renderLittleGirl(view) {
-  app.innerHTML = sleepMessage(view, {title: 'Dare you peek?', text: 'The pack is awake. Spy if you dare — caught, you die in the victim’s place.'});
+  app.innerHTML = sleepMessage(view, {text: '👁 Peek if you dare — caught, you die in the victim’s place.'});
 }
 
 function renderWitch(view, action) {
   const victim = action.victim ? view.players[action.victim] : null;
-  const candidates = Object.values(view.players).filter(player => player.alive && !player.storyteller).map(player => player.id);
   const poisonOpen = ui.poisonOpen || Boolean(ui.witchPoisonTarget);
-  app.innerHTML = `<section class="screen awake-screen awake-witch has-dock">${gameHeader(view)}${phaseHeader(view)}
-    <div class="victim-banner"><span>The pack chose</span><strong>${victim ? esc(victim.name) : 'No victim tonight'}</strong></div>
-    <div class="potions"><button class="potion ${ui.witchHeal ? 'selected' : ''} ${action.potions.heal ? '' : 'used'}" data-action="toggle-heal" ${!action.potions.heal || !victim ? 'disabled' : ''}><b>✚</b><strong>Healing</strong><span>${action.potions.heal ? 'One use for the whole game' : 'Potion already spent'}</span></button><button class="potion ${poisonOpen ? 'selected' : ''} ${action.potions.poison ? '' : 'used'}" data-action="open-poison" ${!action.potions.poison ? 'disabled' : ''}><b>⚗</b><strong>Poison</strong><span>${action.potions.poison ? (poisonOpen ? `Target: ${esc(view.players[ui.witchPoisonTarget]?.name || '')}` : 'Choose one living soul') : 'Potion already spent'}</span></button></div>
-    ${action.potions.poison && poisonOpen ? `<div class="panel compact"><div class="eyebrow">Poison target</div>${choiceGrid(view, candidates, {action: 'choose-poison', selected: ui.witchPoisonTarget ? [ui.witchPoisonTarget] : []})}<button class="btn ghost wide mini" data-action="clear-poison">Use no poison</button></div>` : ''}
-    ${dock(`<button class="btn" data-action="submit-witch">Seal the potion choice</button>`)}
-  </section>`;
+  app.innerHTML = stageScreen(view, {
+    cls: 'awake-screen awake-witch',
+    rail: `<div class="rail-chip doomed"><b>☠</b><strong>${victim ? esc(victim.name) : 'No victim tonight'}</strong></div>
+      <button class="potion rail-potion ${ui.witchHeal ? 'selected' : ''} ${action.potions.heal ? '' : 'used'}" data-action="toggle-heal" ${!action.potions.heal || !victim ? 'disabled' : ''}><b>✚</b><strong>Heal</strong></button>
+      <button class="potion rail-potion ${poisonOpen ? 'selected' : ''} ${action.potions.poison ? '' : 'used'}" data-action="open-poison" ${!action.potions.poison ? 'disabled' : ''}><b>⚗</b><strong>Poison</strong>${ui.witchPoisonTarget ? `<span>${esc(view.players[ui.witchPoisonTarget]?.name || '')}</span>` : ''}</button>
+      ${action.potions.poison && poisonOpen ? '<button class="btn ghost mini" data-action="clear-poison">No poison</button>' : ''}`,
+    foot: '<button class="btn" data-action="submit-witch">Seal the choice</button>'
+  });
 }
 
 function renderVote(view, action) {
-  const ids = action.candidates.filter(id => view.players[id]?.alive && !view.players[id].storyteller);
-  const disabled = action.election ? [] : view.me.loverId ? [view.me.loverId] : [];
-  app.innerHTML = `<section class="screen">${gameHeader(view)}${phaseHeader(view, action.election ? {title: 'Choose the Sheriff', subtitle: 'Their voice will carry the weight of two.'} : null)}
-    ${choiceGrid(view, ids, {action: 'cast-vote', selected: action.choice ? [action.choice] : [], disabled, note: (player, id) => disabled.includes(id) ? 'Your lover · forbidden' : id === view.me.id ? 'You' : player.sheriff ? 'Sheriff' : ''})}
-    ${action.choice ? `<div class="center"><span class="badge green">✓ Sealed for ${esc(view.players[action.choice].name)}</span></div>` : ''}
-  </section>`;
+  app.innerHTML = stageScreen(view, {
+    title: action.election ? 'Choose the Sheriff' : undefined,
+    rail: action.choice
+      ? `<div class="badge green">✓ Sealed for ${esc(view.players[action.choice].name)}</div>`
+      : '<div class="rail-note">⚖ Tap the one you accuse. The ballot seals when the last vote falls.</div>'
+  });
 }
 
 function renderPending(view, action) {
   const hunter = action.type === 'hunter';
-  const ids = action.candidates.filter(id => id !== view.me.id && view.players[id]?.alive);
-  app.innerHTML = `<section class="screen">${gameHeader(view)}${phaseHeader(view, {title: hunter ? 'One final shot' : 'Name your successor', subtitle: hunter ? 'Death cannot silence the Hunter’s last act.' : 'Pass the Sheriff’s badge before you leave the village.'})}
-    <div class="panel compact center"><img src="${hunter ? ROLES.hunter.image : ROLES.sheriff.image}" alt="" style="width:110px;aspect-ratio:2/3;object-fit:cover;border-radius:12px;margin:0 auto 12px"><p class="muted small">${hunter ? 'Choose one living character to die with you.' : 'Choose one living character to inherit the double vote.'}</p></div>
-    ${choiceGrid(view, ids, {action: 'resolve-pending'})}
-    ${hunter ? '<button class="btn ghost wide" data-action="resolve-pending" data-id="">Lower the weapon</button>' : ''}
-  </section>`;
+  app.innerHTML = stageScreen(view, {
+    title: hunter ? 'One final shot' : 'Name your successor',
+    rail: `<div class="rail-emblem">${hunter ? '⌖' : '✹'}</div>
+      ${hunter ? '<button class="btn ghost mini" data-action="resolve-pending" data-id="">Lower the weapon</button>' : ''}`
+  });
 }
 
 function renderPrivateAction(view) {
@@ -1906,10 +1993,9 @@ function tallyMarkup(view) {
 }
 
 function renderDead(view) {
-  const role = ROLES[view.me.role] || ROLES.villager;
-  app.innerHTML = `<section class="screen">${gameHeader(view)}${phaseHeader(view)}
-    ${whisperMarkup(view, {compact: true})}
-    <div class="panel compact center"><div class="eyebrow">A silent spirit</div><h2>${esc(role.name)}</h2><p class="muted small" style="margin:0">Watch. Do not speak, signal or vote.</p></div></section>`;
+  app.innerHTML = stageScreen(view, {
+    rail: `${whisperMarkup(view, {compact: true})}<div class="rail-chip ghostly"><b>☽</b><strong>A silent spirit</strong></div>`
+  });
 }
 
 function renderDawn(view) {
@@ -1920,10 +2006,11 @@ function renderDawn(view) {
 
 function renderDiscussion(view) {
   const action = view.privateAction?.type === 'discussion' ? view.privateAction : null;
-  app.innerHTML = `<section class="screen ${action ? 'has-dock' : ''}">${gameHeader(view)}${phaseHeader(view)}
-    ${whisperMarkup(view, {compact: true})}
-    ${action ? dock(`<button class="btn ${action.ready ? 'secondary' : ''}" data-action="day-ready" data-ready="${action.ready ? 'false' : 'true'}">${action.ready ? '✓ Ready · tap to keep debating' : 'I am ready to vote'}</button>`, `<div class="dock-note">${action.readyCount} of ${action.total} ready for judgement</div>`) : ''}
-  </section>`;
+  app.innerHTML = stageScreen(view, {
+    rail: whisperMarkup(view, {compact: true}),
+    foot: action ? `<div class="dock-note">${action.readyCount} of ${action.total} ready</div>
+      <button class="btn ${action.ready ? 'secondary' : ''}" data-action="day-ready" data-ready="${action.ready ? 'false' : 'true'}">${action.ready ? '✓ Ready · keep debating' : 'Ready to vote'}</button>` : ''
+  });
 }
 
 function renderDayResult(view) {
@@ -1951,7 +2038,7 @@ function renderGameOver(view) {
 
 function renderNarratorWait(view) {
   const [title] = PHASE_META[view.phase] || ['The tale continues'];
-  app.innerHTML = `<section class="screen">${gameHeader(view)}<div class="narrator-stage"><div class="narrator-orb"><i></i><i></i><i></i></div><h1>${esc(title)}</h1></div></section>`;
+  app.innerHTML = narratorStage(view, title);
 }
 
 function renderGame() {
@@ -1970,7 +2057,7 @@ function renderGame() {
   if (!view.me.alive) return renderDead(view);
   if (view.phase === 'day-discussion') return renderDiscussion(view);
   if (view.phase === 'resolution') {
-    app.innerHTML = `<section class="screen">${gameHeader(view)}${phaseHeader(view)}<div class="panel ornate center"><div class="moon-loader"><span></span></div><h2 style="margin-top:18px">A final choice is being made</h2></div></section>`;
+    app.innerHTML = sleepMessage(view);
     return;
   }
   app.innerHTML = sleepMessage(view);
@@ -2001,35 +2088,67 @@ function renderModal() {
   }
 }
 
-// The town square lives in the middle of the screen. It hides on screens
-// that need full focus (card flips, target grids, the dawn reveal) and
-// re-renders only when its content actually changes, so the crowd's idle
-// sway never restarts on ordinary broadcasts.
+// The town square is the playing surface. It hides only on screens that
+// must own the whole display (card flips, the dawn reveal, sleep screens)
+// and re-renders only when its content actually changes, so the crowd's
+// idle animation never restarts on ordinary broadcasts.
 function squareVisible(view) {
   if (!view) return false;
-  if (['lobby', 'dawn', 'day-result', 'game-over'].includes(view.phase)) return false;
-  if (view.phase === 'role-reveal') return Boolean(view.me?.seenRole);
-  const action = view.privateAction || {};
-  const focused = action.type && !action.done && view.phaseReady !== false
-    && !['discussion', 'little-girl'].includes(action.type);
-  return !focused;
+  const phase = view.phase;
+  if (['dawn', 'day-result', 'game-over'].includes(phase)) return false;
+  if (phase === 'lobby') return true;
+  if (phase === 'role-reveal') return Boolean(view.me?.seenRole);
+  const night = phase.startsWith('setup-') || phase.startsWith('night-') || phase === 'resolution';
+  if (night) {
+    if (view.phaseReady === false) return false;
+    const action = view.privateAction || {};
+    if (!action.type || action.done) return false;                 // sleepers keep eyes closed
+    if (['lover', 'thief', 'little-girl'].includes(action.type)) return false;
+    if (action.type === 'seer' && action.target) return false;     // the vision card owns the screen
+    return true;                                                   // the actor plays on the square
+  }
+  return true;
 }
+
+// Track who has already stood in the lobby square, so newcomers walk in.
+const seenInSquare = new Set();
+let arrivalTimer = null;
 
 function updateVillageLayer() {
   if (!villageRoot) return;
   const view = mode ? currentView : null;
-  const html = view && squareVisible(view) ? townSquare(view) : '';
+  let html = '';
+  if (view && squareVisible(view)) {
+    const select = squareSelection(view);
+    let arrivals = null;
+    if (view.phase === 'lobby') {
+      arrivals = new Set(Object.keys(view.players).filter(id => !seenInSquare.has(id) && !view.players[id].storyteller));
+      for (const id of arrivals) seenInSquare.add(id);
+      if (arrivals.size) {
+        clearTimeout(arrivalTimer);
+        arrivalTimer = setTimeout(() => { lastVillageHtml = null; updateVillageLayer(); }, 2100);
+      }
+    }
+    html = townSquare(view, {select, arrivals});
+  }
   if (html === lastVillageHtml) return;
   lastVillageHtml = html;
   villageRoot.innerHTML = html;
 }
 
-// Tap a villager to see their name for a moment.
+// Taps on the crowd: when a selection is open and this character is a legal
+// target, the tap IS the action; otherwise it shows the name for a moment.
 let spriteNameTimer = null;
 villageRoot?.addEventListener('click', event => {
   const sprite = event.target.closest('.sprite');
-  if (!sprite) return;
-  sound('tap');
+  if (!sprite || sprite.disabled) return;
+  const id = sprite.dataset.sprite;
+  const select = mode ? squareSelection(currentView) : null;
+  if (select && select.ids.has(id)) {
+    vibrate(14);
+    handleAction(select.action, {dataset: {id, action: select.action}});
+    return;
+  }
   vibrate(10);
   for (const named of villageRoot.querySelectorAll('.sprite.named')) named.classList.remove('named');
   sprite.classList.add('named');
@@ -2241,7 +2360,7 @@ async function handleAction(action, element) {
   } else if (action === 'toggle-voice') {
     voiceEnabled = !voiceEnabled;
     safeWrite(VOICE_KEY, voiceEnabled);
-    if (voiceEnabled) {
+    if (voiceEnabled && deviceMaySpeak()) {
       const context = unlockAudio(true);
       if (context && voicePackCovers(['preview'])) playVoicePack(context, ['preview'], {delay: 120});
       else narrate('The village sleeps, and the tale continues.', {delay: 120});

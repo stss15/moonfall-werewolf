@@ -260,7 +260,7 @@ body[data-phase="night-witch"]:after{background:radial-gradient(circle at 50% 6%
    Painted character sprites stand in the middle of the screen. Each phone
    dresses the crowd according to what its owner truly knows; ghosts stay
    where they fell. Tap a character to see their name. */
-#village{position:fixed;left:0;right:0;bottom:calc(var(--safe-bottom) + 92px);height:min(46svh,420px);z-index:1;pointer-events:none}
+#village{position:fixed;left:0;right:0;bottom:calc(env(safe-area-inset-bottom,0px) + 14px);height:min(64svh,460px);z-index:1;pointer-events:none}
 .square{position:absolute;inset:0;opacity:0;animation:square-in 1.4s ease .1s both}
 @keyframes square-in{to{opacity:1}}
 .sprite{position:absolute;transform:translateX(-50%);border:0;padding:0;background:none;pointer-events:auto;cursor:pointer;-webkit-tap-highlight-color:transparent}
@@ -329,3 +329,168 @@ body[data-phase="night-witch"]:after{background:radial-gradient(circle at 50% 6%
 .death-plate span{display:block;margin-top:4px;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:#cbb59a}
 .no-deaths.staged{animation:death-in 1s ease both;animation-delay:1s}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   LANDSCAPE LIVING VILLAGE
+   The game is played sideways: the town square fills the screen, a compact
+   phase strip sits top-left, contextual controls in a narrow right rail,
+   one action button bottom-right. Instructions live in the narrator's
+   voice — the screen shows state, not prose.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── Rotate shield: the game is landscape; portrait asks for a turn ────── */
+#rotate-shield{position:fixed;inset:0;z-index:300;display:none;place-content:center;text-align:center;background:radial-gradient(circle at 50% 40%,#131329,#04040c 75%)}
+#rotate-shield span{display:block;font-size:58px;color:var(--gold-2);animation:rotate-hint 2.2s ease-in-out infinite}
+#rotate-shield p{color:var(--muted);margin:12px 0 0;font-size:12px;font-weight:800;letter-spacing:.14em;text-transform:uppercase}
+@keyframes rotate-hint{0%,18%{transform:rotate(0)}52%,100%{transform:rotate(90deg)}}
+@media(orientation:portrait){body:not([data-phase="home"]) #rotate-shield{display:grid}}
+
+/* ── Animated character sheets ──────────────────────────────────────────
+   Each role ships one sheet: 4 frames × 5 rows (idle, walk, act, bound,
+   death). The row is fixed inline via background-position-y; loops drive
+   background-position-x through the frames with steps(). */
+.ss{display:block;width:calc(var(--base,min(20svh,160px))*var(--s,1));height:calc(var(--base,min(20svh,160px))*var(--s,1));
+  background-repeat:no-repeat;background-size:400% 500%;pointer-events:none;transform-origin:50% 100%;
+  filter:drop-shadow(0 7px 13px rgba(0,0,0,.85)) drop-shadow(0 0 24px rgba(0,0,0,.5));
+  animation:sprite-sway var(--sway,4s) ease-in-out var(--sd,0s) infinite alternate}
+.ss.loop{animation:ss-cycle var(--ssd,1.05s) steps(4,jump-none) var(--ssdel,0s) infinite,
+  sprite-sway var(--sway,4s) ease-in-out var(--sd,0s) infinite alternate}
+@keyframes ss-cycle{from{background-position-x:0%}to{background-position-x:100%}}
+.sprite.ghost .ss{opacity:.62;filter:grayscale(.4) brightness(1.14) sepia(.12) hue-rotate(180deg) saturate(.65) drop-shadow(0 0 20px rgba(150,180,255,.36));
+  animation:ghost-drift 5.2s ease-in-out var(--sd,0s) infinite alternate}
+.sprite.fresh .ss{opacity:.85;filter:grayscale(.2) brightness(1.05) drop-shadow(0 0 24px rgba(200,60,50,.5));animation:ghost-drift 5.2s ease-in-out infinite alternate}
+.sprite.bound .ss{filter:drop-shadow(0 7px 13px rgba(0,0,0,.85)) drop-shadow(0 0 22px rgba(255,110,160,.42))}
+.sprite.self:after{background:radial-gradient(ellipse,rgba(223,183,85,.42),transparent 70%)}
+/* newcomers walk in from the edge of the square */
+.sprite.arrive{animation:arrive-walk 1.9s cubic-bezier(.3,.55,.3,1) both}
+@keyframes arrive-walk{from{transform:translateX(calc(-50% - 58vw));opacity:0}12%{opacity:1}to{transform:translateX(-50%);opacity:1}}
+
+/* ── The square as selection surface ────────────────────────────────────
+   When a choice is open: legal targets stay lit, others dim, the chosen
+   step forward on a glowing ring, and every name plate shows. */
+.square.named-all .sprite-name{opacity:1;transform:translateX(-50%) translateY(0);font-size:11px;padding:4px 9px}
+.square{pointer-events:none}
+.square .sprite{pointer-events:auto}
+.square.selecting .sprite.off{opacity:.38;filter:saturate(.35)}
+.square.selecting .sprite.off .sprite-name{opacity:.4}
+.sprite.can-pick{cursor:pointer}
+.sprite.can-pick .ss{filter:drop-shadow(0 7px 13px rgba(0,0,0,.85)) drop-shadow(0 0 18px rgba(255,224,139,.22))}
+.sprite{transition:transform .25s ease}
+.sprite.picked{transform:translateX(-50%) scale(1.14);z-index:14!important}
+.sprite.picked .sprite-name{border-color:rgba(255,224,139,.85);color:#fff3c4}
+.pick-ring{position:absolute;left:50%;bottom:-9px;width:96%;height:22px;transform:translateX(-50%);border-radius:50%;pointer-events:none;
+  border:2px solid rgba(255,224,139,.75);box-shadow:0 0 18px rgba(255,224,139,.5),inset 0 0 14px rgba(255,224,139,.3);animation:ring-pulse 1.6s ease-in-out infinite}
+@keyframes ring-pulse{50%{box-shadow:0 0 30px rgba(255,224,139,.75),inset 0 0 20px rgba(255,224,139,.42);opacity:.75}}
+.sprite.forbidden{opacity:.25;filter:grayscale(.8)}
+.mark.paw{font-size:12px;letter-spacing:-2px;filter:drop-shadow(0 0 6px rgba(200,60,50,.8))}
+.mark.doom{color:#ff9c8a;text-shadow:0 0 10px rgba(220,70,50,.9),0 1px 3px #000;font-size:15px}
+
+/* ── The stage shell ────────────────────────────────────────────────────── */
+.screen.stage-screen{width:100%;max-width:none;padding:0;min-height:100svh}
+.phase-ribbon.strip{position:fixed;z-index:18;top:10px;left:calc(10px + env(safe-area-inset-left,0px));margin:0;text-align:left;padding:7px 14px 9px;border-radius:16px;max-width:44vw}
+.phase-ribbon.strip h1{font-size:clamp(17px,5svh,26px);margin:2px 0 0;line-height:1}
+.phase-ribbon.strip .moon-number{font-size:9px}
+.stage-rail{position:fixed;z-index:17;right:calc(10px + env(safe-area-inset-right,0px));top:62px;bottom:72px;width:min(224px,27vw);
+  display:flex;flex-direction:column;justify-content:center;gap:8px;overflow-y:auto;padding:2px;scrollbar-width:none}
+.stage-rail::-webkit-scrollbar{display:none}
+.stage-foot{position:fixed;z-index:17;right:calc(10px + env(safe-area-inset-right,0px));bottom:calc(8px + env(safe-area-inset-bottom,0px));width:min(224px,27vw);text-align:center}
+.stage-foot .btn{width:100%}
+.stage-foot .tap-hint{padding:12px 4px}
+.stage-foot .dock-note{padding-bottom:7px}
+.rail-chip{display:flex;align-items:center;gap:9px;padding:10px 12px;border:1px solid rgba(223,183,85,.3);border-radius:13px;background:rgba(8,7,14,.82);backdrop-filter:blur(8px)}
+.rail-chip b{font-size:17px;color:var(--gold-2)}
+.rail-chip strong{font-size:12px}
+.rail-chip.doomed{border-color:rgba(190,65,83,.45);background:rgba(50,12,20,.66)}
+.rail-chip.doomed b{color:#ff9c8a}
+.rail-chip.ghostly{border-color:rgba(150,180,255,.35)}.rail-chip.ghostly b{color:#c9d6ff}
+.rail-note{padding:9px 11px;border-radius:12px;background:rgba(6,5,12,.72);border:1px solid rgba(255,255,255,.08);color:var(--muted);font-size:10.5px;line-height:1.45}
+.rail-emblem{width:58px;height:58px;margin:0 auto;display:grid;place-content:center;border-radius:50%;font-size:26px;color:var(--gold-2);
+  border:1px solid rgba(223,183,85,.45);background:radial-gradient(circle,rgba(83,51,99,.85),rgba(9,8,15,.9) 70%);box-shadow:0 0 26px rgba(124,74,164,.3);animation:emblem-pulse 2.4s ease-in-out infinite}
+.rail-emblem.cupid{color:#ff8eb7;border-color:rgba(229,101,147,.5);box-shadow:0 0 26px rgba(255,89,154,.3)}
+.rail-emblem.seer{color:var(--violet)}
+@keyframes emblem-pulse{50%{transform:scale(.93);opacity:.8}}
+.heart-slots{display:flex;justify-content:center;gap:10px}
+.heart-slots b{width:40px;height:40px;display:grid;place-content:center;border-radius:50%;font-size:19px;color:rgba(255,142,183,.28);border:1px dashed rgba(229,101,147,.4);background:rgba(30,10,24,.5)}
+.heart-slots b.filled{color:#ff8eb7;border-style:solid;box-shadow:0 0 16px rgba(255,89,154,.4);animation:heartbeat 1.7s ease-in-out infinite}
+.rail-pack{margin:0;justify-content:flex-start}
+.rail-potion{min-height:0;padding:9px 12px;display:flex;align-items:center;gap:9px;text-align:left}
+.rail-potion b{font-size:19px;margin:0}
+.rail-potion strong{font-size:12px}
+.rail-potion span{font-size:9px;margin:0;color:var(--gold-2)}
+.stage-rail .btn.mini{width:100%}
+.stage-rail .whisper{margin:0}
+.selected-btn{border-color:var(--gold);box-shadow:inset 0 0 0 1px rgba(223,183,85,.5)}
+.moon-loader.mini{width:20px;height:20px;margin:0;padding:2px;flex:0 0 auto}
+
+/* ── The lobby: the village assembles ──────────────────────────────────── */
+.lobby-invite{position:fixed;z-index:16;left:calc(10px + env(safe-area-inset-left,0px));top:62px;width:min(212px,25vw);margin:0;padding:12px;text-align:center}
+.lobby-invite .room-code{font-size:clamp(21px,3.4vw,30px);letter-spacing:.13em;margin:0 0 7px}
+.lobby-invite .qr-wrap{width:min(118px,13vw);margin:0 auto 2px;padding:6px}
+.stage-rail .pack-grid{margin:0;gap:5px}
+.stage-rail .pack-option{min-height:60px;padding:6px 4px}
+.stage-rail .role-toggles{margin:0 -2px;padding:2px 2px 6px}
+.stage-rail .role-toggle{width:64px;flex:0 0 64px}
+.stage-rail .deck-line{font-size:10px;padding:8px 10px}
+.stage-rail .ledger{margin:0}
+.stage-rail .field .input{height:42px;padding:0 9px;font-size:12px}
+
+/* ── Dealing your one card ─────────────────────────────────────────────── */
+.deal-screen .deal-stage{min-height:100svh;display:grid;place-items:center;padding:12px}
+.deal-stage .flip-wrap{width:calc(min(66svh,430px)*2/3);margin:0}
+.deal-deck{position:fixed;left:max(24px,12vw);top:50%;width:calc(min(38svh,250px)*2/3);aspect-ratio:2/3;transform:translateY(-50%);z-index:1;pointer-events:none}
+.deal-deck i{position:absolute;inset:0;border-radius:13px;background:url("assets/card-back.webp") center/cover;border:1px solid rgba(255,223,135,.4);box-shadow:0 12px 28px rgba(0,0,0,.55)}
+.deal-deck i:nth-child(1){transform:rotate(-11deg) translate(-7%,1%)}
+.deal-deck i:nth-child(2){transform:rotate(-4deg)}
+.deal-deck i:nth-child(3){transform:rotate(4deg) translate(5%,-1%)}
+.deal-deck i:nth-child(4){transform:rotate(12deg) translate(11%,1%)}
+.flip-wrap.dealt{animation:deal-fly .9s cubic-bezier(.18,.72,.2,1) both}
+@keyframes deal-fly{from{transform:translate(-42vw,-3vh) rotate(-26deg) scale(.62);opacity:0}30%{opacity:1}}
+.flip-wrap:has(.flip-card.flipped){animation:card-arc .8s cubic-bezier(.3,.6,.3,1)}
+@keyframes card-arc{35%{transform:translateY(-22px) scale(1.05)}}
+.role-peek .flip-wrap{width:calc(min(62svh,400px)*2/3)}
+
+/* ── Eyes closed: the sleeping village ─────────────────────────────────── */
+.night-sleep{width:100%;max-width:none;padding:0;min-height:100svh}
+.sleep-scene{position:fixed;inset:0;display:grid;place-content:center;justify-items:center;text-align:center;background:radial-gradient(circle at 50% 30%,#0e1327,#04050e 72%)}
+.sleep-moon{width:min(26svh,150px);aspect-ratio:1;border-radius:50%;background:radial-gradient(circle at 38% 34%,#fff7d9,#e8d49a 52%,#8d7a4b);box-shadow:0 0 70px rgba(240,220,160,.32);animation:moon-breathe 5.5s ease-in-out infinite}
+@keyframes moon-breathe{50%{box-shadow:0 0 100px rgba(240,220,160,.48);transform:translateY(-5px)}}
+.sleep-stars{position:absolute;inset:0;pointer-events:none;background:
+  radial-gradient(1.6px 1.6px at 12% 24%,#fff9,transparent 60%),radial-gradient(1.4px 1.4px at 78% 16%,#fff8,transparent 60%),
+  radial-gradient(1.8px 1.8px at 32% 12%,#fff7,transparent 60%),radial-gradient(1.3px 1.3px at 64% 34%,#fff6,transparent 60%),
+  radial-gradient(1.5px 1.5px at 88% 42%,#fff7,transparent 60%),radial-gradient(1.4px 1.4px at 22% 52%,#fff5,transparent 60%),
+  radial-gradient(1.7px 1.7px at 48% 22%,#fff8,transparent 60%),radial-gradient(1.2px 1.2px at 8% 68%,#fff5,transparent 60%);
+  animation:star-twinkle 4.4s ease-in-out infinite}
+@keyframes star-twinkle{50%{opacity:.55}}
+.sleep-eyes{margin-top:18px;color:var(--violet);font-size:24px;letter-spacing:.32em;padding-left:.32em;opacity:.85}
+.sleep-line{color:var(--muted);font-size:12px;line-height:1.5;margin:12px auto 0;max-width:320px}
+
+/* ── The storyteller speaks ────────────────────────────────────────────── */
+.storyteller-stage{min-height:100svh;display:grid;place-content:center;justify-items:center;text-align:center;gap:14px;padding:16px}
+.storyteller-mark{width:min(34svh,180px);aspect-ratio:1;border-radius:50%;overflow:hidden;border:2px solid rgba(223,183,85,.55);
+  box-shadow:0 0 46px rgba(124,74,164,.4),0 18px 50px #000;animation:teller-sway 4.6s ease-in-out infinite}
+.storyteller-mark img{width:100%;height:100%;object-fit:cover;object-position:top}
+@keyframes teller-sway{50%{transform:translateY(-7px)}}
+.narrator-orb.mini{width:56px;height:56px;margin:0;border-width:1px}
+.narrator-orb.mini i{width:5px;height:18px}
+.narrator-orb.mini i:nth-child(2){height:30px}
+.storyteller-title{font-size:clamp(20px,7svh,32px);margin:0;background:linear-gradient(180deg,#fdf6e2,#e8cf92 78%,#c9a552);-webkit-background-clip:text;background-clip:text;color:transparent}
+
+/* ── Landscape geometry for the remaining classic screens ─────────────── */
+@media(orientation:landscape){
+  /* The crowd keeps clear of the side controls: the right rail band is
+     reserved on every stage screen, and the lobby also reserves the
+     invite panel's band on the left. */
+  body:not([data-phase="home"]) #village{left:calc(env(safe-area-inset-left,0px) + 8px);right:calc(env(safe-area-inset-right,0px) + min(246px,30vw))}
+  body[data-phase="lobby"] #village{left:calc(env(safe-area-inset-left,0px) + min(238px,27vw))}
+  .screen{width:min(100%,960px);padding-left:calc(16px + env(safe-area-inset-left,0px));padding-right:calc(16px + env(safe-area-inset-right,0px))}
+  .screen.stage-screen,.screen.night-sleep{width:100%;padding:0}
+  .home.home-clean{display:grid;grid-template-columns:.92fr 1.08fr;gap:18px;align-items:center;width:min(100%,880px);padding-top:var(--safe-top)}
+  .home-clean .brand-lockup img{width:min(100%,380px)}
+  .death-reveal{display:flex;flex-direction:row;flex-wrap:wrap;gap:16px;justify-content:center;align-items:center;margin:8vh 0 10px}
+  .death-hero{width:calc(min(56svh,330px)*2/3)}
+  .no-deaths{padding:16vh 16px 0}
+  .final-grid{grid-template-columns:repeat(auto-fill,minmax(88px,1fr))}
+  .game-over-hero{padding-top:6px}
+  .modal{max-height:92svh}
+  .flip-layout{display:block}
+}

@@ -1,5 +1,6 @@
 // The town square: every character stands in the middle of the screen as a
-// painted sprite. What each phone shows follows the game's knowledge rules —
+// painted, animated sprite. What each phone shows follows the game's
+// knowledge rules —
 //
 //   · your own sprite wears your true role
 //   · werewolves see their packmates as wolves
@@ -10,8 +11,10 @@
 //   · the Sheriff's badge shines above their head for everyone
 //   · everyone else simply looks like a villager
 //
-// Tap a character to reveal their name. Nothing in the crowd can leak a
-// living player's secret to anyone who shouldn't know it.
+// The square is also the game's selection surface: when a role must choose
+// someone, the caller passes a selection context and the crowd becomes
+// tappable — chosen characters step forward, illegal targets dim, and every
+// name plate shows so identical villagers can be told apart.
 
 const escText = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'}[char]));
 
@@ -22,12 +25,27 @@ function hashOf(text) {
   return Math.abs(hash);
 }
 
-// Roles without a sprite of their own stand as ordinary villagers.
+// Every playable role has an animated sheet (4 frames × 5 rows: idle, walk,
+// act, bound, death). The storyteller never stands in the square.
 const SPRITE_FOR = {
   villager: 'villager', werewolf: 'werewolf', seer: 'seer', witch: 'witch',
   cupid: 'cupid', 'little-girl': 'little-girl', thief: 'thief',
-  hunter: 'villager', sheriff: 'sheriff', storyteller: 'villager'
+  hunter: 'hunter', sheriff: 'sheriff', storyteller: 'villager'
 };
+
+export const SHEET_ROWS = {idle: 0, walk: 1, act: 2, bound: 3, death: 4};
+
+// One animated cell of a character sheet. Loops drive background-position-x
+// through the four frames with steps(); the row is fixed inline. Browsers
+// without steps(jump-none) simply hold the first frame.
+export function sheetSprite(roleId, {anim = 'idle', loop = true, speed = null, seedText = ''} = {}) {
+  const sheet = SPRITE_FOR[roleId] || 'villager';
+  const row = SHEET_ROWS[anim] ?? 0;
+  const h = hashOf(seedText + sheet);
+  const duration = speed || (anim === 'walk' ? 0.62 : 1.05 + (h % 40) / 100);
+  return `<span class="ss ${loop ? 'loop' : ''} ${anim === 'idle' ? 'breathe' : ''}"
+    style="background-image:url('assets/sprites/sheets/${sheet}.webp');background-position:0% ${row * 25}%;--ssd:${duration.toFixed(2)}s;--ssdel:${((h >> 3) % 90) / 100}s"></span>`;
+}
 
 // What this viewer knows this player to be.
 function knownRole(view, player) {
@@ -46,12 +64,16 @@ export function spriteFile(view, player) {
 
 function moodFor(view) {
   const phase = view.phase;
+  if (phase === 'lobby') return 'night';
   if (phase === 'sheriff-vote' || phase.startsWith('day-')) return 'day';
   if (phase === 'dawn') return 'dawn';
   return 'night';
 }
 
-export function townSquare(view) {
+// select: {ids: Set of tappable player ids, selected: [], disabled: Set,
+//          marks: {playerId: count}, victim: playerId|null, action: string}
+// arrivals: Set of player ids that should walk in from the square's edge.
+export function townSquare(view, {select = null, arrivals = null} = {}) {
   const players = Object.values(view.players || {}).filter(player => !player.storyteller);
   if (!players.length) return '';
   const me = view.me;
@@ -59,20 +81,20 @@ export function townSquare(view) {
   const freshIds = new Set((view.lastDeaths || []).map(death => death.id));
 
   // The crowd stands in staggered rows — nearer rows larger, every position
-  // stable for the whole game so ghosts remain where they fell. Layout and
-  // sprite size adapt to the head-count so a six-soul hamlet and a
-  // nineteen-soul town both fill the square.
+  // stable for the whole game so ghosts remain where they fell. Landscape
+  // spreads wide, so rows stay shallow even for a nineteen-soul town.
   const count = players.length;
-  const rowCount = count <= 9 ? 2 : count <= 13 ? 3 : 4;
+  const rowCount = count <= 10 ? 2 : 3;
   const rowSizes = [];
   for (let remaining = count, r = rowCount; r > 0; r -= 1) {
     const n = Math.ceil(remaining / r);
     rowSizes.push(n);
     remaining -= n;
   }
-  const bottoms = rowCount === 2 ? [0, 32] : rowCount === 3 ? [0, 24, 46] : [0, 18, 36, 53];
-  const scales = rowCount === 2 ? [1, .78] : rowCount === 3 ? [1, .8, .64] : [1, .82, .68, .56];
-  const base = count <= 6 ? 'min(19svh,172px)' : count <= 9 ? 'min(16.5svh,150px)' : count <= 13 ? 'min(14svh,128px)' : 'min(12svh,110px)';
+  const bottoms = rowCount === 2 ? [0, 34] : [0, 26, 48];
+  const scales = rowCount === 2 ? [1, .8] : [1, .82, .66];
+  const base = count <= 7 ? 'min(24svh,190px)' : count <= 12 ? 'min(21svh,164px)' : 'min(18svh,140px)';
+  const selecting = Boolean(select?.ids?.size);
   const sprites = players.map((player, index) => {
     let row = 0;                                       // 0 = front
     let col = index;
@@ -80,33 +102,46 @@ export function townSquare(view) {
     const inRow = rowSizes[row];
     const h = hashOf(seed + player.id);
     const t = inRow === 1 ? .5 : col / (inRow - 1);
-    const lo = inRow <= 3 ? 22 : inRow <= 4 ? 16 : 12;
-    const edge = row === 0 ? 22 : 14;
+    const lo = inRow <= 3 ? 20 : inRow <= 5 ? 14 : 9;
+    const edge = row === 0 ? 12 : 8;
     const x = Math.min(100 - edge, Math.max(edge, lo + t * (100 - lo * 2) + ((h % 5) - 2) + (row % 2 ? 2 : -2)));
     const bottom = bottoms[row];
     const scale = scales[row];
     const dead = !player.alive;
     const loverMark = Boolean(me?.loverId && me.alive && view.players[me.loverId]?.alive
       && (player.id === me.id || player.id === me.loverId));
-    const marks = player.sheriff || loverMark
-      ? `<span class="marks">${player.sheriff ? '<span class="mark badge" aria-label="Sheriff">✶</span>' : ''}${loverMark ? '<span class="mark heart" aria-hidden="true">♥</span>' : ''}</span>`
+    const pickable = selecting && player.alive && select.ids.has(player.id);
+    const picked = selecting && (select.selected || []).includes(player.id);
+    const forbidden = selecting && select.disabled?.has(player.id);
+    const markCount = select?.marks?.[player.id] || 0;
+    const isVictim = select?.victim === player.id;
+    const marks = player.sheriff || loverMark || markCount || isVictim
+      ? `<span class="marks">${player.sheriff ? '<span class="mark badge" aria-label="Sheriff">✶</span>' : ''}${loverMark ? '<span class="mark heart" aria-hidden="true">♥</span>' : ''}${markCount ? `<span class="mark paw" aria-label="${markCount} of the pack">${'🐾'.repeat(Math.min(3, markCount))}</span>` : ''}${isVictim ? '<span class="mark doom" aria-label="Tonight’s victim">☠</span>' : ''}</span>`
       : '';
+    const arriving = arrivals?.has(player.id) && player.alive;
     const classes = [
       'sprite',
       dead ? 'ghost' : '',
       dead && freshIds.has(player.id) ? 'fresh' : '',
       loverMark ? 'bound' : '',
-      player.id === me?.id ? 'self' : ''
+      player.id === me?.id ? 'self' : '',
+      pickable ? 'can-pick' : '',
+      picked ? 'picked' : '',
+      selecting && !pickable && !picked && player.alive ? 'off' : '',
+      forbidden ? 'forbidden' : '',
+      arriving ? 'arrive' : ''
     ].filter(Boolean).join(' ');
+    const anim = dead ? 'idle' : arriving ? 'walk' : 'idle';
     return `<button class="${classes}" data-sprite="${escText(player.id)}"
-      style="left:${x.toFixed(1)}%;bottom:${bottom}%;--s:${scale};--sway:${(3.4 + (h % 21) / 10).toFixed(1)}s;--sd:${((h >> 4) % 30) / 10}s;z-index:${10 - row}">
+      style="left:${x.toFixed(1)}%;bottom:${bottom}%;--s:${scale};--sway:${(3.4 + (h % 21) / 10).toFixed(1)}s;--sd:${((h >> 4) % 30) / 10}s;z-index:${10 - row}" ${forbidden ? 'disabled' : ''}>
       ${marks}
-      <img src="assets/sprites/${spriteFile(view, player)}.webp" alt="" draggable="false">
+      ${picked ? '<i class="pick-ring" aria-hidden="true"></i>' : ''}
+      ${sheetSprite(knownRole(view, player), {anim, loop: !dead, seedText: seed + player.id})}
       <span class="sprite-name">${escText(player.name)}</span>
     </button>`;
   }).join('');
 
-  return `<div class="square" data-mood="${moodFor(view)}" style="--base:${base}">${sprites}</div>`;
+  return `<div class="square ${selecting ? 'selecting named-all' : ''} ${!selecting && (select || view.phase === 'lobby') ? 'named-all' : ''}" data-mood="${moodFor(view)}" style="--base:${base}">${sprites}</div>`;
 }
 
 // One-line scene-setting for the dawn reveal, keyed to what actually
