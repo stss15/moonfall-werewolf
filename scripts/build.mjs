@@ -81,6 +81,13 @@ for (const name of assetNames) {
   const mime = extname(name) === '.webp' ? 'image/webp' : extname(name) === '.png' ? 'image/png' : 'application/octet-stream';
   single = single.replaceAll(`assets/${name}`, `data:${mime};base64,${bytes.toString('base64')}`);
 }
+// The single-file/worker edition ships no asset directory, so every
+// remaining relative asset reference (sprite sheets, backgrounds, props,
+// the narrator voice pack, ambience and role SFX) would otherwise 404 —
+// or worse, the worker answers them with HTML. Point them at the canonical
+// GitHub Pages deployment, which serves the same commit with CORS enabled.
+const CANONICAL_ORIGIN = 'https://stss15.github.io/moonfall-werewolf/';
+single = single.replace(/(["'(`])assets\//g, `$1${CANONICAL_ORIGIN}assets/`);
 await writeFile(join(dist, 'moonfall-werewolf.html'), single);
 
 // ChatGPT Sites expects a Workers-compatible entrypoint. The production worker

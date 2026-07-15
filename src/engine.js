@@ -572,7 +572,7 @@ export function castVote(state, actorId, targetId) {
   if (!['day-vote', 'sheriff-vote'].includes(state.phase)) return {ok: false, error: 'No vote is open.'};
   if (!state.players[actorId]?.alive || actorId === state.storytellerId) return {ok: false, error: 'Only living characters may vote.'};
   if (!state.players[targetId]?.alive || targetId === state.storytellerId) return {ok: false, error: 'That player cannot receive this vote.'};
-  if (state.phase === 'day-vote' && state.lovers.includes(actorId) && state.lovers.includes(targetId)) {
+  if (state.phase === 'day-vote' && actorId !== targetId && state.lovers.includes(actorId) && state.lovers.includes(targetId)) {
     return {ok: false, error: 'Lovers may never vote against one another.'};
   }
   if (state.phase === 'sheriff-vote' && state.electionCandidates.length && !state.electionCandidates.includes(targetId)) {

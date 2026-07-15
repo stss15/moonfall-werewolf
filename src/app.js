@@ -1457,7 +1457,7 @@ function runTestAgents() {
       if (target) { command = 'player:wolf-vote'; payload = {target}; }
     } else if (action.type === 'witch') { command = 'player:witch-submit'; payload = {heal: false, poisonTarget: null}; }
     else if (action.type === 'discussion' && !action.ready) { command = 'player:day-ready'; payload = {ready: true}; }
-    else if (action.type === 'vote') { command = 'player:cast-vote'; payload = {target: action.candidates.find(id => id !== botId)}; }
+    else if (action.type === 'vote') { command = 'player:cast-vote'; payload = {target: action.candidates.find(id => id !== botId && id !== view.me.loverId)}; }
     else if (action.type === 'hunter' || action.type === 'sheriff-successor') { command = 'player:resolve-pending'; payload = {target: action.candidates.find(id => id !== botId) || null}; }
     if (command) {
       setTimeout(() => {
@@ -1581,6 +1581,7 @@ function leaveToHome() {
 
   lastWakePulseKey = null;
   seenInSquare.clear();
+  squareShownFor = null;
   clearTimeout(arrivalTimer);
   narratorAutomationGeneration += 1;
   narratorAutomationKey = null;
@@ -2183,6 +2184,10 @@ function squareVisible(view) {
 // Track who has already stood in the lobby square, so newcomers walk in.
 const seenInSquare = new Set();
 let arrivalTimer = null;
+// The square's entrance fade plays only when the crowd first appears; while
+// the same phase merely re-renders (a vote lands, a mark changes) the crowd
+// must stay solid on screen instead of blinking back in from nothing.
+let squareShownFor = null;
 
 function updateVillageLayer() {
   if (!villageRoot) return;
@@ -2199,7 +2204,10 @@ function updateVillageLayer() {
         arrivalTimer = setTimeout(() => { lastVillageHtml = null; updateVillageLayer(); }, 2100);
       }
     }
-    html = townSquare(view, {select, arrivals});
+    html = townSquare(view, {select, arrivals, settled: squareShownFor === view.phase});
+    squareShownFor = view.phase;
+  } else {
+    squareShownFor = null;
   }
   if (html === lastVillageHtml) return;
   lastVillageHtml = html;
@@ -2275,7 +2283,9 @@ function inviteQrSvg() {
 }
 
 async function handleAction(action, element) {
-  const id = element.dataset.id;
+  // Square taps arrive on .sprite buttons, which carry the player id in
+  // data-sprite; every other actionable element uses data-id.
+  const id = element.dataset.id ?? element.dataset.sprite;
   if (action === 'home-tab') {
     sound('tap');
     ui.homeTab = element.dataset.tab;
@@ -2346,7 +2356,6 @@ async function handleAction(action, element) {
     const serial = currentView?.phaseSerial;
     ui.sceneBusy = 'cupid';
     ui.cupidLoosed = true;
-    playSceneAction('cupid-loose', null, 1600);
     queueRender();
     await sleep(1450);
     if (currentView?.phaseSerial !== serial || currentView?.phase !== 'setup-cupid') return;
