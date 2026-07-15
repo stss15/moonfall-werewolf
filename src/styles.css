@@ -242,14 +242,20 @@ h1,h2,h3,.display{font-family:Georgia,"Times New Roman",serif}
 .phase-ribbon .moon-number{text-shadow:0 1px 6px rgba(0,0,0,.9)}
 .tap-hint{text-shadow:0 2px 8px rgba(0,0,0,.95)}
 .sleep-card h2,.sleep-card p,.look-up h2,.look-up p{text-shadow:0 2px 10px rgba(0,0,0,.9)}
-/* Fate card faces for the arrow reveal (everyone flips together). */
-.lover-face{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;gap:9px;padding:9%;text-align:center;background:linear-gradient(165deg,#221228 0%,#0c0a13 70%)}
-.lover-face b{font-size:52px;line-height:1;color:var(--violet);filter:drop-shadow(0 0 14px rgba(160,120,220,.4))}
-.lover-face.chosen b{color:#ff8eb7;filter:drop-shadow(0 0 18px rgba(255,100,160,.55));animation:heartbeat 1.7s ease-in-out infinite}
-.lover-face strong{font-family:Georgia,serif;font-size:24px;color:var(--gold-2)}
-.lover-face em{font-family:Georgia,serif;font-style:normal;font-size:30px;color:#ffc2d6}
-.lover-face span{color:var(--muted);font-size:12px;line-height:1.5}
+/* Fate card faces for the arrow reveal (everyone flips together). All type
+   scales with the viewport so the smaller landscape card never shouts. */
+.lover-face{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;gap:min(1.8svh,9px);padding:9%;text-align:center;background:linear-gradient(165deg,#221228 0%,#0c0a13 70%);overflow:hidden}
+.lover-face b{font-size:clamp(22px,8svh,44px);line-height:1;color:var(--violet);filter:drop-shadow(0 0 14px rgba(160,120,220,.4))}
+.lover-face.chosen b{color:#ff8eb7;filter:drop-shadow(0 0 18px rgba(255,100,160,.55));animation:heartbeat 1.7s ease-in-out 1.75s infinite}
+.lover-face strong{font-family:Georgia,serif;font-size:clamp(12px,3.8svh,21px);line-height:1.15;color:var(--gold-2)}
+.lover-face em{font-family:Georgia,serif;font-style:normal;font-size:clamp(14px,4.6svh,26px);line-height:1.1;color:#ffc2d6}
+.lover-face span{color:var(--muted);font-size:clamp(8px,2.4svh,11px);line-height:1.45}
 .lover-face.chosen{background:linear-gradient(165deg,#341328 0%,#12060f 70%)}
+/* Cupid's arrow strikes the turned card — private to this card face alone. */
+.lover-arrow-hit{position:absolute;left:6%;top:10%;width:74%;opacity:0;transform:rotate(-18deg);filter:drop-shadow(0 0 10px rgba(255,95,160,.8));animation:arrow-strike 2s cubic-bezier(.2,.8,.25,1) .9s both;pointer-events:none}
+@keyframes arrow-strike{0%{opacity:0;transform:translate(-130%,-50%) rotate(-26deg)}22%{opacity:1}40%{transform:translate(0,0) rotate(-17deg)}48%{transform:translate(-2%,1%) rotate(-19deg)}72%{opacity:.85;transform:translate(0,0) rotate(-18deg)}100%{opacity:0;transform:translate(5%,2%) rotate(-18deg)}}
+.lover-face.chosen:after{content:"";position:absolute;inset:0;background:radial-gradient(circle at 46% 34%,rgba(255,120,170,.6),transparent 58%);opacity:0;animation:arrow-flash .8s ease 1.5s both;pointer-events:none}
+@keyframes arrow-flash{25%{opacity:1}100%{opacity:0}}
 /* ── Phase glow: the screen itself breathes the active colour ───────────
    No second moon fights the artwork: a soft pulsing aura around the screen
    edges says whose hour it is — blood for the pack, violet for the Seer,
@@ -293,9 +299,10 @@ body[data-phase="night-witch"]:after{background:radial-gradient(circle at 50% 6%
 /* the marks above heads */
 .marks{position:absolute;left:50%;bottom:calc(100% - 16px);transform:translateX(-50%);display:flex;gap:7px;pointer-events:none;z-index:3}
 .mark{font-size:17px;line-height:1}
-.mark.badge{color:#ffd964;text-shadow:0 0 9px rgba(255,205,80,.85),0 1px 3px #000;animation:badge-glint 3s ease-in-out infinite}
+/* the Sheriff's actual badge floats above their head */
+.sprite .mark.badge{width:min(8.5svh,40px);height:auto;max-width:none;filter:drop-shadow(0 1px 3px #000) drop-shadow(0 0 9px rgba(255,205,80,.95));animation:badge-shine 3s ease-in-out infinite}
+@keyframes badge-shine{50%{filter:drop-shadow(0 1px 3px #000) drop-shadow(0 0 18px rgba(255,215,100,1))}}
 @keyframes badge-glint{50%{text-shadow:0 0 16px rgba(255,215,100,1),0 1px 3px #000}}
-.mark.heart{color:#ff7fa8;text-shadow:0 0 10px rgba(255,110,160,.9),0 1px 3px #000;animation:heartbeat 1.7s ease-in-out infinite}
 .sprite.bound img{filter:drop-shadow(0 7px 13px rgba(0,0,0,.85)) drop-shadow(0 0 22px rgba(255,110,160,.42))}
 /* ghosts stay where they fell, their true card revealed */
 .sprite.ghost img{opacity:.66;filter:grayscale(.35) brightness(1.12) sepia(.14) hue-rotate(180deg) saturate(.7) drop-shadow(0 0 20px rgba(150,180,255,.36));animation:ghost-drift 5.2s ease-in-out var(--sd,0s) infinite alternate}
@@ -504,10 +511,10 @@ body[data-phase="night-witch"]:after{background:radial-gradient(circle at 50% 6%
   box-shadow:0 0 46px rgba(124,74,164,.4),0 18px 50px #000;animation:teller-sway 4.6s ease-in-out infinite}
 .storyteller-mark img{width:100%;height:100%;object-fit:cover;object-position:top}
 @keyframes teller-sway{50%{transform:translateY(-7px)}}
-.narrator-orb.mini{width:56px;height:56px;margin:0;border-width:1px}
-.narrator-orb.mini i{width:5px;height:18px}
-.narrator-orb.mini i:nth-child(2){height:30px}
-.storyteller-title{font-size:clamp(20px,7svh,32px);margin:0;background:linear-gradient(180deg,#fdf6e2,#e8cf92 78%,#c9a552);-webkit-background-clip:text;background-clip:text;color:transparent}
+/* Speech is shown, not written: the portrait breathes light while the
+   narrator's recorded voice carries the story. */
+.storyteller-mark.speaking{animation:teller-sway 4.6s ease-in-out infinite,teller-glow 2.2s ease-in-out infinite}
+@keyframes teller-glow{50%{box-shadow:0 0 85px rgba(194,154,239,.66),0 18px 50px #000;border-color:rgba(255,231,166,.8)}}
 
 /* ── Local action effects ────────────────────────────────────────────────
    These never leave the acting phone. They make a tap feel physical while
@@ -592,7 +599,7 @@ body[data-phase="night-witch"]:after{background:radial-gradient(circle at 50% 6%
 .successor-badge{width:min(110px,68%);margin:0 auto;filter:drop-shadow(0 0 20px rgba(255,210,95,.48));animation:badge-glint 2.1s ease-in-out infinite}.hunter-note{border-color:rgba(170,180,185,.22);color:#d4d8da}
 
 /* ── Long-hunt scoring and the final podium ───────────────────────────── */
-.round-results{display:grid;gap:14px}.scoreboard{border:1px solid rgba(223,183,85,.38);border-radius:20px;background:rgba(8,7,12,.88);box-shadow:0 18px 55px rgba(0,0,0,.58);overflow:hidden;backdrop-filter:blur(10px)}.score-head{display:flex;justify-content:space-between;align-items:center;padding:11px 14px;border-bottom:1px solid rgba(223,183,85,.18);color:var(--gold-2);font-family:Georgia,serif}.score-head b{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}.score-rows{display:grid}.score-row{display:grid;grid-template-columns:30px minmax(0,1fr) 44px 42px;align-items:center;gap:7px;padding:8px 11px;border-bottom:1px solid rgba(255,255,255,.06)}.score-row:last-child{border-bottom:0}.score-rank{width:25px;height:25px;display:grid;place-items:center;border-radius:50%;background:rgba(223,183,85,.12);color:var(--gold-2);font-size:10px}.score-name strong,.score-name small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.score-name strong{font-size:12px}.score-name small{font-size:8px;color:var(--muted);margin-top:2px}.score-delta{text-align:right;font-weight:900;font-size:11px}.score-delta.up{color:#82e8ad}.score-delta.down{color:#ef8791}.score-total{text-align:right;font-family:Georgia,serif;font-size:21px;color:var(--gold-2)}.session-actions{display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px}.session-actions .btn{padding-left:8px;padding-right:8px;font-size:10px}.game-over-screen,.session-over-screen{width:min(100%,1040px)}.game-over-screen .game-over-hero{padding-top:2px}.game-over-screen .game-over-hero .victory-moon{font-size:48px}.game-over-screen .game-over-hero h1{font-size:clamp(28px,7svh,44px);margin:5px 0}.game-over-screen .game-over-hero p{font-size:12px;margin-bottom:8px}.podium{display:flex;align-items:end;justify-content:center;gap:10px;margin:4px auto 16px;height:150px}.podium-place{width:min(27vw,170px);display:grid;justify-items:center;align-content:start;gap:4px;padding:10px 7px;border:1px solid rgba(223,183,85,.35);border-radius:16px 16px 4px 4px;background:linear-gradient(180deg,rgba(89,60,110,.82),rgba(15,11,20,.92));box-shadow:0 16px 35px #000}.podium-place.place-1{height:145px;order:2;border-color:rgba(255,225,135,.75)}.podium-place.place-2{height:112px;order:1}.podium-place.place-3{height:88px;order:3}.podium-place span{width:27px;height:27px;display:grid;place-items:center;border-radius:50%;background:var(--gold);color:#211509;font-weight:900}.podium-place strong{font-family:Georgia,serif;text-align:center}.podium-place b{color:var(--gold-2);font-size:22px}
+.round-results{display:grid;gap:14px}.scoreboard{border:1px solid rgba(223,183,85,.38);border-radius:20px;background:rgba(8,7,12,.88);box-shadow:0 18px 55px rgba(0,0,0,.58);overflow:hidden;backdrop-filter:blur(10px)}.score-head{display:flex;justify-content:space-between;align-items:center;padding:11px 14px;border-bottom:1px solid rgba(223,183,85,.18);color:var(--gold-2);font-family:Georgia,serif}.score-head b{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}.score-rows{display:grid}.score-row{display:grid;grid-template-columns:30px minmax(0,1fr) 44px 42px;align-items:center;gap:7px;padding:8px 11px;border-bottom:1px solid rgba(255,255,255,.06)}.score-row:last-child{border-bottom:0}.score-rank{width:25px;height:25px;display:grid;place-items:center;border-radius:50%;background:rgba(223,183,85,.12);color:var(--gold-2);font-size:10px}.score-name strong,.score-name small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.score-name strong{font-size:12px}.score-name small{font-size:8px;color:var(--muted);margin-top:2px}.score-delta{text-align:right;font-weight:900;font-size:11px}.score-delta.up{color:#82e8ad}.score-delta.down{color:#ef8791}.score-total{text-align:right;font-family:Georgia,serif;font-size:21px;color:var(--gold-2)}.session-actions{display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px}.session-actions.solo{grid-template-columns:1fr}.session-actions .btn{padding-left:8px;padding-right:8px;font-size:10px}.podium{display:flex;align-items:end;justify-content:center;gap:10px;margin:0 auto}.podium-place{width:min(27vw,170px);display:grid;justify-items:center;align-content:start;gap:4px;padding:10px 7px;border:1px solid rgba(223,183,85,.35);border-radius:16px 16px 4px 4px;background:linear-gradient(180deg,rgba(89,60,110,.82),rgba(15,11,20,.92));box-shadow:0 16px 35px #000}.podium-place.place-1{height:min(22svh,130px);order:2;border-color:rgba(255,225,135,.75)}.podium-place.place-2{height:min(17svh,102px);order:1}.podium-place.place-3{height:min(14svh,82px);order:3}.podium-place span{width:27px;height:27px;display:grid;place-items:center;border-radius:50%;background:var(--gold);color:#211509;font-weight:900}.podium-place strong{font-family:Georgia,serif;text-align:center}.podium-place b{color:var(--gold-2);font-size:22px}
 
 /* ── Landscape geometry for the remaining classic screens ─────────────── */
 @media(orientation:landscape){
@@ -608,11 +615,6 @@ body[data-phase="night-witch"]:after{background:radial-gradient(circle at 50% 6%
   .death-reveal{display:flex;flex-direction:row;flex-wrap:wrap;gap:16px;justify-content:center;align-items:center;margin:8vh 0 10px}
   .death-hero{width:calc(min(56svh,330px)*2/3)}
   .no-deaths{padding:16vh 16px 0}
-  .final-grid{grid-template-columns:repeat(auto-fill,minmax(88px,1fr))}
-  .game-over-hero{padding-top:6px}
-  .round-results{grid-template-columns:minmax(0,1.25fr) minmax(320px,.75fr);align-items:start;max-width:980px;margin:0 auto}
-  .game-over-screen .final-grid{grid-template-columns:repeat(auto-fill,minmax(72px,1fr));max-height:43svh;overflow:auto;padding-right:3px}
-  .session-over-screen .scoreboard{width:min(760px,90vw);margin:0 auto}
   .modal{max-height:92svh}
   .flip-layout{display:block}
   /* Card-flip flow screens were laid out for portrait; sideways they must
@@ -628,3 +630,36 @@ body[data-phase="night-witch"]:after{background:radial-gradient(circle at 50% 6%
   .cinema-body.disguise,.cinema-claws,.cinema-poison,.cinema-heart,.cinema-bolt,.cinema-votes,.cinema-fate{display:none}
   .cinema-body.truth,.cinema-reveal,.cinema-ring{opacity:1;animation:none;transform:none;filter:none}
 }
+
+/* ── The finale: verdict, village and scores on one fixed stage ──────────
+   Game-over and session-over fill exactly one viewport: the verdict and
+   controls (and the podium) on the left, the revealed village and the
+   scoreboard on the right. Everything is sized in viewport units so nothing
+   is ever cut off and no screen needs scrolling; only villages far larger
+   than the space can ever pan their card grid or score list internally. */
+.finale-screen{width:100%;max-width:none;height:100svh;height:100dvh;min-height:0;overflow:hidden;display:grid;
+  grid-template-columns:minmax(0,.88fr) minmax(0,1.12fr);gap:16px;align-items:center;
+  padding:calc(var(--safe-top) + 6px) calc(16px + env(safe-area-inset-right,0px)) calc(env(safe-area-inset-bottom,0px) + 12px) calc(16px + env(safe-area-inset-left,0px))}
+.finale-side{display:grid;gap:min(2.2svh,13px);justify-items:center;min-width:0}
+.finale-main{display:grid;grid-template-rows:auto minmax(0,1fr);gap:10px;align-content:center;height:100%;min-height:0;min-width:0}
+.session-over-screen .finale-main{grid-template-rows:minmax(0,1fr)}
+.finale-screen .game-over-hero{padding:0;text-align:center}
+.finale-screen .game-over-hero .victory-moon{font-size:min(9svh,52px);margin:0}
+.finale-screen .game-over-hero h1{font-size:clamp(20px,8.4svh,42px);line-height:.95;margin:min(1.4svh,8px) 0}
+.finale-screen .game-over-hero p{font-size:clamp(10px,3svh,14px);line-height:1.45;margin:0}
+.finale-screen .session-actions{width:100%}
+.finale-screen .session-actions .btn{min-height:44px}
+.finale-screen .final-grid{grid-template-columns:repeat(auto-fill,minmax(min(11svh,66px),1fr));gap:6px;max-height:36svh;overflow-y:auto;padding:2px;scrollbar-width:none}
+.finale-screen .final-grid::-webkit-scrollbar,.finale-screen .scoreboard::-webkit-scrollbar{display:none}
+.finale-screen .scoreboard{min-height:0;max-height:100%;overflow-y:auto;scrollbar-width:none}
+.finale-screen .score-row{padding:5px 10px}
+.finale-screen .score-total{font-size:17px}
+.finale-screen .podium{width:100%;align-items:end}
+/* Podium steps come from bottom padding, never fixed heights, so the rank,
+   name and score are always fully visible. */
+.finale-screen .podium-place{width:min(30%,150px);height:auto;min-height:0;padding:9px 6px 8px}
+.finale-screen .podium-place.place-1{padding-bottom:min(6svh,34px)}
+.finale-screen .podium-place.place-2{padding-bottom:min(3svh,18px)}
+.finale-screen .podium-place b{font-size:19px}
+/* Keep the scoreboard's header clear of the floating connection pill. */
+.session-over-screen.finale-screen{padding-top:calc(var(--safe-top) + 52px)}

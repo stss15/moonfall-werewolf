@@ -67,11 +67,14 @@ test('a selection context makes legal targets tappable and dims the rest', () =>
   assert.ok((square.match(/sprite [^"]*\boff\b/g) || []).length >= 3, 'non-targets stand dimmed');
 });
 
-test('the heart hangs only over the lovers, and only on their own phones', () => {
+test('lovers stand in their chained bound pose, and only on their own phones', () => {
   const lover = fakeView({me: {id: 'ada', alive: true, role: 'villager', loverId: 'cleo', visions: null, pack: null}});
-  assert.equal((townSquare(lover).match(/mark heart/g) || []).length, 2, 'both bound souls are marked for the lover');
+  const square = townSquare(lover);
+  assert.equal((square.match(/background-position:0% 75%/g) || []).length, 2, 'both bound souls wear the chained sheet row');
+  assert.doesNotMatch(square, /mark heart/, 'no floating heart betrays the pose');
   const stranger = fakeView({me: {id: 'ben', alive: true, role: 'villager', loverId: null, visions: null, pack: null}});
-  assert.doesNotMatch(townSquare(stranger), /mark heart/);
+  const strangerSquare = townSquare(stranger);
+  assert.doesNotMatch(strangerSquare, /background-position:0% 75%/, 'strangers see ordinary standing villagers');
 });
 
 test('the Sheriff’s badge is public, and tapping is wired for every sprite', () => {
@@ -79,6 +82,7 @@ test('the Sheriff’s badge is public, and tapping is wired for every sprite', (
   view.players.drew.sheriff = true;
   const square = townSquare(view);
   assert.equal((square.match(/mark badge/g) || []).length, 1);
+  assert.match(square, /badge\.png/, 'the Sheriff wears the real badge, not a glyph');
   assert.equal((square.match(/data-sprite=/g) || []).length, 6);
   assert.equal((square.match(/data-id=/g) || []).length, 6, 'every sprite carries the id the action handler reads');
   assert.match(square, /sprite-name/, 'names wait behind a tap');
