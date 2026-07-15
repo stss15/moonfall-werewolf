@@ -7,8 +7,8 @@
 //   · the Seer sees the true form of everyone her visions have touched
 //   · the dead become ghosts, staying where they stood, their true identity
 //     revealed to all once the village has seen their card
-//   · lovers see a heart above both bound souls (their phones only)
-//   · the Sheriff's badge shines above their head for everyone
+//   · lovers see both bound souls in their chained pose (their phones only)
+//   · the Sheriff's badge hangs above their head for everyone
 //   · everyone else simply looks like a villager
 //
 // The square is also the game's selection surface: when a role must choose
@@ -45,7 +45,8 @@ export function sheetSprite(roleId, {anim = 'idle', loop = true, speed = null, s
   const row = SHEET_ROWS[anim] ?? 0;
   const h = hashOf(seedText + sheet);
   const duration = speed || (anim === 'walk' ? 0.62 : 1.05 + (h % 40) / 100);
-  const playback = anim === 'idle' ? '' : loop ? 'loop' : 'oneshot';
+  // 'bound' is a standing pose too (the chained lovers): hold the frame.
+  const playback = anim === 'idle' || anim === 'bound' ? '' : loop ? 'loop' : 'oneshot';
   return `<span class="ss ${playback} ${anim === 'idle' ? 'breathe' : ''}"
     style="background-image:url('assets/sprites/sheets/${sheet}.webp');background-position:0% ${row * 25}%;--ssd:${duration.toFixed(2)}s;--ssdel:${((h >> 3) % 90) / 100}s"></span>`;
 }
@@ -120,8 +121,10 @@ export function townSquare(view, {select = null, arrivals = null} = {}) {
     const forbidden = selecting && select.disabled?.has(player.id);
     const markCount = select?.marks?.[player.id] || 0;
     const isVictim = select?.victim === player.id;
-    const marks = player.sheriff || loverMark || markCount || isVictim
-      ? `<span class="marks">${player.sheriff ? '<span class="mark badge" aria-label="Sheriff">✶</span>' : ''}${loverMark ? '<span class="mark heart" aria-hidden="true">♥</span>' : ''}${markCount ? `<span class="mark paw" aria-label="${markCount} of the pack">${'🐾'.repeat(Math.min(3, markCount))}</span>` : ''}${isVictim ? '<span class="mark doom" aria-label="Tonight’s victim">☠</span>' : ''}</span>`
+    // Lovers wear their bound sprite (the chained pose) instead of a floating
+    // heart; the Sheriff's real badge hangs above their head for everyone.
+    const marks = player.sheriff || markCount || isVictim
+      ? `<span class="marks">${player.sheriff ? '<img class="mark badge" src="assets/sprites/props/badge.png" alt="Sheriff">' : ''}${markCount ? `<span class="mark paw" aria-label="${markCount} of the pack">${'🐾'.repeat(Math.min(3, markCount))}</span>` : ''}${isVictim ? '<span class="mark doom" aria-label="Tonight’s victim">☠</span>' : ''}</span>`
       : '';
     const arriving = arrivals?.has(player.id) && player.alive;
     const classes = [
@@ -136,7 +139,7 @@ export function townSquare(view, {select = null, arrivals = null} = {}) {
       forbidden ? 'forbidden' : '',
       arriving ? 'arrive' : ''
     ].filter(Boolean).join(' ');
-    const anim = dead ? 'idle' : arriving ? 'walk' : 'idle';
+    const anim = dead ? 'idle' : arriving ? 'walk' : loverMark ? 'bound' : 'idle';
     return `<button class="${classes}" data-sprite="${escText(player.id)}" data-id="${escText(player.id)}"
       style="left:${x.toFixed(1)}%;bottom:${bottom}%;--s:${scale};--sway:${(3.4 + (h % 21) / 10).toFixed(1)}s;--sd:${((h >> 4) % 30) / 10}s;--fresh:${freshOrder.get(player.id) || 0};z-index:${10 - row}" ${forbidden ? 'disabled' : ''}>
       ${marks}

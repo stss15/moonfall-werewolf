@@ -1660,14 +1660,13 @@ function stageScreen(view, {title = undefined, rail = '', foot = '', extra = '',
   </section>`;
 }
 
-// The narrator made visible: the storyteller character speaks, the village
-// listens. Replaces the abstract orb.
-function narratorStage(view, title) {
+// The narrator made visible: the storyteller character speaks and the village
+// listens. No orb, no caption — the pulsing glow around the portrait is the
+// speech; the spoken words carry the story.
+function narratorStage(view) {
   return `<section class="screen stage-screen">${gameHeader(view)}
     <div class="storyteller-stage">
-      <div class="storyteller-mark"><img src="assets/storyteller.webp" alt="The storyteller"></div>
-      <div class="narrator-orb mini"><i></i><i></i><i></i></div>
-      <h1 class="storyteller-title">${esc(title)}</h1>
+      <div class="storyteller-mark speaking"><img src="assets/storyteller.webp" alt="The storyteller speaks"></div>
     </div>
   </section>`;
 }
@@ -1816,7 +1815,7 @@ function renderRoleReveal(view) {
   const seenCount = Object.values(view.players).filter(player => player.ready).length;
   const total = Object.keys(view.players).length;
   if (!view.phaseReady) {
-    app.innerHTML = narratorStage(view, 'The cards are dealt');
+    app.innerHTML = narratorStage(view);
     return;
   }
   if (!view.me.seenRole) {
@@ -1875,10 +1874,12 @@ function renderCupid(view, action) {
 function renderLover(view, action) {
   const partner = action.partnerId ? view.players[action.partnerId] : null;
   const flipped = ui.loverFlipped;
+  // A chosen heart sees Cupid's arrow strike the card itself — the animation
+  // lives on the card face, so it stays exactly as private as the card.
   const front = action.chosen
-    ? `<span class="lover-face chosen"><b>♥</b><strong>Your heart is bound</strong><em>${esc(partner?.name || 'A hidden soul')}</em><span>You live and die together. Tell no one — not even a glance.</span></span>`
+    ? `<span class="lover-face chosen"><img class="lover-arrow-hit" src="assets/sprites/props/arrow.png" alt=""><b>♥</b><strong>Your heart is bound</strong><em>${esc(partner?.name || 'A hidden soul')}</em><span>You live and die together. Tell no one — not even a glance.</span></span>`
     : `<span class="lover-face"><b>☾</b><strong>The arrow passed you by</strong><span>Your heart remains your own. Reveal nothing.</span></span>`;
-  app.innerHTML = `<section class="screen awake-screen awake-lovers ${flipped ? 'has-dock' : ''}">${gameHeader(view)}${phaseHeader(view)}
+  app.innerHTML = `<section class="screen awake-screen awake-lovers centered ${flipped ? 'has-dock' : ''}">${gameHeader(view)}
     <div class="flip-wrap">
       <button class="flip-card ${flipped ? 'flipped' : ''}" data-action="flip-lover" aria-label="${flipped ? 'Your fate card' : 'Turn over your fate card'}">
         <span class="card-face back"><img src="assets/card-back.webp" alt="Face-down fate card"></span>
@@ -2092,30 +2093,40 @@ function renderGameOver(view) {
     : winner.team === 'village' ? 'Morning holds. One by one, the boarded windows will open again.'
     : winner.team === 'lovers' ? 'Two lit windows remain, facing one another across the empty lane.'
     : 'The village stands silent beneath the moon.';
-  app.innerHTML = `<section class="screen game-over-screen ${view.coordinator ? 'has-dock' : ''}">${gameHeader(view)}<div class="game-over-hero"><div class="victory-moon">${symbol}</div><div class="eyebrow">Round ${view.session?.round || 1} complete</div><h1>${esc(winner.title)}</h1><p>${esc(winner.text || epilogue)}</p></div>
-    <div class="round-results"><div class="final-grid">${Object.values(view.players).map(player => {
-      const roleId = player.storyteller ? 'storyteller' : player.role;
-      const role = ROLES[roleId] || ROLES.villager;
-      return `<div class="final-card ${player.alive ? '' : 'dead'}"><img src="${role.image}" alt="${esc(role.name)}"><div class="label"><strong>${esc(player.name)}</strong><span>${esc(role.name)}${player.sheriff ? ' · Sheriff' : ''}</span></div></div>`;
-    }).join('')}</div>${scoreboardMarkup(view)}</div>
-    ${view.coordinator ? dock('<div class="session-actions"><button class="btn" data-action="next-round">Next hunt</button><button class="btn secondary" data-action="change-deck">Change deck</button><button class="btn secondary" data-action="end-session">End table</button></div>') : ''}
+  // The finale is a fixed two-panel stage: verdict and controls on the left,
+  // the revealed village and scoreboard on the right. Everything is sized in
+  // viewport units so the whole screen fits without scrolling.
+  app.innerHTML = `<section class="screen game-over-screen finale-screen">${gameHeader(view)}
+    <div class="finale-side">
+      <div class="game-over-hero"><div class="victory-moon">${symbol}</div><h1>${esc(winner.title)}</h1><p>${esc(winner.text || epilogue)}</p></div>
+      ${view.coordinator ? '<div class="session-actions"><button class="btn" data-action="next-round">Next hunt</button><button class="btn secondary" data-action="change-deck">Change deck</button><button class="btn secondary" data-action="end-session">End table</button></div>' : ''}
+    </div>
+    <div class="finale-main">
+      <div class="final-grid">${Object.values(view.players).map(player => {
+        const roleId = player.storyteller ? 'storyteller' : player.role;
+        const role = ROLES[roleId] || ROLES.villager;
+        return `<div class="final-card ${player.alive ? '' : 'dead'}"><img src="${role.image}" alt="${esc(role.name)}"><div class="label"><strong>${esc(player.name)}</strong><span>${esc(role.name)}${player.sheriff ? ' · Sheriff' : ''}</span></div></div>`;
+      }).join('')}</div>
+      ${scoreboardMarkup(view)}
+    </div>
   </section>`;
 }
 
 function renderSessionOver(view) {
   const scores = Object.values(view.session?.scores || {}).sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
   const podium = scores.slice(0, 3);
-  app.innerHTML = `<section class="screen session-over-screen ${view.coordinator ? 'has-dock' : ''}">${gameHeader(view)}
-    <div class="game-over-hero"><div class="victory-moon">✦</div><div class="eyebrow">The table closes</div><h1>Legends of Moonfall</h1><p>${view.session?.round || 0} ${(view.session?.round || 0) === 1 ? 'hunt' : 'hunts'} are written into the village chronicle.</p></div>
-    <div class="podium">${podium.map((score, index) => `<div class="podium-place place-${index + 1}"><span>${index + 1}</span><strong>${esc(score.name)}</strong><b>${score.total}</b></div>`).join('')}</div>
-    ${scoreboardMarkup(view, {final: true})}
-    ${view.coordinator ? dock('<button class="btn" data-action="clear-session">Gather a new village</button>') : ''}
+  app.innerHTML = `<section class="screen session-over-screen finale-screen">${gameHeader(view)}
+    <div class="finale-side">
+      <div class="game-over-hero"><div class="victory-moon">✦</div><h1>Legends of Moonfall</h1><p>${view.session?.round || 0} ${(view.session?.round || 0) === 1 ? 'hunt is' : 'hunts are'} written into the village chronicle.</p></div>
+      <div class="podium">${podium.map((score, index) => `<div class="podium-place place-${index + 1}"><span>${index + 1}</span><strong>${esc(score.name)}</strong><b>${score.total}</b></div>`).join('')}</div>
+      ${view.coordinator ? '<div class="session-actions solo"><button class="btn" data-action="clear-session">Gather a new village</button></div>' : ''}
+    </div>
+    <div class="finale-main">${scoreboardMarkup(view, {final: true})}</div>
   </section>`;
 }
 
 function renderNarratorWait(view) {
-  const [title] = PHASE_META[view.phase] || ['The tale continues'];
-  app.innerHTML = narratorStage(view, title);
+  app.innerHTML = narratorStage(view);
 }
 
 function renderGame() {
@@ -2125,8 +2136,15 @@ function renderGame() {
   if (view.phase === 'role-reveal') return renderRoleReveal(view);
   if (view.phase === 'game-over') return renderGameOver(view);
   if (view.phase === 'session-over') return renderSessionOver(view);
-  const gated = view.phase.startsWith('setup-') || view.phase.startsWith('night-') || ['sheriff-vote', 'day-vote', 'resolution'].includes(view.phase);
-  if (!view.phaseReady && gated) return renderNarratorWait(view);
+  // While the narrator opens a night turn, every phone shows the same plain
+  // sleeping-village screen — nightfall itself is the announcement. Daytime
+  // ballots wait on the storyteller's speaking portrait instead.
+  const nightGated = view.phase.startsWith('setup-') || view.phase.startsWith('night-') || view.phase === 'resolution';
+  if (!view.phaseReady && nightGated) {
+    app.innerHTML = sleepMessage(view);
+    return;
+  }
+  if (!view.phaseReady && ['sheriff-vote', 'day-vote'].includes(view.phase)) return renderNarratorWait(view);
   if (renderPrivateAction(view) !== false) return;
   // The dawn reveal and the vote's judgement belong to everyone — the dead
   // watch the same cinematic morning the living do, through a ghost's veil.
@@ -2174,6 +2192,9 @@ function squareVisible(view) {
   if (!view) return false;
   const phase = view.phase;
   if (phase === 'lobby') return true;
+  // The finale screens show every card face-up; the crowd would only stand
+  // in front of the scoreboard and buttons.
+  if (phase === 'game-over' || phase === 'session-over') return false;
   if (phase === 'role-reveal') return Boolean(view.me?.seenRole);
   const night = phase.startsWith('setup-') || phase.startsWith('night-') || phase === 'resolution';
   if (night) {
