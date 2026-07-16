@@ -119,6 +119,10 @@ const ui = {
   modal: null,
   cupidLoosed: false,
   sceneBusy: null,
+  arrowSeen: false,
+  arrowPlayed: false,
+  wasWaiting: false,
+  screenReused: false,
   busy: false
 };
 
@@ -550,23 +554,28 @@ function transitionSound(view, previous) {
     return;
   }
   if (next === 'night-witch') return sound('witch');
-  if (next === 'resolution') return sound(view.narrator?.pending?.type === 'hunter' ? 'hunter' : 'kill');
+  if (next === 'resolution') return sound(view.narrator?.pending?.type === 'hunter' ? 'hunter' : 'sheriff');
+  // The kill sting belongs to the reveal itself: each death cinematic runs on
+  // a 4.4s beat and the true form rises about 1.9s in — that is when the
+  // village hears the blow, one death at a time.
   if (next === 'dawn') {
-    const deathAtDawn = Boolean(view.lastDeaths?.length);
+    const deaths = view.lastDeaths || [];
     const healedAtDawn = Boolean(view.nightResult?.healed);
-    if (deathAtDawn) sound('kill');
-    else if (healedAtDawn) sound('heal');
-    return sound('dawn', deathAtDawn ? 3.8 : healedAtDawn ? 3.1 : 0);
+    if (deaths.length) deaths.forEach((death, index) => sound('kill', index * 4.4 + 1.9));
+    else if (healedAtDawn) sound('heal', 1.2);
+    return sound('dawn', deaths.length ? .4 : healedAtDawn ? 3.1 : 0);
   }
   if (next === 'sheriff-vote') return sound('sheriff');
   if (next === 'day-vote') return sound('vote');
   if (next === 'day-result') {
-    if (view.lastDeaths?.length) {
-      sound('kill');
-      return sound('decision', 3.8);
+    const deaths = view.lastDeaths || [];
+    if (deaths.length) {
+      deaths.forEach((death, index) => sound('kill', index * 4.4 + 1.9));
+      return sound('decision', deaths.length * 4.4 + .5);
     }
     return sound('decision');
   }
+  if (next === 'day-discussion' && previous === 'sheriff-vote') return; // the badge ceremony carries its own chime
   if (next === 'game-over') return sound('victory');
   return sound('decision');
 }
@@ -851,6 +860,7 @@ function scheduleNarratorAutomation() {
   const generation = ++narratorAutomationGeneration;
   const phaseSerial = view.phaseSerial;
   const phase = view.phase;
+  const startedAt = Date.now();
   void (async () => {
     if (stage === 'opening') {
       const opening = openingNarration(view);
@@ -861,11 +871,20 @@ function scheduleNarratorAutomation() {
       // reveal on the following recorded clips. There is no dead-air card wait.
       const delay = opening.ids?.[0] === 'nightfall' ? 2300 : deathReveal ? 650 : healedReveal ? 900 : phase === 'dawn' ? 650 : phaseCueLead[phase] || 350;
       await playNarratorSequence(opening.ids, opening.text, {delay});
-      if (phase === 'dawn' || phase === 'day-result') await sleep(Math.max(900, (view.lastDeaths?.length || 0) * 700));
+      if (phase === 'dawn' || phase === 'day-result') {
+        // Each death plays a full 4.4s reveal cinematic. Never advance before
+        // the last transformation has landed, however short the narration ran.
+        const deaths = view.lastDeaths?.length || 0;
+        const sceneMs = deaths ? deaths * 4400 + 1500 : 3000;
+        await sleep(Math.max(1100, sceneMs - (Date.now() - startedAt)));
+      } else {
+        await sleep(650);                    // let each scene settle before the next
+      }
     } else {
       const [id, text] = SLEEP_CUES[phase] || [null, ''];
       if (id) await playNarratorSequence([id], text, {delay: 180});
       else await sleep(500);
+      await sleep(600);
     }
     if (generation !== narratorAutomationGeneration || currentView?.phaseSerial !== phaseSerial || currentView?.phase !== phase) return;
     if (stage === 'closing') return sendOwnCommand('auto:advance');
@@ -876,9 +895,11 @@ function scheduleNarratorAutomation() {
   })();
 }
 
+let lastPhaseFxAt = 0;
 function playPhaseFx(kind) {
   const fx = document.querySelector('#phase-fx');
   if (!fx || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+  lastPhaseFxAt = Date.now();
   fx.className = '';
   void fx.offsetWidth;
   fx.className = kind;
@@ -892,7 +913,21 @@ function phaseFxFor(view, previous) {
   const fromDayOrDeal = previous === 'role-reveal' || previous === 'day-result';
   if (toNight && fromDayOrDeal) return 'nightfall';
   if (view.phase === 'dawn') return 'dawnrise';
+  // Every daytime scene change gets a short fade to black, so the story
+  // breathes between moments instead of jump-cutting.
+  if (['role-reveal', 'sheriff-vote', 'day-discussion', 'day-vote', 'day-result', 'game-over', 'session-over'].includes(view.phase)) return 'scene-cut';
   return null;
+}
+
+// The badge descends onto the newly elected Sheriff — a public beat between
+// the sealed ballot and the day's debate.
+function playBadgeCeremony(view) {
+  setTimeout(() => {
+    if (currentView?.sheriffId !== view.sheriffId) return;
+    const sprite = villageRoot?.querySelector(`[data-sprite="${view.sheriffId}"]`) || null;
+    playSceneAction('badge-crown', sprite, 2600);
+    sound('sheriff', .3);
+  }, 500);
 }
 
 async function holdWakeLock() {
@@ -1102,6 +1137,8 @@ function phaseChanged(view) {
   ui.poisonOpen = false;
   ui.cupidLoosed = false;
   ui.sceneBusy = null;
+  ui.arrowSeen = false;
+  ui.arrowPlayed = false;
   ui.whisperOpen = false;
   ui.headerOpen = false;
   document.body.dataset.phase = view.phase;
@@ -1115,6 +1152,7 @@ function phaseChanged(view) {
     transitionSound(view, previous);
     const fx = phaseFxFor(view, previous);
     if (fx) playPhaseFx(fx);
+    if (previous === 'sheriff-vote' && view.phase === 'day-discussion' && view.sheriffId) playBadgeCeremony(view);
   }
   scheduleNarratorAutomation();
 }
@@ -1613,9 +1651,7 @@ function gameHeader(view) {
   return `<header class="top-dock ${ui.headerOpen ? 'open' : ''}">
     <button class="top-tab" data-action="toggle-header" aria-expanded="${ui.headerOpen ? 'true' : 'false'}" aria-label="Player and connection details"><span class="connection-dot ${connectionState === 'offline' ? 'offline' : ''}"></span><b>☾</b></button>
     <div class="top-sheet">
-      <img class="mini-mark" src="assets/card-back.webp" alt="">
       <div class="top-copy"><strong>${esc(me?.name || 'Moonfall')}</strong><span>${esc(subtitle)} · ${esc(view.roomCode)}</span></div>
-      ${connectionMarkup()}
       <button class="icon-btn" data-action="open-menu" aria-label="Open menu">⋯</button>
     </div>
   </header>`;
@@ -1848,6 +1884,20 @@ function sleepMessage(view, custom = null) {
   </section>`;
 }
 
+// Sleeping phones keep sleeping: consecutive night phases re-broadcast the
+// same moonlit scene, and repainting it made the screen blink every time a
+// different role was called awake. Identical scenes are left untouched.
+let lastSleepHtml = null;
+function showSleep(view, custom = null) {
+  const html = sleepMessage(view, custom);
+  if (lastSleepHtml === html && app.querySelector('.sleep-scene')) {
+    ui.screenReused = true;
+    return;
+  }
+  lastSleepHtml = html;
+  app.innerHTML = html;
+}
+
 function renderThief(view, action) {
   const forced = action.extras.length === 2 && action.extras.every(role => role === 'werewolf');
   app.innerHTML = `<section class="screen awake-screen awake-thief ${ui.thiefRevealed ? 'has-dock' : ''}">${gameHeader(view)}${phaseHeader(view, forced ? {title: 'The Thief wakes', subtitle: 'Both spares are Werewolves. One must be taken.'} : null)}
@@ -1874,10 +1924,8 @@ function renderCupid(view, action) {
 function renderLover(view, action) {
   const partner = action.partnerId ? view.players[action.partnerId] : null;
   const flipped = ui.loverFlipped;
-  // A chosen heart sees Cupid's arrow strike the card itself — the animation
-  // lives on the card face, so it stays exactly as private as the card.
   const front = action.chosen
-    ? `<span class="lover-face chosen"><img class="lover-arrow-hit" src="assets/sprites/props/arrow.png" alt=""><b>♥</b><strong>Your heart is bound</strong><em>${esc(partner?.name || 'A hidden soul')}</em><span>You live and die together. Tell no one — not even a glance.</span></span>`
+    ? `<span class="lover-face chosen"><b>♥</b><strong>Your heart is bound</strong><em>${esc(partner?.name || 'A hidden soul')}</em><span>You live and die together. Tell no one — not even a glance.</span></span>`
     : `<span class="lover-face"><b>☾</b><strong>The arrow passed you by</strong><span>Your heart remains your own. Reveal nothing.</span></span>`;
   app.innerHTML = `<section class="screen awake-screen awake-lovers centered ${flipped ? 'has-dock' : ''}">${gameHeader(view)}
     <div class="flip-wrap">
@@ -1886,9 +1934,24 @@ function renderLover(view, action) {
         <span class="card-face front">${front}</span>
       </button>
     </div>
-    ${!flipped ? '<div class="tap-hint">Turn over your fate card</div>' : ''}
+    ${!flipped && ui.arrowSeen ? '<div class="tap-hint">Turn over your fate card</div>' : ''}
     ${flipped ? dock('<button class="btn" data-action="lovers-seen">Seal the card · close your eyes</button>') : ''}
   </section>`;
+  // Everyone opens their eyes to the same cutscene: Cupid's arrow crosses the
+  // whole screen, strikes the face-down card and bursts into hearts — THEN
+  // the card may be turned. Identical on every phone; only the hidden card
+  // face knows whose heart it hit.
+  if (!ui.arrowPlayed) {
+    ui.arrowPlayed = true;
+    playSceneAction('cupid-strike', app.querySelector('.flip-wrap'), 3000);
+    const serial = view.phaseSerial;
+    setTimeout(() => {
+      if (currentView?.phaseSerial === serial && currentView?.phase === 'setup-lovers') {
+        ui.arrowSeen = true;
+        queueRender();
+      }
+    }, 2600);
+  }
 }
 
 function renderSeer(view, action) {
@@ -1923,7 +1986,7 @@ function renderWolves(view, action) {
 }
 
 function renderLittleGirl(view) {
-  app.innerHTML = sleepMessage(view, {text: '👁 Peek if you dare — caught, you die in the victim’s place.'});
+  showSleep(view, {text: '👁 Peek if you dare — caught, you die in the victim’s place.'});
 }
 
 function renderWitch(view, action) {
@@ -1964,7 +2027,7 @@ function renderPending(view, action) {
 function renderPrivateAction(view) {
   const action = view.privateAction || {};
   if (action.done && action.type !== 'vote') {
-    app.innerHTML = sleepMessage(view, {title: 'Your choice is sealed', text: 'The tale continues on its own.'});
+    showSleep(view, {text: 'Your choice is sealed. The tale continues on its own.'});
     return true;
   }
   if (action.type === 'thief') return renderThief(view, action);
@@ -2138,13 +2201,22 @@ function renderGame() {
   if (view.phase === 'session-over') return renderSessionOver(view);
   // While the narrator opens a night turn, every phone shows the same plain
   // sleeping-village screen — nightfall itself is the announcement. Daytime
-  // ballots wait on the storyteller's speaking portrait instead.
+  // ballots wait on the storyteller's fade-to-black cutscene instead.
   const nightGated = view.phase.startsWith('setup-') || view.phase.startsWith('night-') || view.phase === 'resolution';
-  if (!view.phaseReady && nightGated) {
-    app.innerHTML = sleepMessage(view);
-    return;
+  const dayGated = ['sheriff-vote', 'day-vote'].includes(view.phase);
+  if (!view.phaseReady && (nightGated || dayGated)) {
+    ui.wasWaiting = true;
+    if (nightGated) return showSleep(view);
+    return renderNarratorWait(view);
   }
-  if (!view.phaseReady && ['sheriff-vote', 'day-vote'].includes(view.phase)) return renderNarratorWait(view);
+  if (ui.wasWaiting) {
+    // The wait is over: fade the cutscene out into whatever scene opens now.
+    // Phones that simply keep sleeping stay untouched.
+    ui.wasWaiting = false;
+    const action = view.privateAction || {};
+    const opensScene = Boolean(action.type && !action.done) || dayGated;
+    if (opensScene && Date.now() - lastPhaseFxAt > 1800) playPhaseFx('scene-cut');
+  }
   if (renderPrivateAction(view) !== false) return;
   // The dawn reveal and the vote's judgement belong to everyone — the dead
   // watch the same cinematic morning the living do, through a ghost's veil.
@@ -2152,11 +2224,7 @@ function renderGame() {
   if (view.phase === 'day-result') return renderDayResult(view);
   if (!view.me.alive) return renderDead(view);
   if (view.phase === 'day-discussion') return renderDiscussion(view);
-  if (view.phase === 'resolution') {
-    app.innerHTML = sleepMessage(view);
-    return;
-  }
-  app.innerHTML = sleepMessage(view);
+  return showSleep(view);
 }
 
 function renderModal() {
@@ -2178,9 +2246,24 @@ function renderModal() {
     return;
   }
   if (ui.modal === 'menu') {
-    const appButton = isStandalone() ? '' : '<button class="btn secondary" data-action="install-app">Install Moonfall to home screen</button>';
-    const fullButton = fullscreenAvailable() ? `<button class="btn secondary" data-action="toggle-fullscreen">${fullscreenElement() ? 'Exit fullscreen' : 'Enter fullscreen'}</button>` : '';
-    modalRoot.innerHTML = `<div class="modal-backdrop" data-action="close-modal"><div class="modal"><div class="modal-head"><h2>Moonfall</h2><button class="icon-btn" data-action="close-modal">×</button></div><div class="connection-health"><span class="health-orb ${connectionState === 'offline' ? 'offline' : ''}"></span><div><strong>${connectionState === 'connected' ? 'Village link healthy' : connectionState === 'connecting' ? 'Reconnecting to the village' : 'The host is currently away'}</strong><small>${wakeLock ? 'Screen-awake protection is active.' : 'Tap anywhere if your browser has paused screen-awake protection.'}</small></div></div><div class="button-stack" style="margin-top:14px">${appButton}${fullButton}<button class="btn secondary" data-action="show-rules">Role guide & classic rules</button><button class="btn secondary" data-action="toggle-sound">Sound effects: ${soundEnabled ? 'On' : 'Off'}</button>${narrationSupported() || voicePackReady() ? `<button class="btn secondary" data-action="toggle-voice">Automatic narrator: ${voiceEnabled ? 'On' : 'Off'}${voicePackReady() ? ' · cinematic' : ''}</button>` : ''}<button class="btn secondary" data-action="toggle-ambience">Night &amp; day ambience: ${ambienceEnabled ? 'On' : 'Off'}</button>${soundEnabled ? '<button class="btn ghost" data-action="preview-howl">Preview the nightfall howl</button>' : ''}<button class="btn ghost" data-action="copy-code">Copy room code ${esc(roomCode)}</button><button class="btn ghost" data-action="copy-diagnostics">Copy connection diagnostics</button>${currentView?.coordinator && currentView.phase !== 'lobby' && currentView.phase !== 'game-over' ? '<button class="btn danger" data-action="reset-game">Abandon this tale & reshuffle</button>' : ''}<button class="btn ghost" data-action="leave-game">Leave this screen</button></div><p class="footer-note">Every joined phone is kept awake. If the OS still suspends the web app, Moonfall restores the peer link and saved seat when the screen returns.</p><p class="footer-note">The host phone plays the room narration and ambience while its owner still plays a character. Every secret choice stays on the active player’s own screen.</p></div></div>`;
+    // A quiet, compact sheet: paired toggles in a small grid, one line of
+    // essentials, nothing that competes with the game behind it.
+    const items = [
+      ['show-rules', 'Rules'],
+      fullscreenAvailable() ? ['toggle-fullscreen', fullscreenElement() ? 'Exit fullscreen' : 'Fullscreen'] : null,
+      isStandalone() ? null : ['install-app', 'Install app'],
+      ['toggle-sound', `Sound · ${soundEnabled ? 'on' : 'off'}`],
+      narrationSupported() || voicePackReady() ? ['toggle-voice', `Narrator · ${voiceEnabled ? 'on' : 'off'}`] : null,
+      ['toggle-ambience', `Ambience · ${ambienceEnabled ? 'on' : 'off'}`],
+      ['copy-code', 'Copy invite'],
+      ['copy-diagnostics', 'Diagnostics']
+    ].filter(Boolean);
+    const abandon = currentView?.coordinator && currentView.phase !== 'lobby' && currentView.phase !== 'game-over'
+      ? '<button class="btn danger mini" data-action="reset-game">Abandon this tale &amp; reshuffle</button>' : '';
+    modalRoot.innerHTML = `<div class="modal-backdrop" data-action="close-modal"><div class="modal slim"><div class="modal-head"><h2>Moonfall</h2>${connectionMarkup()}<button class="icon-btn" data-action="close-modal">×</button></div>
+      <div class="menu-grid">${items.map(([action, label]) => `<button class="btn secondary mini" data-action="${action}">${label}</button>`).join('')}</div>
+      <div class="button-stack" style="margin-top:9px">${abandon}<button class="btn ghost mini" data-action="leave-game">Leave this screen</button></div>
+    </div></div>`;
   }
 }
 
@@ -2196,6 +2279,9 @@ function squareVisible(view) {
   // in front of the scoreboard and buttons.
   if (phase === 'game-over' || phase === 'session-over') return false;
   if (phase === 'role-reveal') return Boolean(view.me?.seenRole);
+  // The storyteller's announcement is a cutscene of its own: the square
+  // clears while the narrator speaks, then the village fades back in.
+  if (view.phaseReady === false && ['sheriff-vote', 'day-vote'].includes(phase)) return false;
   const night = phase.startsWith('setup-') || phase.startsWith('night-') || phase === 'resolution';
   if (night) {
     if (view.phaseReady === false) return false;
@@ -2264,8 +2350,9 @@ function render() {
     renderModal();
     if (ui.phaseFresh) {
       ui.phaseFresh = false;
-      app.firstElementChild?.classList.add('phase-enter');
+      if (!ui.screenReused) app.firstElementChild?.classList.add('phase-enter');
     }
+    ui.screenReused = false;
   } catch (error) {
     diagnostic('render-error', {message: String(error?.message || error).slice(0, 220)});
     app.innerHTML = `<section class="screen centered"><div class="panel ornate center"><div class="eyebrow">A cloud crossed the moon</div><h2>The screen failed to draw</h2><p class="muted">Your seat and the game state are safe. Redraw to continue.</p><div class="button-stack"><button class="btn" data-action="recover-render">Redraw the screen</button><button class="btn ghost" data-action="leave-game">Leave to the home screen</button></div></div></section>`;
@@ -2390,6 +2477,7 @@ async function handleAction(action, element) {
     ui.seerFlipped = !ui.seerFlipped;
     queueRender();
   } else if (action === 'flip-lover') {
+    if (!ui.arrowSeen) return;             // the arrow must land first
     ui.loverFlipped = true;
     sound('flip');
     vibrate(18);
