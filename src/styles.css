@@ -149,11 +149,12 @@ h1,h2,h3,.display{font-family:Georgia,"Times New Roman",serif}
 .top-tab b{font-weight:400;font-size:17px;line-height:1}
 .connection-dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 9px rgba(110,207,155,.8)}
 .connection-dot.offline{background:#d45867;box-shadow:0 0 8px rgba(212,88,103,.6)}
-.top-sheet{position:absolute;top:calc(100% + 8px);right:0;width:min(calc(100vw - 24px),380px);display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:18px;border:1px solid rgba(223,183,85,.34);background:rgba(6,5,12,.92);backdrop-filter:blur(14px);box-shadow:0 18px 44px rgba(0,0,0,.55);opacity:0;transform:translateY(-6px);pointer-events:none;transition:opacity .22s ease,transform .22s ease}
+.top-sheet{position:absolute;top:calc(100% + 6px);right:0;width:max-content;max-width:min(calc(100vw - 24px),300px);display:flex;align-items:center;gap:8px;padding:6px 7px 6px 12px;border-radius:14px;border:1px solid rgba(223,183,85,.34);background:rgba(6,5,12,.92);backdrop-filter:blur(14px);box-shadow:0 14px 34px rgba(0,0,0,.5);opacity:0;transform:translateY(-6px);pointer-events:none;transition:opacity .22s ease,transform .22s ease}
 .top-dock.open .top-tab{border-color:rgba(255,224,139,.6)}
 .top-dock.open .top-sheet{opacity:1;transform:none;pointer-events:auto}
 .mini-mark{width:48px;height:48px;object-fit:cover;object-position:center;border-radius:50%;border:1px solid rgba(223,183,85,.43);box-shadow:0 4px 18px #000}
-.top-copy{min-width:0;flex:1}.top-copy strong{display:block;font-family:Georgia,serif;font-size:19px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.top-copy span{color:var(--muted);font-size:10px;letter-spacing:.1em;text-transform:uppercase}
+.top-copy{min-width:0;flex:1}.top-copy strong{display:block;font-family:Georgia,serif;font-size:14px;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.top-copy span{color:var(--muted);font-size:9px;letter-spacing:.07em;text-transform:uppercase;white-space:nowrap}
+.top-sheet .icon-btn{width:34px;height:34px;font-size:17px;flex:0 0 auto}
 .connection{display:inline-flex;align-items:center;gap:6px;font-size:10px;color:var(--muted);padding:7px 9px;border:1px solid rgba(255,255,255,.1);border-radius:999px;background:rgba(4,5,10,.54)}
 .connection i{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 10px rgba(110,207,155,.7)}.connection.offline i{background:#d45867;box-shadow:none}
 .phase-ribbon{text-align:center;margin:6px auto 14px;padding-right:0}.phase-ribbon .moon-number{display:inline-flex;align-items:center;gap:6px;color:var(--violet);font-size:10px;font-weight:900;letter-spacing:.17em;text-transform:uppercase}.phase-ribbon h1{font-size:clamp(31px,9vw,45px);line-height:.98;margin:7px 0 6px;text-shadow:0 4px 18px #000}.phase-ribbon p{font-family:Georgia,serif;color:#d5c8d5;font-size:14px;line-height:1.4;margin:0 auto;max-width:390px}
@@ -196,7 +197,9 @@ h1,h2,h3,.display{font-family:Georgia,"Times New Roman",serif}
 .dock{position:fixed;z-index:20;left:50%;bottom:0;transform:translateX(-50%);width:min(100%,560px);padding:10px 14px var(--safe-bottom);background:linear-gradient(180deg,rgba(7,7,12,0),rgba(7,7,12,.94) 18%,#07070c 44%)}
 .dock .btn{width:100%;box-shadow:inset 0 1px #fff8cb,inset 0 -2px rgba(59,30,3,.38),0 8px 28px rgba(0,0,0,.55)}
 .toast-root{position:fixed;z-index:100;left:50%;bottom:calc(var(--safe-bottom) + 12px);transform:translateX(-50%);width:min(calc(100% - 28px),500px);pointer-events:none;display:grid;gap:8px}.toast{padding:12px 14px;border:1px solid rgba(223,183,85,.32);border-radius:13px;background:rgba(17,13,21,.96);box-shadow:0 12px 35px #000;color:#eee4ee;font-size:12px;animation:toast-in .28s ease both}.toast.error{border-color:rgba(219,81,98,.55);color:#ffc7ce}.toast.success{border-color:rgba(110,207,155,.45);color:#bff2d5}@keyframes toast-in{from{opacity:0;transform:translateY(10px)}}
-.modal-backdrop{position:fixed;z-index:90;inset:0;background:rgba(0,0,0,.78);backdrop-filter:blur(9px);display:grid;place-items:end center;padding:14px}.modal{width:min(100%,530px);max-height:85svh;overflow:auto;border:1px solid rgba(223,183,85,.38);border-radius:24px;background:linear-gradient(155deg,#2d1c37,#0b0a11 64%);box-shadow:0 25px 80px #000;padding:20px;margin-bottom:var(--safe-bottom)}.modal-head{display:flex;gap:10px;align-items:center}.modal-head h2{flex:1;margin:0;font-size:28px}.icon-btn{width:42px;height:42px;border:1px solid rgba(255,255,255,.13);border-radius:50%;background:rgba(5,5,10,.45);color:var(--muted);font-size:20px}.rule-list{display:grid;gap:8px;margin-top:14px}.rule-item{display:grid;grid-template-columns:56px 1fr;gap:11px;align-items:center;padding:8px;border-radius:14px;background:rgba(5,5,10,.4);border:1px solid rgba(255,255,255,.07)}.rule-item img{width:56px;aspect-ratio:2/3;object-fit:cover;border-radius:8px}.rule-item h3{font-size:16px;margin:0 0 3px}.rule-item p{font-size:10px;line-height:1.4;color:var(--muted);margin:0}
+.modal-backdrop{position:fixed;z-index:90;inset:0;background:rgba(0,0,0,.78);backdrop-filter:blur(9px);display:grid;place-items:end center;padding:14px}.modal{width:min(100%,530px);max-height:85svh;overflow:auto;border:1px solid rgba(223,183,85,.38);border-radius:24px;background:linear-gradient(155deg,#2d1c37,#0b0a11 64%);box-shadow:0 25px 80px #000;padding:20px;margin-bottom:var(--safe-bottom)}.modal-head{display:flex;gap:10px;align-items:center}.modal-head h2{flex:1;margin:0;font-size:28px}
+.modal.slim{width:min(100%,430px);padding:14px}.modal.slim .modal-head h2{font-size:21px}
+.menu-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:11px}.icon-btn{width:42px;height:42px;border:1px solid rgba(255,255,255,.13);border-radius:50%;background:rgba(5,5,10,.45);color:var(--muted);font-size:20px}.rule-list{display:grid;gap:8px;margin-top:14px}.rule-item{display:grid;grid-template-columns:56px 1fr;gap:11px;align-items:center;padding:8px;border-radius:14px;background:rgba(5,5,10,.4);border:1px solid rgba(255,255,255,.07)}.rule-item img{width:56px;aspect-ratio:2/3;object-fit:cover;border-radius:8px}.rule-item h3{font-size:16px;margin:0 0 3px}.rule-item p{font-size:10px;line-height:1.4;color:var(--muted);margin:0}
 .connection-health{display:flex;align-items:center;gap:12px;margin:16px 0 4px;padding:12px;border:1px solid rgba(110,207,155,.2);border-radius:14px;background:rgba(5,9,11,.38)}.health-orb{width:12px;height:12px;flex:0 0 auto;border-radius:50%;background:var(--green);box-shadow:0 0 15px rgba(110,207,155,.72)}.health-orb.offline{background:#d45867;box-shadow:0 0 12px rgba(212,88,103,.45)}.connection-health strong{display:block;font-size:12px}.connection-health small{display:block;color:var(--muted);font-size:9px;line-height:1.4;margin-top:3px}
 .install-mark{width:112px;height:112px;margin:18px auto 14px;padding:7px;border:1px solid rgba(223,183,85,.38);border-radius:25px;background:linear-gradient(145deg,#3a2646,#0b0910);box-shadow:0 18px 40px rgba(0,0,0,.42),0 0 28px rgba(124,74,164,.18)}.install-mark img{width:100%;height:100%;object-fit:cover;border-radius:19px}
 .footer-note{text-align:center;color:#716977;font-size:9px;line-height:1.5;padding:16px 10px 0}.footer-note a{color:#a99bb2}
@@ -216,6 +219,10 @@ h1,h2,h3,.display{font-family:Georgia,"Times New Roman",serif}
 #phase-fx.nightfall:after{content:"";position:absolute;inset:0;background:radial-gradient(1.5px 1.5px at 18% 32%,#fff8,transparent 60%),radial-gradient(1.5px 1.5px at 72% 22%,#fff7,transparent 60%),radial-gradient(1.5px 1.5px at 42% 12%,#fff6,transparent 60%),radial-gradient(1.5px 1.5px at 86% 44%,#fff5,transparent 60%);animation:phase-veil 2.5s ease both}
 #phase-fx.dawnrise{background:linear-gradient(180deg,rgba(255,197,118,.6),rgba(148,72,88,.34) 52%,rgba(20,10,20,.15));animation:phase-veil 2.3s ease both}
 @keyframes phase-veil{0%{opacity:0}22%{opacity:1}72%{opacity:1}100%{opacity:0}}
+/* A plain cinematic cut: quick fade to black, a held breath, fade back in.
+   Used between every daytime scene so the story never jump-cuts. */
+#phase-fx.scene-cut{background:#04040a;animation:scene-cut 1.7s ease both}
+@keyframes scene-cut{0%{opacity:0}14%,52%{opacity:1}100%{opacity:0}}
 /* ── Gold gilding & final shine ─────────────────────────────────────────── */
 .card-face{border:2px solid transparent;background:
   linear-gradient(#100b16,#100b16) padding-box,
@@ -251,10 +258,7 @@ h1,h2,h3,.display{font-family:Georgia,"Times New Roman",serif}
 .lover-face em{font-family:Georgia,serif;font-style:normal;font-size:clamp(14px,4.6svh,26px);line-height:1.1;color:#ffc2d6}
 .lover-face span{color:var(--muted);font-size:clamp(8px,2.4svh,11px);line-height:1.45}
 .lover-face.chosen{background:linear-gradient(165deg,#341328 0%,#12060f 70%)}
-/* Cupid's arrow strikes the turned card — private to this card face alone. */
-.lover-arrow-hit{position:absolute;left:6%;top:10%;width:74%;opacity:0;transform:rotate(-18deg);filter:drop-shadow(0 0 10px rgba(255,95,160,.8));animation:arrow-strike 2s cubic-bezier(.2,.8,.25,1) .9s both;pointer-events:none}
-@keyframes arrow-strike{0%{opacity:0;transform:translate(-130%,-50%) rotate(-26deg)}22%{opacity:1}40%{transform:translate(0,0) rotate(-17deg)}48%{transform:translate(-2%,1%) rotate(-19deg)}72%{opacity:.85;transform:translate(0,0) rotate(-18deg)}100%{opacity:0;transform:translate(5%,2%) rotate(-18deg)}}
-.lover-face.chosen:after{content:"";position:absolute;inset:0;background:radial-gradient(circle at 46% 34%,rgba(255,120,170,.6),transparent 58%);opacity:0;animation:arrow-flash .8s ease 1.5s both;pointer-events:none}
+.lover-face.chosen:after{content:"";position:absolute;inset:0;background:radial-gradient(circle at 46% 34%,rgba(255,120,170,.55),transparent 58%);opacity:0;animation:arrow-flash .9s ease .7s both;pointer-events:none}
 @keyframes arrow-flash{25%{opacity:1}100%{opacity:0}}
 /* ── Phase glow: the screen itself breathes the active colour ───────────
    No second moon fights the artwork: a soft pulsing aura around the screen
@@ -504,9 +508,11 @@ body[data-phase="night-witch"]:after{background:radial-gradient(circle at 50% 6%
 .sleep-line{color:var(--muted);font-size:12px;line-height:1.5;margin:12px auto 0;max-width:320px}
 
 /* ── The storyteller speaks ────────────────────────────────────────────── */
-/* Raised above the town square (z-index 1) so the crowd can never stand in
-   front of the spoken title; taps still fall through to the sprites below. */
-.storyteller-stage{position:relative;z-index:16;pointer-events:none;min-height:100svh;display:grid;place-content:center;justify-items:center;text-align:center;gap:14px;padding:16px}
+/* The narrator's announcement is its own cutscene: an opaque night backdrop
+   (the village is hidden meanwhile), the portrait alone at centre, fading in
+   and out with the scene cut. */
+.storyteller-stage{position:relative;z-index:16;pointer-events:none;min-height:100svh;display:grid;place-content:center;justify-items:center;text-align:center;gap:14px;padding:16px;
+  background:radial-gradient(circle at 50% 40%,#141230,#05050e 74%)}
 .storyteller-mark{width:min(34svh,180px);aspect-ratio:1;border-radius:50%;overflow:hidden;border:2px solid rgba(223,183,85,.55);
   box-shadow:0 0 46px rgba(124,74,164,.4),0 18px 50px #000;animation:teller-sway 4.6s ease-in-out infinite}
 .storyteller-mark img{width:100%;height:100%;object-fit:cover;object-position:top}
@@ -536,10 +542,21 @@ body[data-phase="night-witch"]:after{background:radial-gradient(circle at 50% 6%
 #scene-fx.poison-mark:before{box-shadow:0 0 0 0 rgba(194,54,225,.72)}
 #scene-fx.witch-dual:before{box-shadow:0 0 0 0 rgba(61,246,133,.7),0 0 0 0 rgba(194,54,225,.7)}
 @keyframes fx-spell{0%{opacity:1;transform:translate(-50%,-50%) scale(.3)}100%{opacity:0;transform:translate(-50%,-50%) scale(3.2);box-shadow:0 0 0 32vw transparent}}
-#scene-fx.vote-token:before,#scene-fx.badge-pass:before{width:70px;height:70px;background-position:center;background-size:contain;background-repeat:no-repeat;filter:drop-shadow(0 10px 12px #000);animation:fx-token .75s cubic-bezier(.18,.75,.25,1) both}
+#scene-fx.vote-token:before,#scene-fx.badge-pass:before{width:70px;height:70px;background-position:center;background-size:contain;background-repeat:no-repeat;filter:drop-shadow(0 10px 12px #000);animation:fx-token 1.15s cubic-bezier(.22,.7,.3,1) both}
 #scene-fx.vote-token:before{background-image:url("assets/sprites/props/vote-token.png")}
 #scene-fx.badge-pass:before{background-image:url("assets/sprites/props/badge.png")}
-@keyframes fx-token{from{opacity:0;transform:translate(-50%,-120vh) rotate(-40deg) scale(.6)}65%{opacity:1;transform:translate(-50%,-50%) rotate(10deg) scale(1.15)}to{opacity:0;transform:translate(-50%,-35%) rotate(0) scale(.85)}}
+@keyframes fx-token{from{opacity:0;transform:translate(-50%,-90vh) rotate(-34deg) scale(.7)}45%{opacity:1;transform:translate(-50%,-52%) rotate(8deg) scale(1.14)}62%{transform:translate(-50%,-47%) rotate(-3deg) scale(.97)}74%{transform:translate(-50%,-50%) rotate(1deg) scale(1.02)}to{opacity:0;transform:translate(-50%,-42%) rotate(0) scale(.9)}}
+/* The elected Sheriff's badge descends onto them with a golden burst. */
+#scene-fx.badge-crown:before{width:min(20svh,110px);aspect-ratio:1;background:url("assets/sprites/props/badge.png") center/contain no-repeat;filter:drop-shadow(0 0 22px rgba(255,215,110,.9)) drop-shadow(0 8px 12px #000);animation:fx-crown 2.4s cubic-bezier(.25,.75,.25,1) both}
+@keyframes fx-crown{0%{opacity:0;transform:translate(-50%,-46vh) scale(.5) rotate(-14deg)}28%{opacity:1}56%{transform:translate(-50%,-58%) scale(1.18) rotate(4deg)}70%{transform:translate(-50%,-52%) scale(1) rotate(0)}86%{opacity:1}100%{opacity:0;transform:translate(-50%,-58%) scale(.72)}}
+#scene-fx.badge-crown:after{width:12px;aspect-ratio:1;border-radius:50%;transform:translate(-50%,-50%);box-shadow:0 0 0 0 rgba(255,215,110,.7);animation:fx-crown-ring 1s ease-out 1.3s both}
+@keyframes fx-crown-ring{0%{opacity:1;box-shadow:0 0 0 0 rgba(255,215,110,.7)}100%{opacity:0;box-shadow:0 0 0 34vw rgba(255,215,110,0)}}
+/* Cupid's arrow crosses the whole screen, strikes the face-down fate card
+   and bursts into pink smoke and hearts — everyone's phones in unison. */
+#scene-fx.cupid-strike:before{left:0;top:calc(var(--fx-y,50vh) - 50px);width:min(38vw,340px);height:100px;background:url("assets/sprites/props/arrow.png") center/contain no-repeat;filter:drop-shadow(0 0 16px rgba(255,95,160,.9));animation:fx-strike-arrow 1.45s cubic-bezier(.3,.5,.35,1) both}
+@keyframes fx-strike-arrow{0%{opacity:0;transform:translate(-46vw,12vh) rotate(-12deg)}16%{opacity:1}80%{opacity:1;transform:translate(calc(var(--fx-x,50vw) - min(38vw,340px) + 30px),0) rotate(0)}100%{opacity:0;transform:translate(calc(var(--fx-x,50vw) - min(38vw,340px) + 26px),2px) rotate(0)}}
+#scene-fx.cupid-strike:after{content:"♥";left:var(--fx-x,50vw);top:var(--fx-y,50vh);font-size:34px;line-height:1;color:#ff8eb7;transform:translate(-50%,-50%);text-shadow:0 0 22px #ff4f98,-52px -44px 0 rgba(255,140,180,.95),50px -38px 0 rgba(255,110,165,.9),-38px 34px 0 rgba(255,160,195,.85),44px 40px 0 rgba(255,120,170,.9),0 -60px 0 rgba(255,150,190,.9);animation:fx-strike-burst 1.5s ease-out 1.3s both}
+@keyframes fx-strike-burst{0%{opacity:0;transform:translate(-50%,-50%) scale(.2);filter:blur(0)}18%{opacity:1;transform:translate(-50%,-50%) scale(1.15)}55%{opacity:.9;transform:translate(-50%,-62%) scale(1.4);filter:blur(1px)}100%{opacity:0;transform:translate(-50%,-95%) scale(1.9);filter:blur(5px)}}
 #scene-fx.hunter-shot:before{left:-12vw;top:var(--fx-y,50vh);width:125vw;height:4px;transform:rotate(-3deg);background:linear-gradient(90deg,transparent,#fff 30%,#d7b46a 70%,transparent);box-shadow:0 0 15px #fff;animation:fx-shot .78s ease-out both}
 #scene-fx.hunter-shot:after{inset:0;left:0;top:0;background:#fff;animation:fx-muzzle .34s ease-out both}
 @keyframes fx-shot{from{opacity:0;transform:translateX(-35vw) rotate(-3deg)}20%{opacity:1}to{opacity:0;transform:translateX(35vw) rotate(-3deg)}}

@@ -47,6 +47,18 @@ async function bundledApp() {
 
 const tick = () => new Promise(resolve => setTimeout(resolve, 25));
 
+// The automatic narrator paces the game with real pauses now, so the tests
+// poll for each milestone instead of assuming fixed timings.
+async function until(check, label, timeout = 12000) {
+  const start = Date.now();
+  while (Date.now() - start < timeout) {
+    const value = check();
+    if (value) return value;
+    await new Promise(resolve => setTimeout(resolve, 60));
+  }
+  throw new Error(`timed out waiting for ${label}`);
+}
+
 test('mobile lobby renders, accepts five remote seats and deals the cards', async () => {
   const dom = new JSDOM(`<!doctype html><body><main id="app"></main><div id="toast-root"></div><div id="modal-root"></div></body>`, {
     url: 'https://moonfall.test/',
@@ -99,9 +111,9 @@ test('mobile lobby renders, accepts five remote seats and deals the cards', asyn
   const start = dom.window.document.querySelector('[data-action="start-game"]');
   assert.equal(start.disabled, false);
   start.click();
-  await new Promise(resolve => setTimeout(resolve, 1050));
+  await until(() => dom.window.document.body.dataset.phase === 'role-reveal', 'the deal');
+  await until(() => dom.window.document.querySelector('.flip-card'), 'the dealt card');
 
-  assert.equal(dom.window.document.body.dataset.phase, 'role-reveal');
   assert.match(dom.window.document.querySelector('.phase-ribbon').textContent, /cards are dealt/i);
   assert.ok(dom.window.document.querySelector('.flip-card'));
   assert.ok(dom.window.__sent.some(item => item.id === 'mfview'), 'private views should be sent to peers');
@@ -130,15 +142,18 @@ test('five local test agents play while the user keeps a character card and narr
   const name = dom.window.document.querySelector('#create-name');
   name.value = 'Steven';
   dom.window.document.querySelector('[data-action="start-agent-test"]').click();
-  await new Promise(resolve => setTimeout(resolve, 1050));
-  assert.doesNotMatch(dom.window.document.querySelector('.screen').textContent, /You do not hold a character role/);
-  assert.equal(dom.window.document.body.dataset.phase, 'role-reveal');
+  try {
+    await until(() => dom.window.document.querySelector('[data-action="flip-role"]'), 'the dealt card');
+    assert.doesNotMatch(dom.window.document.querySelector('.screen').textContent, /You do not hold a character role/);
+    assert.equal(dom.window.document.body.dataset.phase, 'role-reveal');
 
-  dom.window.document.querySelector('[data-action="flip-role"]').click();
-  await tick();
-  dom.window.document.querySelector('[data-action="seal-role"]').click();
-  await new Promise(resolve => setTimeout(resolve, 2600));
-  assert.notEqual(dom.window.document.body.dataset.phase, 'role-reveal', 'the automatic narrator should begin the first night after every card is sealed');
-  assert.equal(dom.window.document.querySelector('[data-action="story-advance"]'), null, 'there is no human Storyteller advance control');
-  dom.window.close();
+    dom.window.document.querySelector('[data-action="flip-role"]').click();
+    await tick();
+    dom.window.document.querySelector('[data-action="seal-role"]').click();
+    await until(() => dom.window.document.body.dataset.phase !== 'role-reveal', 'the first night', 15000);
+    assert.notEqual(dom.window.document.body.dataset.phase, 'role-reveal', 'the automatic narrator should begin the first night after every card is sealed');
+    assert.equal(dom.window.document.querySelector('[data-action="story-advance"]'), null, 'there is no human Storyteller advance control');
+  } finally {
+    dom.window.close();
+  }
 });
