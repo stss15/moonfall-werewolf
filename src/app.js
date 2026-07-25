@@ -12,6 +12,7 @@ import {
   startGame,
   startNextRound,
   storytellerAdvance,
+  swapRoleToSeat,
   upgradeState,
   updateSettings,
   viewFor
@@ -75,6 +76,9 @@ let agentTest = false;
 let agentTimer = null;
 const agentActionKeys = new Map();
 let audioContext = null;
+// 0 → 1 across the ballot, so each cast vote rings a little higher.
+let ballotTension = 0;
+let lastBallotKey = null;
 let noiseBuffer = null;
 let sfxBus = null;
 let sfxCompressor = null;
@@ -122,6 +126,7 @@ const ui = {
   arrowSeen: false,
   arrowPlayed: false,
   acting: false,
+  practiceName: '',
   wasWaiting: false,
   screenReused: false,
   busy: false
@@ -579,6 +584,16 @@ function sound(kind = 'tap', delay = 0) {
       bell(context, at, 311.1, .085, 1.35);
       bell(context, at + .34, 311.1, .065, 1.1);
       tone(context, {at: at + .66, frequency: 126, endFrequency: 72, duration: .38, volume: .075, type: 'triangle', attack: .006});
+    } else if (kind === 'ballot') {
+      // Pitch climbs with each ballot cast, so the last one lands highest.
+      const step = Math.max(0, Math.min(1, ballotTension));
+      tone(context, {at, frequency: 96 + step * 54, duration: .2, volume: .06, type: 'triangle', attack: .004});
+      tone(context, {at: at + .02, frequency: 780 + step * 420, duration: .1, volume: .028, type: 'square', attack: .003});
+    } else if (kind === 'ballot-final') {
+      // One vote left. A held, unresolved pair — the room stops breathing.
+      tone(context, {at, frequency: 116, duration: 1.5, volume: .07, type: 'triangle', attack: .1});
+      tone(context, {at: at + .04, frequency: 174.6, duration: 1.4, volume: .045, type: 'sine', attack: .14});
+      noise(context, {at, duration: 1.2, volume: .016, filterType: 'bandpass', frequency: 320, endFrequency: 180, q: .8});
     } else if (kind === 'sheriff') {
       bell(context, at, 440, .075, 1.4);
       bell(context, at + .28, 659.3, .055, 1.25);
@@ -1540,6 +1555,15 @@ async function createVillage(name) {
   history.replaceState(null, '', `${location.pathname}?room=${roomCode}`);
 }
 
+const shuffleLocal = list => {
+  const out = [...list];
+  for (let index = out.length - 1; index > 0; index -= 1) {
+    const other = Math.floor(Math.random() * (index + 1));
+    [out[index], out[other]] = [out[other], out[index]];
+  }
+  return out;
+};
+
 function runTestAgents() {
   if (!agentTest || !serverState || !identity || ['lobby', 'game-over', 'session-over'].includes(serverState.phase)) return;
   const botIds = Object.keys(serverState.players).filter(id => id.startsWith('test-agent-'));
@@ -1550,29 +1574,43 @@ function runTestAgents() {
     if (agentActionKeys.get(botId) === actionKey) continue;
     agentActionKeys.set(botId, actionKey);
     const candidates = Object.values(view.players).filter(player => player.alive && !player.storyteller && player.id !== botId).map(player => player.id);
+    // Agents choose at random rather than always taking the first candidate.
+    // With a fixed pick, every practice game reached the same deaths in the
+    // same order — you could not see a second story without five friends.
+    const anyOf = list => list.length ? list[Math.floor(Math.random() * list.length)] : undefined;
     let command = null;
     let payload = {};
     if (view.phase === 'role-reveal' && !view.me.seenRole) command = 'player:seen-role';
     else if (action.done) continue;
-    else if (action.type === 'cupid') { command = 'player:cupid-choose'; payload = {choices: candidates.slice(0, 2)}; }
+    else if (action.type === 'cupid') { command = 'player:cupid-choose'; payload = {choices: shuffleLocal(candidates).slice(0, 2)}; }
     else if (action.type === 'lover') command = 'player:lovers-seen';
-    else if (action.type === 'seer' && !action.target) { command = 'player:seer-choose'; payload = {target: candidates[0]}; }
+    else if (action.type === 'seer' && !action.target) { command = 'player:seer-choose'; payload = {target: anyOf(candidates)}; }
     else if (action.type === 'seer') command = 'player:seer-done';
     else if (action.type === 'werewolf') {
       const blocked = new Set([botId, ...(action.teammates || [])]);
-      const target = Object.values(view.players).find(player => player.alive && !player.storyteller && !blocked.has(player.id))?.id;
+      // The pack must converge, so every wolf agrees on one seeded victim
+      // rather than each picking their own and never reaching consensus.
+      const prey = Object.values(view.players).filter(player => player.alive && !player.storyteller && !blocked.has(player.id)).map(player => player.id);
+      const target = prey[view.phaseSerial % Math.max(1, prey.length)];
       if (target) { command = 'player:wolf-vote'; payload = {target}; }
-    } else if (action.type === 'witch') { command = 'player:witch-submit'; payload = {heal: false, poisonTarget: null}; }
+    } else if (action.type === 'witch') {
+      // Sometimes spend a bottle, so a practice run can actually show a heal
+      // or a poisoning instead of the Witch always waving both away.
+      const heal = Boolean(action.victim) && action.potions.heal && Math.random() < .45;
+      const poisonTarget = !heal && action.potions.poison && Math.random() < .3 ? anyOf(candidates) || null : null;
+      command = 'player:witch-submit';
+      payload = {heal, poisonTarget};
+    }
     else if (action.type === 'discussion' && !action.ready) { command = 'player:day-ready'; payload = {ready: true}; }
     else if (action.type === 'vote') {
       // A lover's day vote against their partner is rejected by the engine,
       // which would deadlock the ballot — the agent must pick someone else.
-      const target = action.candidates.find(id => id !== botId && id !== view.me.loverId)
-        || action.candidates.find(id => id !== botId);
+      const legal = action.candidates.filter(id => id !== botId && id !== view.me.loverId);
+      const target = anyOf(legal) || action.candidates.find(id => id !== botId);
       command = 'player:cast-vote';
       payload = {target};
     }
-    else if (action.type === 'hunter' || action.type === 'sheriff-successor') { command = 'player:resolve-pending'; payload = {target: action.candidates.find(id => id !== botId) || null}; }
+    else if (action.type === 'hunter' || action.type === 'sheriff-successor') { command = 'player:resolve-pending'; payload = {target: anyOf(action.candidates.filter(id => id !== botId)) || null}; }
     if (command) {
       setTimeout(() => {
         if (!agentTest || !serverState?.players[botId]) return;
@@ -1582,7 +1620,18 @@ function runTestAgents() {
   }
 }
 
-function startAgentTest(name) {
+// Which characters a practice deck must contain for you to be able to play
+// the role you asked for. Six seats leave four special slots beside the two
+// Werewolves, so asking for a plain Villager has to thin the specials out —
+// the classic six-hand deck has no ordinary villagers left in it at all.
+function practiceDeck(role) {
+  const others = ['seer', 'witch', 'hunter', 'cupid', 'little-girl', 'thief'];
+  if (role === 'villager') return ['seer', 'witch'];
+  if (SPECIAL_ROLE_IDS.includes(role)) return [role, ...others.filter(id => id !== role)].slice(0, 4);
+  return ['seer', 'witch', 'hunter', 'cupid'];
+}
+
+function startAgentTest(name, role = null) {
   const playerName = name.trim().slice(0, 24) || safeRead(NAME_KEY, '') || 'Steven';
   mode = 'coordinator';
   agentTest = true;
@@ -1601,11 +1650,20 @@ function startAgentTest(name) {
     serverState.players[id] = {id, seatKey: `local-${index + 1}`, name: agentName, connected: true, peerId: null, joinedAt: Date.now() + index, alive: true, role: null, ready: false};
   });
   setPreset(serverState, 'classic');
-  const result = startGame(serverState, () => 0);
+  if (role) updateSettings(serverState, {roles: practiceDeck(role)});
+  // A real shuffle. This used to deal with rng = () => 0, which is a constant,
+  // so every practice game in the app's life dealt the same cards to the same
+  // seats and played out the same way — the worst possible property for the
+  // mode you use to learn the game.
+  const result = startGame(serverState);
   if (!result.ok) {
     agentTest = false;
     mode = null;
     return toast(result.error, 'error');
+  }
+  if (role) {
+    const swap = swapRoleToSeat(serverState, identity.seatId, role);
+    if (!swap.ok) toast(swap.error, 'error');
   }
   currentView = viewFor(serverState, identity.seatId, {coordinator: true});
   connectionState = 'connected';
@@ -2072,12 +2130,30 @@ function renderWitch(view, action) {
   });
 }
 
+// The ballot is the day's clinch moment, so the screen has to carry the
+// pressure the narrator cannot: how full the box is, and — the beat that
+// actually tightens a table — that only one vote is still missing.
+function ballotMeter(action) {
+  if (!action.total) return '';
+  const remaining = Math.max(0, action.total - (action.cast || 0));
+  const label = remaining === 0 ? 'The ballot is sealed'
+    : remaining === 1 ? 'One vote left'
+    : `${action.cast} of ${action.total} cast`;
+  return `<div class="ballot ${remaining === 1 ? 'final' : ''} ${remaining === 0 ? 'sealed' : ''}">
+    <div class="ballot-pips" role="img" aria-label="${action.cast} of ${action.total} votes cast">${
+      Array.from({length: action.total}, (_, index) =>
+        `<i class="${index < action.cast ? 'in' : ''}" style="--i:${index}"></i>`).join('')}</div>
+    <strong>${esc(label)}</strong>
+  </div>`;
+}
+
 function renderVote(view, action) {
   app.innerHTML = stageScreen(view, {
     title: action.election ? 'Choose the Sheriff' : undefined,
-    rail: action.choice
+    cls: `vote-screen ${action.total - (action.cast || 0) === 1 ? 'last-ballot' : ''}`,
+    rail: `${ballotMeter(action)}${action.choice
       ? `<div class="badge green">✓ Sealed for ${esc(view.players[action.choice].name)}</div>`
-      : hint('vote', 'Tap the one you accuse. Nobody sees the tally until it seals.')
+      : hint('vote', 'Tap the one you accuse. Nobody sees the tally until it seals.')}`
   });
 }
 
@@ -2163,12 +2239,22 @@ function whisperMarkup(view, {compact = false} = {}) {
   </button>`;
 }
 
+// The tally is the payoff, so it is counted out rather than posted. Rows are
+// revealed fewest votes first, each bar filling in turn, which leaves the name
+// with the most votes arriving last and alone — the "it's you" beat the old
+// all-at-once table threw away. Leaders are marked so a tie reads as a tie.
 function tallyMarkup(view) {
   const tally = view.lastVote?.tally || {};
   const max = Math.max(1, ...Object.values(tally));
-  const rows = Object.entries(tally).sort((a, b) => b[1] - a[1]);
+  const leaders = new Set(view.lastVote?.leaders || []);
+  const rows = Object.entries(tally).sort((a, b) => a[1] - b[1] || String(a[0]).localeCompare(String(b[0])));
   if (!rows.length) return '<div class="panel compact center"><p class="muted" style="margin:0">No votes were cast.</p></div>';
-  return `<div class="tally">${rows.map(([id, count]) => `<div class="tally-row"><span>${esc(view.players[id]?.name || 'Unknown')}</span><span class="tally-bar"><i style="width:${Math.round(count / max * 100)}%"></i></span><b>${count}</b></div>`).join('')}</div>`;
+  return `<div class="tally counting" style="--rows:${rows.length}">${rows.map(([id, count], index) =>
+    `<div class="tally-row ${leaders.has(id) ? 'leader' : ''}" style="--i:${index}">
+      <span>${esc(view.players[id]?.name || 'Unknown')}</span>
+      <span class="tally-bar"><i style="--w:${Math.round(count / max * 100)}%"></i></span>
+      <b>${count}</b>
+    </div>`).join('')}</div>`;
 }
 
 function scoreboardMarkup(view, {final = false} = {}) {
@@ -2261,9 +2347,34 @@ function renderNarratorWait(view) {
   app.innerHTML = narratorStage(view);
 }
 
+// The ballot filling up, made audible. Counts only — sound() already gates
+// every cue to the table's speaker phone, so no player's handset gives them
+// away by ringing when they vote.
+function watchBallot(view) {
+  const action = view?.privateAction;
+  if (!action || action.type !== 'vote' || !action.total) {
+    lastBallotKey = null;
+    ballotTension = 0;
+    if (document.body.dataset.ballot) document.body.dataset.ballot = '';
+    return;
+  }
+  const remaining = action.total - action.cast;
+  // The square lives outside the screen element, so the "one vote left" state
+  // has to ride on the body for the crowd to feel it too.
+  document.body.dataset.ballot = remaining === 1 ? 'final' : '';
+  const key = `${view.phaseSerial}:${action.cast}`;
+  if (lastBallotKey === key) return;
+  const opening = lastBallotKey === null;
+  lastBallotKey = key;
+  ballotTension = action.total > 1 ? Math.max(0, action.cast - 1) / (action.total - 1) : 1;
+  if (opening || !action.cast) return;
+  sound(remaining === 1 ? 'ballot-final' : 'ballot');
+}
+
 function renderGame() {
   const view = currentView;
   phaseChanged(view);
+  watchBallot(view);
   if (view.phase === 'lobby') return renderLobby(view);
   if (view.phase === 'role-reveal') return renderRoleReveal(view);
   if (view.phase === 'game-over') return renderGameOver(view);
@@ -2296,8 +2407,26 @@ function renderGame() {
   return showSleep(view);
 }
 
+// A practice table deals five agents around you and plays itself. Letting you
+// name the character you want means one person can review every role's whole
+// turn — the Seer's vision, the Witch's bottles, Cupid's arrow, the Hunter's
+// last shot — without ever gathering five friends.
+function practicePicker() {
+  const choices = ['werewolf', 'seer', 'witch', 'hunter', 'cupid', 'little-girl', 'thief', 'villager'];
+  return `<div class="modal-backdrop" data-action="close-modal"><div class="modal"><div class="modal-head">
+      <h2>Practice table</h2><button class="icon-btn" data-action="close-modal">×</button></div>
+    <p class="muted small">Five agents play the rest of the village and the narrator runs the night. Pick what you want to be — the deck is built to contain it, and every other card is shuffled fresh.</p>
+    <div class="practice-grid">
+      <button class="practice-pick random" data-action="practice-start"><span class="practice-sigil">✦</span><strong>Surprise me</strong></button>
+      ${choices.map(id => `<button class="practice-pick" data-action="practice-start" data-role="${esc(id)}">
+        <img src="${esc(ROLES[id].image)}" alt=""><strong>${esc(ROLES[id].name)}</strong></button>`).join('')}
+    </div>
+  </div></div>`;
+}
+
 function renderModal() {
   if (!ui.modal) { modalRoot.innerHTML = ''; return; }
+  if (ui.modal === 'practice') { modalRoot.innerHTML = practicePicker(); return; }
   if (ui.modal === 'rules') {
     modalRoot.innerHTML = `<div class="modal-backdrop" data-action="close-modal"><div class="modal"><div class="modal-head"><h2>The Moonfall deck</h2><button class="icon-btn" data-action="close-modal">×</button></div><div class="auto-narrator-note"><span>◉</span><div><strong>No player sits out</strong><p>The automatic narrator speaks every wake and sleep cue, then opens each private action on the correct phones.</p></div></div><div class="rule-list">${['werewolf','villager','seer','witch','hunter','cupid','little-girl','thief','sheriff'].map(id => `<div class="rule-item"><img src="${ROLES[id].image}" alt=""><div><h3>${esc(ROLES[id].name)}</h3><p>${esc(ROLES[id].rule)}</p></div></div>`).join('')}</div><p class="footer-note"><a href="https://www.zygomatic-games.com/en/game/the-werewolves-of-millers-hollow/" target="_blank" rel="noreferrer">Read the publisher’s classic rulebook</a></p></div></div>`;
     return;
@@ -2474,9 +2603,16 @@ async function handleAction(action, element) {
     createVillage(document.querySelector('#create-name')?.value || '');
   } else if (action === 'start-agent-test') {
     sound('tap');
+    // Remember the name now: the picker replaces the screen that holds the input.
+    ui.practiceName = document.querySelector('#create-name')?.value
+      || document.querySelector('#join-name')?.value || ui.practiceName || '';
+    ui.modal = 'practice';
+    queueRender();
+  } else if (action === 'practice-start') {
+    sound('tap');
     ui.modal = null;
     void enterImmersiveMode();
-    startAgentTest(document.querySelector('#create-name')?.value || document.querySelector('#join-name')?.value || '');
+    startAgentTest(ui.practiceName || '', element.dataset.role || null);
   } else if (action === 'join-room') {
     sound('tap');
     void enterImmersiveMode();

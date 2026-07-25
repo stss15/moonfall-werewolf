@@ -12,10 +12,13 @@ import {
   nextNight,
   narratorUnlock,
   resolvePending,
+  updateSettings,
   scoreRound,
   startGame,
+  setPreset,
   startNextRound,
   storytellerAdvance,
+  swapRoleToSeat,
   viewFor,
   wolvesHaveConsensus
 } from '../src/engine.js';
@@ -385,4 +388,48 @@ test('complete first night follows Thief → Cupid → lovers → Seer → Wolve
   assert.equal(state.phase, 'dawn');
   assert.equal(state.players.villager.alive, false);
   assert.equal(state.lastDeaths[0].cause, 'the Werewolves');
+});
+
+test('a practice table can hand one seat the character it asked for', () => {
+  const state = fixture();
+  state.storytellerId = null;
+  state.players.story.role = null;
+  setPreset(state, 'classic');
+  assert.equal(startGame(state, () => 0.37).ok, true);
+
+  const seat = 'ada';
+  const before = Object.values(state.players).map(player => player.role).sort();
+  assert.equal(swapRoleToSeat(state, seat, 'seer').ok, true);
+  assert.equal(state.players[seat].role, 'seer', 'the seat gets the character it asked for');
+  const after = Object.values(state.players).map(player => player.role).sort();
+  assert.deepEqual(after, before, 'trading cards must not change the deck composition');
+
+  // Asking for what you already hold is a no-op, not a failure.
+  assert.equal(swapRoleToSeat(state, seat, 'seer').ok, true);
+  // A card that was never dealt cannot be conjured out of nothing.
+  assert.equal(swapRoleToSeat(state, seat, 'storyteller').ok, false);
+  assert.equal(swapRoleToSeat(state, 'nobody', 'seer').ok, false);
+});
+
+test('a practice seat can claim a role the Thief setup left in the centre', () => {
+  const state = fixture();
+  state.storytellerId = null;
+  state.players.story.role = null;
+  setPreset(state, 'classic');
+  updateSettings(state, {roles: ['thief', 'seer', 'witch', 'cupid']});
+  assert.equal(startGame(state, () => 0.61).ok, true);
+  assert.equal(state.extraCards.length, 2, 'the Thief setup leaves two spare cards');
+
+  // A picked role can end up in the centre rather than in someone's hand, and
+  // the picker still has to reach it. Whichever way the trade goes, no card is
+  // created or destroyed — that is the invariant worth pinning.
+  const allCards = () => [...Object.values(state.players).map(player => player.role), ...state.extraCards]
+    .filter(Boolean).sort();
+  const before = allCards();
+  const wanted = state.extraCards.find(role => !Object.values(state.players).some(player => player.role === role))
+    || state.extraCards[0];
+
+  assert.equal(swapRoleToSeat(state, 'ada', wanted).ok, true);
+  assert.equal(state.players.ada.role, wanted, 'the seat holds the card it asked for');
+  assert.deepEqual(allCards(), before, 'the deal is conserved across the trade');
 });

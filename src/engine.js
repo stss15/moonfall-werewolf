@@ -262,6 +262,28 @@ export function startGame(state, rng = Math.random) {
   return dealRound(state, connected, rng);
 }
 
+// Practice tables only: hand one seat a chosen character by trading cards
+// with whoever drew it (or with a spare left in the centre), so the deck's
+// composition stays exactly as legal as it was dealt. Nothing calls this in a
+// real game — a multiplayer deal is never steered.
+export function swapRoleToSeat(state, seatId, roleId) {
+  const mine = state.players[seatId];
+  if (!mine) return {ok: false, error: 'No such seat.'};
+  if (mine.role === roleId) return {ok: true};
+  const holder = Object.values(state.players).find(player => player.role === roleId && player.id !== seatId);
+  if (holder) {
+    [mine.role, holder.role] = [holder.role, mine.role];
+    return {ok: true};
+  }
+  const spare = (state.extraCards || []).indexOf(roleId);
+  if (spare >= 0) {
+    state.extraCards[spare] = mine.role;
+    mine.role = roleId;
+    return {ok: true};
+  }
+  return {ok: false, error: `No ${roleId} card was dealt.`};
+}
+
 export function startNextRound(state, rng = Math.random) {
   if (state.phase !== 'game-over') return {ok: false, error: 'Finish the current hunt before dealing again.'};
   upgradeState(state);
@@ -928,7 +950,12 @@ function privateAction(state, seatId) {
         type: 'vote',
         election: state.phase === 'sheriff-vote',
         candidates: state.phase === 'sheriff-vote' ? [...state.electionCandidates] : aliveIds(state),
-        choice: state.actions.votes[seatId] || null
+        choice: state.actions.votes[seatId] || null,
+        // How full the ballot box is — a count only. Who voted, and for whom,
+        // stays sealed until the tally, so this can tighten the room without
+        // telling anyone anything.
+        cast: aliveIds(state).filter(id => state.actions.votes[id] !== undefined).length,
+        total: aliveIds(state).length
       };
       break;
     case 'day-discussion':

@@ -142,6 +142,9 @@ test('five local test agents play while the user keeps a character card and narr
   const name = dom.window.document.querySelector('#create-name');
   name.value = 'Steven';
   dom.window.document.querySelector('[data-action="start-agent-test"]').click();
+  await tick();
+  // Practice now asks which character you want to review before dealing.
+  dom.window.document.querySelector('.modal [data-action="practice-start"][data-role="seer"]').click();
   try {
     await until(() => dom.window.document.querySelector('[data-action="flip-role"]'), 'the dealt card');
     assert.doesNotMatch(dom.window.document.querySelector('.screen').textContent, /You do not hold a character role/);
@@ -182,6 +185,8 @@ test('on-screen hints retire once the player has used the mechanic', async () =>
     await tick();
     dom.window.document.querySelector('#create-name').value = 'Steven';
     dom.window.document.querySelector('[data-action="start-agent-test"]').click();
+    await tick();
+    dom.window.document.querySelector('.modal [data-action="practice-start"][data-role="witch"]').click();
     await until(() => dom.window.document.querySelector('[data-action="flip-role"]'), 'the dealt card');
     dom.window.document.querySelector('[data-action="flip-role"]').click();
     await tick();
