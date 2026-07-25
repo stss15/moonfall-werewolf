@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {morningLine, spriteFile, townSquare} from '../src/village.js';
-import {deathCinematic, seerCinematic} from '../src/cutscene.js';
+import {deathCinematic, seerCinematic, victoryCinematic} from '../src/cutscene.js';
 
 function fakeView(overrides = {}) {
   const players = {};
@@ -174,4 +174,47 @@ test('committing an action plays your own role’s act pose, and only yours', ()
   assert.match(mine, /sheets\/witch\.webp/);
   assert.match(mine, /background-position:0% 50%/, 'the act row is row 2 of 5');
   assert.equal((acting.match(/class="[^"]*acting/g) || []).length, 1, 'nobody else in the square moves');
+});
+
+test('every ending opens on its own scene', () => {
+  const withWinner = (team, players) => ({...fakeView({players}), phase: 'game-over', winner: {team, title: 'x', text: 'y'}});
+  const mk = (id, alive, role) => [id, {id, name: id, alive, connected: true, storyteller: false, sheriff: false, role}];
+
+  // The pack howls: survivors are drawn from the act row, not standing idle.
+  const wolves = victoryCinematic(withWinner('wolves', Object.fromEntries([
+    mk('ada', true, 'werewolf'), mk('ben', true, 'werewolf'), mk('cleo', false, 'seer')])));
+  assert.match(wolves, /finale-scene wolves-win/);
+  assert.match(wolves, /finale-moon blood/);
+  assert.equal((wolves.match(/sheets\/werewolf\.webp/g) || []).length, 2, 'both surviving wolves stand');
+  assert.match(wolves, /background-position:0% 50%/, 'the act row is row 2 of 5');
+
+  // The village wins with the last wolf down beside it.
+  const village = victoryCinematic(withWinner('village', Object.fromEntries([
+    mk('ada', true, 'seer'), mk('ben', false, 'werewolf')])));
+  assert.match(village, /finale-scene village-win/);
+  assert.match(village, /sheets\/seer\.webp/);
+  assert.match(village, /finale-fallen[\s\S]*sheets\/werewolf\.webp/);
+  const chorusBlock = village.slice(village.indexOf('finale-cast'), village.indexOf('finale-fallen'));
+  assert.doesNotMatch(chorusBlock, /sheets\/werewolf\.webp/, 'the dead wolf lies apart, it does not join the village chorus');
+
+  // The lovers stand in the chained bound pose (row 3), not the act row.
+  const lovers = victoryCinematic(withWinner('lovers', Object.fromEntries([
+    mk('ada', true, 'cupid'), mk('ben', true, 'hunter'), mk('cleo', false, 'werewolf')])));
+  assert.match(lovers, /finale-scene lovers-win/);
+  assert.match(lovers, /background-position:0% 75%/, 'bound is row 4 of 5');
+  assert.match(lovers, /finale-thread/);
+
+  // Nobody survived: an empty square, and no cast at all.
+  const none = victoryCinematic(withWinner('none', Object.fromEntries([mk('ada', false, 'villager')])));
+  assert.match(none, /finale-scene none-win/);
+  assert.doesNotMatch(none, /sheets\//, 'there is nobody left to draw');
+});
+
+test('a wiped-out winning team still has something on screen', () => {
+  // Lovers can win with the pack dead and the village dead; wolves can win a
+  // parity ending where the survivors list is oddly shaped. The scene must
+  // never render an empty cast block.
+  const view = {...fakeView({players: {}}), phase: 'game-over', winner: {team: 'wolves', title: 'x', text: 'y'}};
+  const scene = victoryCinematic(view);
+  assert.match(scene, /sheets\/werewolf\.webp/, 'a fallback wolf stands in for an empty pack');
 });

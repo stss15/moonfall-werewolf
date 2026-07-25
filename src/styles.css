@@ -693,13 +693,25 @@ body[data-ballot="final"] #village .square{animation:square-in 1.4s ease .1s bot
 @keyframes fx-muzzle{from{opacity:.65}to{opacity:0}}
 
 /* ── Dawn, judgement and true-form reveals ────────────────────────────── */
-.public-cinema{position:fixed;z-index:15;left:0;right:min(244px,29vw);top:52px;bottom:0;display:grid;place-items:center;pointer-events:none}
+/* The dawn reveal is the story's loudest public beat, so it takes the whole
+   screen. It used to play at a third of the width beside the standing crowd,
+   which is why it read as a small thing happening in the corner of a busy
+   village rather than as a death being announced. The square is dimmed and
+   pushed out of focus behind it, and the stage is roughly half again as big. */
+.public-cinema{position:fixed;z-index:15;inset:0;display:grid;place-items:center;pointer-events:none}
 .cinema-deaths{position:absolute;inset:0;display:grid;place-items:center}
-.cinema-death{position:absolute;display:grid;grid-template-rows:1fr auto;justify-items:center;width:min(48vw,390px);height:min(76svh,520px);opacity:0;animation:cinema-window 4.4s ease calc(var(--beat)*4.4s) both}
+/* The veil lasts the whole run of deaths, not one beat of it. */
+.cinema-deaths:before,.cinema-empty:before{content:"";position:fixed;inset:0;z-index:0;
+  background:radial-gradient(ellipse 62% 62% at 50% 52%,rgba(3,2,7,.6),rgba(3,2,7,.9) 78%);
+  backdrop-filter:blur(3px) saturate(.55) brightness(.62);-webkit-backdrop-filter:blur(3px) saturate(.55) brightness(.62);
+  animation:cinema-veil calc(var(--deaths,1)*4.4s + .5s) ease both}
+@keyframes cinema-veil{0%,100%{opacity:0}7%,89%{opacity:1}}
+.cinema-death{z-index:1}
+.cinema-death{position:absolute;display:grid;grid-template-rows:1fr auto;justify-items:center;width:min(72vw,560px);height:min(88svh,620px);opacity:0;animation:cinema-window 4.4s ease calc(var(--beat)*4.4s) both}
 @keyframes cinema-window{0%,100%{opacity:0;transform:scale(.94)}5%,86%{opacity:1;transform:scale(1)}92%{opacity:0;transform:translateY(-8px) scale(1.02)}}
-.cinema-stage{position:relative;width:min(44svh,330px);aspect-ratio:1;align-self:end}
+.cinema-stage{position:relative;width:min(62svh,440px);aspect-ratio:1;align-self:end}
 .cinema-body{position:absolute;inset:0;display:grid;place-items:center}
-.cinema-body .ss{--base:min(44svh,330px);--s:1;width:100%;height:100%;filter:drop-shadow(0 18px 25px rgba(0,0,0,.92))}
+.cinema-body .ss{--base:min(62svh,440px);--s:1;width:100%;height:100%;filter:drop-shadow(0 18px 25px rgba(0,0,0,.92))}
 .cinema-body.disguise{animation:disguise-fall 4.4s ease calc(var(--beat)*4.4s) both}
 .cinema-body.truth{opacity:0;animation:truth-rise 4.4s ease calc(var(--beat)*4.4s) both}
 .cinema-body.disguise .ss.oneshot{animation-delay:calc(.35s + var(--beat)*4.4s)}
@@ -708,9 +720,9 @@ body[data-ballot="final"] #village .square{animation:square-in 1.4s ease .1s bot
 @keyframes truth-rise{0%,38%{opacity:0;transform:scale(.72);filter:brightness(4) blur(7px)}52%,88%{opacity:1;transform:scale(1);filter:none}100%{opacity:0}}
 .cinema-ring{position:absolute;left:50%;bottom:8%;width:74%;height:15%;transform:translateX(-50%);border:2px solid rgba(255,226,148,.7);border-radius:50%;box-shadow:0 0 30px rgba(255,209,94,.45),inset 0 0 20px rgba(255,209,94,.28);animation:cinema-ring 4.4s ease calc(var(--beat)*4.4s) both}
 @keyframes cinema-ring{0%,34%,100%{opacity:0;transform:translateX(-50%) scale(.4)}52%,85%{opacity:1;transform:translateX(-50%) scale(1)}}
-.cinema-reveal{min-width:230px;padding:8px 18px 10px;text-align:center;border:1px solid rgba(255,225,145,.48);border-radius:16px;background:rgba(7,5,10,.9);box-shadow:0 16px 40px #000;animation:cinema-label 4.4s ease calc(var(--beat)*4.4s) both}
+.cinema-reveal{min-width:280px;padding:10px 26px 12px;text-align:center;border:1px solid rgba(255,225,145,.48);border-radius:16px;background:rgba(7,5,10,.9);box-shadow:0 16px 40px #000;animation:cinema-label 4.4s ease calc(var(--beat)*4.4s) both}
 .cinema-reveal span,.cinema-reveal small{display:block;font-size:10px;color:var(--muted)}
-.cinema-reveal strong{display:block;font-family:Georgia,serif;font-size:27px;color:var(--gold-2);margin:1px 0}
+.cinema-reveal strong{display:block;font-family:Georgia,serif;font-size:clamp(30px,6.4svh,42px);color:var(--gold-2);margin:1px 0}
 @keyframes cinema-label{0%,45%,100%{opacity:0;transform:translateY(14px)}56%,88%{opacity:1;transform:none}}
 .cinema-claws,.cinema-poison,.cinema-heart,.cinema-bolt,.cinema-votes,.cinema-fate{position:absolute;inset:0;z-index:3;pointer-events:none;animation:cause-show 4.4s ease calc(var(--beat)*4.4s) both}
 @keyframes cause-show{0%,16%,100%{opacity:0}24%,48%{opacity:1}62%{opacity:0}}
@@ -810,3 +822,104 @@ body[data-ballot="final"] #village .square{animation:square-in 1.4s ease .1s bot
 .finale-screen .podium-place b{font-size:19px}
 /* Keep the scoreboard's header clear of the floating connection pill. */
 .session-over-screen.finale-screen{padding-top:calc(var(--safe-top) + 52px)}
+
+/* ── Victory scenes ───────────────────────────────────────────────────────
+   Each ending opens on a full-screen picture before the verdict settles over
+   it. Everything here is the existing sheets plus CSS — no new art. */
+.finale-scene{position:fixed;inset:0;z-index:2;pointer-events:none;overflow:hidden;animation:finale-in 1.1s ease both}
+@keyframes finale-in{from{opacity:0}to{opacity:1}}
+.finale-wash{position:absolute;inset:0;animation:finale-wash 5s ease-in-out infinite alternate}
+@keyframes finale-wash{to{opacity:.55}}
+/* The cast stands clear of the verdict panel on the left and the card strip
+   at the top right, rather than being centred under both. */
+.finale-cast{position:absolute;left:min(36%,320px);right:2%;bottom:8%;display:flex;justify-content:center;align-items:flex-end;gap:min(3.4vw,34px)}
+.finale-actor{animation:finale-rise .85s cubic-bezier(.2,.8,.3,1) calc(.25s + var(--n,0)*.18s) both}
+.finale-actor .ss{--base:min(46svh,340px);--s:1;filter:drop-shadow(0 16px 26px rgba(0,0,0,.95))}
+@keyframes finale-rise{from{opacity:0;transform:translateY(34px) scale(.9)}to{opacity:1;transform:none}}
+
+/* The pack: a red moon, embers on the wind, the square gone dark. */
+.wolves-win{background:radial-gradient(ellipse 90% 70% at 50% 96%,rgba(70,10,16,.6),transparent 68%),linear-gradient(180deg,rgba(6,3,9,.86),rgba(24,4,10,.9))}
+.wolves-win .finale-wash{background:radial-gradient(circle at 50% 26%,rgba(190,40,44,.28),transparent 60%)}
+/* A moon, not a disc: the sphere is mottled and its edge is allowed to bleed
+   into the sky instead of stopping dead. Kept left of the card strip. */
+.finale-moon{position:absolute;left:22%;top:9%;width:min(23svh,150px);aspect-ratio:1;transform:translateX(-50%);border-radius:50%;
+  background:radial-gradient(circle at 62% 68%,rgba(140,124,84,.5) 0 12%,transparent 13%),
+    radial-gradient(circle at 34% 62%,rgba(140,124,84,.4) 0 8%,transparent 9%),
+    radial-gradient(circle at 56% 30%,rgba(140,124,84,.35) 0 6%,transparent 7%),
+    radial-gradient(circle at 38% 34%,#fff7d9,#e8d49a 54%,#9c8a58 88%,rgba(156,138,88,0) 100%);
+  filter:drop-shadow(0 0 34px rgba(240,220,160,.5));opacity:.92;animation:moon-breathe 5.5s ease-in-out infinite}
+.finale-moon.blood{background:radial-gradient(circle at 62% 68%,rgba(90,20,16,.55) 0 12%,transparent 13%),
+    radial-gradient(circle at 34% 62%,rgba(90,20,16,.45) 0 8%,transparent 9%),
+    radial-gradient(circle at 56% 30%,rgba(90,20,16,.4) 0 6%,transparent 7%),
+    radial-gradient(circle at 38% 34%,#ffd2c2,#c2402f 54%,#6d1a14 88%,rgba(109,26,20,0) 100%);
+  filter:drop-shadow(0 0 46px rgba(200,50,40,.7));animation:blood-rise 3.2s ease both,moon-breathe 5.5s ease-in-out 3.2s infinite}
+@keyframes blood-rise{from{filter:hue-rotate(40deg) brightness(1.5);transform:translateX(-50%) translateY(22px) scale(.86)}}
+.finale-embers i{position:absolute;bottom:-6%;width:3px;height:3px;border-radius:50%;background:#ff9a5c;box-shadow:0 0 9px #ff6a2a;
+  left:calc(4% + var(--x,0)*1%);animation:ember-drift linear infinite}
+.finale-embers i:nth-child(n){animation-duration:7s}
+.finale-embers i:nth-child(1){left:8%;animation-delay:-.3s}.finale-embers i:nth-child(2){left:16%;animation-delay:-1.6s}
+.finale-embers i:nth-child(3){left:24%;animation-delay:-3.1s}.finale-embers i:nth-child(4){left:32%;animation-delay:-4.4s}
+.finale-embers i:nth-child(5){left:40%;animation-delay:-.9s}.finale-embers i:nth-child(6){left:48%;animation-delay:-2.4s}
+.finale-embers i:nth-child(7){left:56%;animation-delay:-5.2s}.finale-embers i:nth-child(8){left:64%;animation-delay:-1.1s}
+.finale-embers i:nth-child(9){left:72%;animation-delay:-3.8s}.finale-embers i:nth-child(10){left:80%;animation-delay:-6.1s}
+.finale-embers i:nth-child(11){left:88%;animation-delay:-2.9s}.finale-embers i:nth-child(12){left:94%;animation-delay:-4.9s}
+.finale-embers i:nth-child(13){left:12%;animation-delay:-5.7s}.finale-embers i:nth-child(14){left:68%;animation-delay:-.6s}
+@keyframes ember-drift{from{transform:translateY(0) translateX(0);opacity:0}
+  12%{opacity:1}to{transform:translateY(-96svh) translateX(26px);opacity:0}}
+
+/* The village: sunrise over the square, lanterns up, the last wolf down. */
+.village-win{background:linear-gradient(180deg,rgba(255,196,116,.32),rgba(120,64,58,.34) 46%,rgba(12,8,14,.72))}
+.village-win .finale-wash{background:radial-gradient(ellipse 70% 50% at 50% 88%,rgba(255,206,132,.34),transparent 66%)}
+.finale-sun{position:absolute;left:calc(min(36%,320px) + (98% - min(36%,320px))/2);bottom:16%;width:min(46svh,330px);aspect-ratio:1;transform:translateX(-50%);border-radius:50%;
+  background:radial-gradient(circle,#fff6d5 0 26%,rgba(255,214,132,.7) 44%,transparent 70%);animation:sun-rise 3.4s cubic-bezier(.2,.7,.3,1) both}
+@keyframes sun-rise{from{transform:translateX(-50%) translateY(46%);opacity:0}to{transform:translateX(-50%);opacity:1}}
+.finale-rays{position:absolute;left:calc(min(36%,320px) + (98% - min(36%,320px))/2);bottom:16%;width:min(46svh,330px);aspect-ratio:1;transform:translateX(-50%);animation:rune-spin 44s linear infinite}
+.finale-rays i{position:absolute;left:50%;top:50%;width:2px;height:74svh;transform-origin:50% 0;background:linear-gradient(180deg,rgba(255,226,160,.3),transparent 60%)}
+.finale-rays i:nth-child(1){transform:rotate(0)}.finale-rays i:nth-child(2){transform:rotate(40deg)}
+.finale-rays i:nth-child(3){transform:rotate(80deg)}.finale-rays i:nth-child(4){transform:rotate(120deg)}
+.finale-rays i:nth-child(5){transform:rotate(160deg)}.finale-rays i:nth-child(6){transform:rotate(200deg)}
+.finale-rays i:nth-child(7){transform:rotate(240deg)}.finale-rays i:nth-child(8){transform:rotate(280deg)}
+.finale-rays i:nth-child(9){transform:rotate(320deg)}
+.finale-fallen{position:absolute;right:9%;bottom:5%;animation:finale-rise 1s ease .9s both}
+.finale-fallen .ss{--base:min(30svh,220px);--s:1;filter:grayscale(.45) brightness(.7) drop-shadow(0 12px 20px #000)}
+
+/* The lovers: two bound souls and an empty town. */
+.lovers-win{background:radial-gradient(ellipse 70% 60% at 50% 70%,rgba(72,18,44,.6),rgba(6,4,10,.92) 72%)}
+.lovers-win .finale-wash{background:radial-gradient(circle at 50% 62%,rgba(255,96,158,.2),transparent 58%)}
+.finale-cast.pair{gap:min(9vw,86px)}
+.finale-thread{position:absolute;left:calc(min(36%,320px) + (98% - min(36%,320px))/2);bottom:26%;width:min(18vw,150px);height:2px;transform:translateX(-50%);
+  background:linear-gradient(90deg,transparent,rgba(255,132,182,.85),transparent);box-shadow:0 0 14px rgba(255,96,158,.8);
+  animation:thread-in 1.2s ease .9s both}
+@keyframes thread-in{from{opacity:0;transform:translateX(-50%) scaleX(.2)}to{opacity:1;transform:translateX(-50%)}}
+.finale-hearts i{position:absolute;bottom:22%;font-style:normal;color:#ff77ad;font-size:17px;text-shadow:0 0 12px #ff3f8d;animation:heart-float 5.5s ease-in-out infinite}
+.finale-hearts i:nth-child(1){left:52%;animation-delay:-.2s}.finale-hearts i:nth-child(2){left:58%;animation-delay:-1.4s}
+.finale-hearts i:nth-child(3){left:64%;animation-delay:-2.6s}.finale-hearts i:nth-child(4){left:70%;animation-delay:-3.5s}
+.finale-hearts i:nth-child(5){left:76%;animation-delay:-4.4s}.finale-hearts i:nth-child(6){left:55%;animation-delay:-3.1s}
+.finale-hearts i:nth-child(7){left:67%;animation-delay:-.9s}.finale-hearts i:nth-child(8){left:73%;animation-delay:-2.1s}
+.finale-hearts i:nth-child(9){left:61%;animation-delay:-4.9s}
+@keyframes heart-float{from{transform:translateY(0) scale(.7);opacity:0}20%{opacity:1}to{transform:translateY(-34svh) scale(1.1);opacity:0}}
+
+/* Nobody: an empty square under a cold moon. */
+.none-win{background:radial-gradient(ellipse 80% 70% at 50% 84%,rgba(16,20,40,.6),rgba(3,3,8,.94) 74%)}
+.none-win .finale-wash{background:radial-gradient(circle at 50% 30%,rgba(120,140,190,.12),transparent 62%)}
+.finale-empty-square{position:absolute;left:-10%;right:-10%;bottom:0;height:34%;
+  background:radial-gradient(ellipse 40% 100% at 30% 100%,rgba(150,170,215,.22),transparent 70%),
+    radial-gradient(ellipse 36% 100% at 72% 100%,rgba(140,160,208,.18),transparent 72%);
+  animation:mist-far 30s ease-in-out infinite alternate}
+
+@media(prefers-reduced-motion:reduce){
+  .finale-scene *,.finale-scene{animation:none!important}
+  .finale-embers,.finale-hearts,.finale-rays{display:none}
+}
+
+/* The finale panels sit above their scene and hold back a beat so the picture
+   lands first. The card grid is dropped to a whisper so the scene can breathe;
+   the verdict and the scoreboard are what the table actually reads. */
+.finale-screen.has-scene .finale-side,.finale-screen.has-scene .finale-main{position:relative;z-index:3}
+.finale-screen.has-scene .finale-side{animation:verdict-settle 1s cubic-bezier(.2,.8,.3,1) 1.5s both}
+.finale-screen.has-scene .finale-main{animation:verdict-settle 1s cubic-bezier(.2,.8,.3,1) 2.1s both}
+@keyframes verdict-settle{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+.finale-screen.has-scene .game-over-hero{background:linear-gradient(180deg,rgba(6,4,11,.86),rgba(6,4,11,.62));
+  border-radius:20px;padding:14px 16px;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+.finale-screen.has-scene .final-grid{opacity:.9}
+.finale-screen.has-scene .final-card{background:rgba(6,5,11,.72);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}

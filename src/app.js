@@ -19,7 +19,7 @@ import {
 } from './engine.js';
 import {PHASE_META, PRESETS, ROLES, SPECIAL_ROLE_IDS, STORY_CUES} from './roles.js';
 import {morningLine, townSquare} from './village.js';
-import {cupidCinematic, deathCinematic, hunterCinematic, seerCinematic} from './cutscene.js';
+import {cupidCinematic, deathCinematic, hunterCinematic, seerCinematic, victoryCinematic} from './cutscene.js';
 import {narrate, narrationSupported, stopNarration} from './narrator.js';
 import {initVoicePack, playVoicePack, stopVoicePack, voicePackCovers, voicePackEngine, voicePackReady, warmVoicePack} from './voicepack.js';
 import qrFactory from 'qrcode-generator';
@@ -2314,7 +2314,11 @@ function renderGameOver(view) {
   // The finale is a fixed two-panel stage: verdict and controls on the left,
   // the revealed village and scoreboard on the right. Everything is sized in
   // viewport units so the whole screen fits without scrolling.
-  app.innerHTML = `<section class="screen game-over-screen finale-screen">${gameHeader(view)}
+  // The ending opens on its own scene — the pack howling over a dark square,
+  // the village raising lanterns at sunrise, two lovers alone — and the
+  // verdict settles over it a beat later.
+  app.innerHTML = `<section class="screen game-over-screen finale-screen has-scene">${gameHeader(view)}
+    ${victoryCinematic(view)}
     <div class="finale-side">
       <div class="game-over-hero"><div class="victory-moon">${symbol}</div><h1>${esc(winner.title)}</h1><p>${esc(winner.text || epilogue)}</p></div>
       ${view.coordinator ? '<div class="session-actions"><button class="btn" data-action="next-round">Next hunt</button><button class="btn secondary" data-action="change-deck">Change deck</button><button class="btn secondary" data-action="end-session">End table</button></div>' : ''}

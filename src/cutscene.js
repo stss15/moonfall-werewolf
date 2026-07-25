@@ -33,7 +33,7 @@ export function deathCinematic(view) {
       <small>No death is revealed.</small>
     </div>`;
   }
-  return `<div class="cinema-deaths" style="--deaths:${deaths.length}">${deaths.map((death, index) => {
+  return `<div class="cinema-deaths" style="--deaths:${deaths.length};--last-beat:${deaths.length - 1}">${deaths.map((death, index) => {
     const role = ROLES[death.role] || ROLES.villager;
     const kind = deathCauseKind(death.cause);
     return `<article class="cinema-death cause-${kind}" style="--beat:${index}">
@@ -74,5 +74,68 @@ export function hunterCinematic() {
     <div class="hunter-actor">${sheetSprite('hunter', {anim: 'act', loop: false, speed: 1.15, seedText: 'last-shot'})}</div>
     <span class="hunter-sight"><i></i><i></i></span>
     <span class="hunter-bolt"></span>
+  </div>`;
+}
+
+// ── The finale ───────────────────────────────────────────────────────────
+// The game ended on a static verdict card: a headline, a grid of cards and a
+// scoreboard. Three of the four endings are the most dramatic thing that can
+// happen at this table and none of them had a picture. Each outcome now opens
+// on a full-screen scene built from the sheets already in the repo — wolves
+// howling over a dark square, the village raising its lanterns at sunrise,
+// two lovers alone, or an empty town — before the verdict settles over it.
+
+// Who is left standing, dressed as what the whole table now knows them to be.
+function survivors(view, team) {
+  return Object.values(view.players || {})
+    .filter(player => !player.storyteller && player.alive
+      && (team === 'wolf' ? player.role === 'werewolf' : player.role !== 'werewolf'))
+    .slice(0, 5);
+}
+
+function chorus(players, {anim, fallbackRole}) {
+  const cast = players.length ? players : [{id: 'ghost', role: fallbackRole}];
+  return cast.map((player, index) => `<div class="finale-actor" style="--n:${index};--of:${cast.length}">
+    ${sheetSprite(player.role || fallbackRole, {anim, loop: false, speed: 1.5, seedText: `finale-${player.id}`})}
+  </div>`).join('');
+}
+
+export function victoryCinematic(view) {
+  const team = view.winner?.team || 'none';
+  if (team === 'wolves') {
+    // The pack owns the square: they hold the act row's howl while the last
+    // village windows go dark behind them and the moon runs red.
+    return `<div class="finale-scene wolves-win">
+      <div class="finale-moon blood"></div>
+      <div class="finale-cast">${chorus(survivors(view, 'wolf'), {anim: 'act', fallbackRole: 'werewolf'})}</div>
+      <div class="finale-embers">${'<i></i>'.repeat(14)}</div>
+      <div class="finale-wash"></div>
+    </div>`;
+  }
+  if (team === 'village') {
+    return `<div class="finale-scene village-win">
+      <div class="finale-sun"></div>
+      <div class="finale-cast">${chorus(survivors(view, 'village'), {anim: 'act', fallbackRole: 'villager'})}</div>
+      <div class="finale-fallen">${sheetSprite('werewolf', {anim: 'death', loop: false, speed: 1.6, seedText: 'last-wolf'})}</div>
+      <div class="finale-rays">${'<i></i>'.repeat(9)}</div>
+      <div class="finale-wash"></div>
+    </div>`;
+  }
+  if (team === 'lovers') {
+    const pair = Object.values(view.players || {}).filter(player => player.alive && !player.storyteller).slice(0, 2);
+    return `<div class="finale-scene lovers-win">
+      <div class="finale-moon"></div>
+      <div class="finale-cast pair">${pair.map((player, index) => `<div class="finale-actor" style="--n:${index};--of:2">
+        ${sheetSprite(player.role || 'villager', {anim: 'bound', seedText: `finale-${player.id}`})}
+      </div>`).join('')}</div>
+      <div class="finale-thread"></div>
+      <div class="finale-hearts">${'<i>♥</i>'.repeat(9)}</div>
+      <div class="finale-wash"></div>
+    </div>`;
+  }
+  return `<div class="finale-scene none-win">
+    <div class="finale-moon"></div>
+    <div class="finale-empty-square"></div>
+    <div class="finale-wash"></div>
   </div>`;
 }
