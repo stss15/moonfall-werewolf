@@ -63,6 +63,21 @@ export function sheetSprite(roleId, {anim = 'idle', loop = true, speed = null, s
     style="background-image:url('assets/sprites/sheets/${sheet}.webp');background-position:0% ${row * 25}%;--ssd:${duration.toFixed(2)}s;--ssdel:${((h >> 3) % 90) / 100}s${idleStyle}"></span>`;
 }
 
+// Eight of the nine roles ship a painted fallen figure (assets/sprites/
+// dead-*.webp) that nothing has ever rendered — the square dressed its dead
+// in the living idle frame under a blue filter instead. A kneeling, broken
+// figure wearing that same spectral treatment is what "a ghost that stays
+// where they fell" was always meant to look like. The Hunter has no fallen
+// art, so that one role keeps the sheet-based ghost.
+const FALLEN_ART = new Set(['villager', 'werewolf', 'seer', 'witch', 'cupid', 'little-girl', 'thief', 'sheriff']);
+
+export function fallenSprite(roleId, {seedText = ''} = {}) {
+  const sheet = SPRITE_FOR[roleId] || 'villager';
+  if (!FALLEN_ART.has(sheet)) return null;
+  const h = hashOf(seedText + sheet);
+  return `<img class="fallen" src="assets/sprites/dead-${sheet}.webp" alt="" style="--sd:${((h >> 4) % 30) / 10}s">`;
+}
+
 // What this viewer knows this player to be.
 function knownRole(view, player) {
   if (player.role) return player.role;
@@ -167,7 +182,8 @@ export function townSquare(view, {select = null, arrivals = null, acting = false
       style="left:${x.toFixed(1)}%;bottom:${bottom}%;--s:${scale};--depth:${rowCount > 1 ? (row / (rowCount - 1)).toFixed(2) : 0};--sway:${(3.4 + (h % 21) / 10).toFixed(1)}s;--sd:${((h >> 4) % 30) / 10}s;--fresh:${freshOrder.get(player.id) || 0};z-index:${10 - row}" ${forbidden ? 'disabled' : ''}>
       ${marks}
       ${picked ? '<i class="pick-ring" aria-hidden="true"></i>' : ''}
-      ${sheetSprite(knownRole(view, player), {anim, loop: !dead && !isActor, seedText: seed + player.id, alive: !dead})}
+      ${(dead ? fallenSprite(knownRole(view, player), {seedText: seed + player.id}) : null)
+        || sheetSprite(knownRole(view, player), {anim, loop: !dead && !isActor, seedText: seed + player.id, alive: !dead})}
       <span class="sprite-name">${escText(player.name)}</span>
     </button>`;
   }).join('');

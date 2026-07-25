@@ -310,7 +310,8 @@ body[data-phase="night-witch"]:after{background:radial-gradient(circle at 50% 6%
 #village:has(.square[data-mood="dawn"]):before{filter:sepia(.4) hue-rotate(-14deg) saturate(1.25)}
 .square{position:absolute;inset:0;opacity:0;animation:square-in 1.4s ease .1s both}
 @keyframes square-in{to{opacity:1}}
-.sprite{position:absolute;transform:translateX(-50%);border:0;padding:0;background:none;pointer-events:auto;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.sprite{--dim:saturate(calc(1 - var(--depth,0)*.42)) brightness(calc(1 - var(--depth,0)*.26)) contrast(calc(1 - var(--depth,0)*.12));
+  position:absolute;transform:translateX(-50%);border:0;padding:0;background:none;pointer-events:auto;cursor:pointer;-webkit-tap-highlight-color:transparent}
 .sprite img{display:block;height:calc(var(--base,min(15.5svh,136px))*var(--s,1));width:auto;max-width:none;pointer-events:none;
   filter:drop-shadow(0 7px 13px rgba(0,0,0,.85)) drop-shadow(0 0 24px rgba(0,0,0,.5));
   animation:sprite-sway var(--sway,4s) ease-in-out var(--sd,0s) infinite alternate;transform-origin:50% 100%}
@@ -322,19 +323,32 @@ body[data-phase="night-witch"]:after{background:radial-gradient(circle at 50% 6%
 .sprite-name{position:absolute;left:50%;bottom:calc(100% + 4px);transform:translateX(-50%) translateY(5px);white-space:nowrap;padding:6px 11px;border-radius:999px;border:1px solid rgba(223,183,85,.45);background:rgba(8,6,12,.92);color:var(--gold-2);font-family:Georgia,serif;font-size:13px;opacity:0;transition:opacity .25s ease,transform .25s ease;pointer-events:none;box-shadow:0 8px 22px rgba(0,0,0,.5)}
 .sprite.named .sprite-name{opacity:1;transform:translateX(-50%) translateY(0)}
 /* the marks above heads */
-.marks{position:absolute;left:50%;bottom:calc(100% - 16px);transform:translateX(-50%);display:flex;gap:7px;pointer-events:none;z-index:3}
+.marks{position:absolute;left:50%;bottom:calc(100% - 16px);transform:translateX(-50%);display:flex;align-items:center;gap:7px;pointer-events:none;z-index:3}
 .mark{font-size:17px;line-height:1}
 /* the Sheriff's actual badge floats above their head */
-.sprite .mark.badge{width:min(8.5svh,40px);height:auto;max-width:none;filter:drop-shadow(0 1px 3px #000) drop-shadow(0 0 9px rgba(255,205,80,.95));animation:badge-shine 3s ease-in-out infinite}
-@keyframes badge-shine{50%{filter:drop-shadow(0 1px 3px #000) drop-shadow(0 0 18px rgba(255,215,100,1))}}
+/* The badge art is a gold star and rim on a dark medallion. It was being
+   drawn oversized and squashed out of square by the flex row of marks, so it
+   read as a dark hole above the head; sized square and lifted in brightness,
+   the gold actually reads at 30px. (A blend mode cannot help here — .marks
+   carries a z-index, so the badge has no backdrop to blend with.) */
+.sprite .mark.badge{width:min(6.4svh,30px);height:min(6.4svh,30px);max-width:none;flex:none;object-fit:contain;
+  filter:brightness(1.34) saturate(1.3) drop-shadow(0 1px 3px #000) drop-shadow(0 0 8px rgba(255,205,80,.85));
+  animation:badge-shine 3s ease-in-out infinite}
+@keyframes badge-shine{50%{filter:brightness(1.5) saturate(1.45) drop-shadow(0 1px 3px #000) drop-shadow(0 0 16px rgba(255,215,100,1))}}
 @keyframes badge-glint{50%{text-shadow:0 0 16px rgba(255,215,100,1),0 1px 3px #000}}
 .sprite.bound img{filter:drop-shadow(0 7px 13px rgba(0,0,0,.85)) drop-shadow(0 0 22px rgba(255,110,160,.42))}
 /* ghosts stay where they fell, their true card revealed */
-.sprite.ghost img{opacity:.66;filter:grayscale(.35) brightness(1.12) sepia(.14) hue-rotate(180deg) saturate(.7) drop-shadow(0 0 20px rgba(150,180,255,.36));animation:ghost-drift 5.2s ease-in-out var(--sd,0s) infinite alternate}
+/* The dead are already faint; a full dose of distance grading on top of the
+   spectral fade sinks the back row into the cobbles entirely. */
+.sprite.ghost{--dim:saturate(calc(1 - var(--depth,0)*.24)) brightness(calc(1 - var(--depth,0)*.13))}
+.sprite.ghost img{opacity:.74;filter:var(--dim) grayscale(.35) brightness(1.12) sepia(.14) hue-rotate(180deg) saturate(.7) drop-shadow(0 0 20px rgba(150,180,255,.36));animation:ghost-drift 5.2s ease-in-out var(--sd,0s) infinite alternate}
+/* The fallen are kneeling or collapsed, so they stand shorter than the living
+   even though the art is drawn at a wider aspect. */
+.sprite img.fallen{height:calc(var(--base,min(20svh,160px))*var(--s,1)*.68)}
 @keyframes ghost-drift{from{transform:translateY(0)}to{transform:translateY(-7px)}}
 .sprite.ghost:after{opacity:.4}
 .sprite.ghost .sprite-name{border-color:rgba(150,180,255,.4);color:#c9d6ff}
-.sprite.fresh img{filter:grayscale(.2) brightness(1.05) drop-shadow(0 0 24px rgba(200,60,50,.5))}
+.sprite.fresh img{filter:var(--dim) grayscale(.2) brightness(1.05) drop-shadow(0 0 24px rgba(200,60,50,.5))}
 /* daylight: deepen the ground shadows so the crowd anchors on a bright wash */
 .square[data-mood="day"] .sprite:after{background:radial-gradient(ellipse,rgba(20,12,4,calc(.55 - var(--depth,0)*.22)),transparent 70%)}
 .dock-note{text-align:center;color:var(--gold-2);font-size:10px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;padding:0 0 8px;text-shadow:0 2px 8px #000}

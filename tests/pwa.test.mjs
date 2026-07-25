@@ -25,6 +25,10 @@ test('mobile shell is installable and requests standalone fullscreen display', a
   assert.match(serviceWorker, /addEventListener\('fetch'/);
   assert.match(serviceWorker, /square-night\.webp/);
   assert.match(serviceWorker, /potion-green\.png/);
+  // A death is the game's biggest moment; the fallen art must survive offline.
+  for (const role of ['werewolf', 'villager', 'seer', 'witch', 'cupid', 'little-girl', 'thief', 'sheriff']) {
+    assert.match(serviceWorker, new RegExp(`dead-${role}\\.webp`), `dead-${role}.webp must be precached`);
+  }
   assert.match(styles, /body:not\(\[data-phase="home"\]\).*height:100dvh.*overflow:hidden/);
   assert.match(styles, /\.screen\.stage-screen.*height:100dvh.*overflow:hidden/);
   assert.match(app, /requestFullscreen/);

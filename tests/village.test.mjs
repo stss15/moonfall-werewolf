@@ -47,13 +47,26 @@ test('the dead become ghosts where they stood, revealed once the village turns t
   view.players.ben.role = 'werewolf';
   const square = townSquare(view);
   assert.match(square, /sprite ghost/);
-  assert.match(square, /sheets\/werewolf\.webp/, 'a revealed ghost wears its true sheet');
+  // The fallen wear the painted kneeling art, not a standing idle frame.
+  assert.match(square, /dead-werewolf\.webp/, 'a revealed ghost wears its true fallen figure');
+  assert.doesNotMatch(square, /sheets\/werewolf\.webp/, 'the dead do not stand about in their living pose');
   const hidden = fakeView();
   hidden.players.ben.alive = false;
   hidden.players.ben.role = null;
   const hiddenSquare = townSquare(hidden);
   assert.match(hiddenSquare, /sprite ghost/);
-  assert.doesNotMatch(hiddenSquare, /sheets\/werewolf\.webp/, 'an unrevealed corpse stays anonymous');
+  assert.match(hiddenSquare, /dead-villager\.webp/, 'an unrevealed corpse falls as a plain villager');
+  assert.doesNotMatch(hiddenSquare, /dead-werewolf\.webp/, 'an unrevealed corpse stays anonymous');
+});
+
+test('the Hunter has no painted fallen figure and falls back to the sheet', () => {
+  const view = fakeView();
+  view.players.ben.alive = false;
+  view.players.ben.role = 'hunter';
+  const square = townSquare(view);
+  assert.match(square, /sprite ghost/);
+  assert.doesNotMatch(square, /dead-hunter\.webp/, 'assets/sprites/dead-hunter.webp does not exist');
+  assert.match(square, /sheets\/hunter\.webp/, 'the one role without fallen art keeps the sheet ghost');
 });
 
 test('a selection context makes legal targets tappable and dims the rest', () => {
