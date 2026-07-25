@@ -18,15 +18,19 @@ The game has no looping music track. Its Web Audio soundscape combines generated
 
 The narration script is fixed, so it is pre-recorded once into short composable clips that the game sequences at runtime — `wake-village` + `dawn-death` + `reveal` + `role-werewolf` becomes a complete spoken passage. Every line has several phrasing variants and the game picks one at random per playback, so no two rounds sound identical. Without a pack the game falls back to the phone's own offline Web Speech voices.
 
-**Premium audio (one-shot, free tier):** add an `ELEVENLABS_API_KEY` repository secret, then run the **Generate premium audio** workflow from the Actions tab. It renders the whole variant script with an expressive storyteller voice, plus looping night/day ambience and hero stings (howl, kill, heal, victory) via ElevenLabs sound generation, and commits the audio to the repo. Deploys reuse the committed files and never spend credits again; the script checks the account quota before every call and refuses to drop below its reserve, so it cannot exceed the free tier. ElevenLabs' free tier requires attribution (shown in the in-game settings) and is non-commercial.
+**Premium audio (free tier):** add an `ELEVENLABS_API_KEY` repository secret, then run the **Generate premium audio** workflow from the Actions tab (tick **force** to replace a pack that is already committed). It renders the whole variant script and commits the audio to the repo; deploys reuse the committed files and never spend credits again.
+
+The generator walks a model preference chain and locks onto the best one the account will actually serve — **Eleven v3** first, then `eleven_multilingual_v2`, then the cheap turbo/flash models as a last resort. This matters more than any other audio setting: the latency-optimised flash models exist for realtime agents and read narration flat. Eleven v3 is also the only model that treats the script's inline `[audio tags]` — `[whispers]`, `[ominous]`, `[solemn]` — as delivery direction; every other engine has them stripped before synthesis, and a test asserts each line still reads as clean prose once stripped.
+
+Because the expressive models cost double, generation is budget-guarded: it reads real spend from the usage-analytics endpoint (the legacy `character_count` counts only TTS characters and understates a mixed account badly), renders lines in dramatic-priority order, and re-syncs its ledger every twelve clips. If the free tier runs dry it stops cleanly — the manifest records what rendered, and the remaining lines fall back to on-device speech. Ambience and hero stings (howl, kill, heal, victory) come from the separate **Generate premium ambience and SFX** workflow. ElevenLabs' free tier requires attribution (shown in the in-game settings) and is non-commercial.
 
 Local/manual generation uses `python3 scripts/generate_voice_pack.py` with three free engines:
 
-- **ElevenLabs** (best quality, most intonation): set `ELEVENLABS_API_KEY`; pick any voice with `ELEVENLABS_VOICE_ID` (default is George, an expressive British storyteller).
+- **ElevenLabs** (best quality, most intonation): set `ELEVENLABS_API_KEY`; pick any voice with `ELEVENLABS_VOICE_ID` (default is George, an expressive British storyteller). Override the model chain with `ELEVENLABS_MODELS`, the v3 stability point with `ELEVENLABS_STABILITY` (`0.0` creative, `0.5` natural, `1.0` robust) and the untouchable credit floor with `ELEVENLABS_RESERVE`.
 - **Microsoft Edge neural voices** (default, no account): `pip install edge-tts`. Uses `en-GB-RyanNeural`, slowed and pitched down.
 - **Kokoro** (fully local, Apache-2.0 open weights): `pip install kokoro-onnx`, place the model files next to the script, and run with `VOICE_ENGINE=kokoro`.
 
-If `ffmpeg` is installed, each clip is also given a stone-hall storyteller treatment — a slight pitch-down, soft high roll-off, cavernous echo and loudness normalisation — so any engine comes out sounding like it belongs at a midnight table.
+If `ffmpeg` is installed, each clip is also given a storyteller treatment — a slight pitch-down, a soft high roll-off and a short, close room — so any engine comes out sounding like it belongs at a midnight table. The loudness range is left deliberately wide: a dramatic read needs its quiet lines to stay quiet.
 
 The lobby shows a scannable QR code alongside the six-character village code, so friends can point a phone camera at the host's screen and land directly in the room.
 

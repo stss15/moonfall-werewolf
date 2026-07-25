@@ -154,6 +154,37 @@ function safeRemove(key) {
   try { localStorage.removeItem(key); } catch { /* no-op */ }
 }
 
+// ── Training wheels that take themselves off ─────────────────────────────
+// The screen is not allowed to keep explaining a mechanic the narrator
+// already spoke. A hint appears the first couple of times a device meets a
+// mechanic, then never again — so a first game teaches and a fifth game is
+// pure scene. Counts are per-device and survive reloads.
+const HINT_KEY = 'moonfall:hints';
+const hintsSeen = safeRead(HINT_KEY, {}) || {};
+
+function hintDone(id) {
+  hintsSeen[id] = (hintsSeen[id] || 0) + 1;
+  safeWrite(HINT_KEY, hintsSeen);
+}
+
+// Rendered only while this device is still learning `id`. `limit` is how many
+// times the hint may be shown before it retires for good.
+function hint(id, text, {limit = 2, cls = ''} = {}) {
+  if ((hintsSeen[id] || 0) >= limit) return '';
+  return `<p class="hint ${cls}" data-hint="${esc(id)}">${esc(text)}</p>`;
+}
+
+// A mechanic counts as learned once the player has actually performed it, not
+// merely seen the hint — so a phase that timed out without a tap still
+// explains itself next time.
+const HINT_FOR_ACTION = {
+  'choose-cupid': 'cupid', 'seer-choose': 'seer', 'wolf-vote': 'wolves',
+  'cast-vote': 'vote', 'choose-poison': 'witch', 'toggle-heal': 'witch',
+  'resolve-pending': 'pending', 'day-ready': 'discussion', 'toggle-whisper': 'whisper',
+  'flip-role': 'role-card', 'flip-lover': 'lover-card', 'reveal-thief': 'thief',
+  'seal-role': 'sealed'
+};
+
 function diagnostic(type, details = {}) {
   diagnosticEvents.push({at: new Date().toISOString(), type, ...details});
   if (diagnosticEvents.length > 160) diagnosticEvents.splice(0, diagnosticEvents.length - 160);
@@ -816,6 +847,19 @@ function openingNarration(view) {
   return {ids, text};
 }
 
+// Where a composed line is allowed to breathe. The reveal is the whole game
+// in two clips — "Turn the card." then the role — so the silence between
+// them is the drama, and it gets nearly a second. Everything else keeps a
+// conversational beat.
+function narratorGap(previous, next) {
+  if (/^role-/.test(next)) return .85;              // the punchline lands alone
+  if (next === 'another-death') return .7;          // "…and it was not finished"
+  if (next === 'reveal') return .5;
+  if (previous === 'nightfall' || previous === 'wake-village') return .5;
+  if (/^(dawn|vote)-/.test(previous)) return .45;
+  return .24;
+}
+
 async function playNarratorSequence(ids, text, {delay = 350} = {}) {
   const fallbackMs = Math.max(900, String(text || '').trim().split(/\s+/).filter(Boolean).length * 510);
   setAmbienceDuck(true);
@@ -827,7 +871,7 @@ async function playNarratorSequence(ids, text, {delay = 350} = {}) {
     const context = unlockAudio(true);
     if (context && ids?.length && voicePackCovers(ids)) {
       stopNarration();
-      const duration = await playVoicePack(context, ids, {delay, gap: .24, volume: 1});
+      const duration = await playVoicePack(context, ids, {delay, gap: narratorGap, volume: 1});
       if (duration) {
         await sleep(duration + 180);
         return;
@@ -1867,7 +1911,7 @@ function renderRoleReveal(view) {
   app.innerHTML = stageScreen(view, {
     title: 'Your fate is sealed',
     rail: `<div class="rail-chip"><b>✓</b><strong>${seenCount} of ${total} sealed</strong></div>
-      <div class="rail-note">☾ Close your eyes when night falls. Your phone pulses when the tale needs you.</div>`
+      ${hint('sealed', 'Close your eyes. Your phone wakes you when the tale needs you.')}`
   });
 }
 
@@ -1878,7 +1922,7 @@ function sleepMessage(view, custom = null) {
     <div class="sleep-scene" aria-hidden="true">
       <div class="sleep-stars"></div>
       <div class="sleep-moon"></div>
-      <div class="sleep-eyes">— ◡ —</div>
+      <div class="sleep-eyes"><i></i><i></i></div>
       ${custom?.text ? `<p class="sleep-line">${esc(custom.text)}</p>` : ''}
     </div>
   </section>`;
@@ -1958,7 +2002,7 @@ function renderSeer(view, action) {
   if (!action.target) {
     app.innerHTML = stageScreen(view, {
       cls: 'awake-screen awake-seer',
-      rail: '<div class="rail-emblem seer">✦</div><div class="rail-note">One soul’s truth will be shown to you.</div>'
+      rail: `<div class="rail-emblem seer">✦</div>${hint('seer', 'Tap a soul to see what they really are.')}`
     });
     return;
   }
@@ -1978,15 +2022,15 @@ function renderWolves(view, action) {
   app.innerHTML = stageScreen(view, {
     title: 'The pack hunts',
     cls: 'awake-screen awake-wolves',
-    rail: `<div class="wolf-pack rail-pack">${wolves.map(id => `<span class="wolf-chip">🐺 ${esc(view.players[id]?.name || 'Werewolf')}</span>`).join('')}</div>
-      ${action.consensus ? '<div class="badge green">✓ The pack agrees</div>' : '<div class="rail-note">🐾 marks show the pack’s choices. The hunt needs one shared victim.</div>'}
+    rail: `<div class="wolf-pack rail-pack">${wolves.map(id => `<span class="wolf-chip"><i class="claw-mark" aria-hidden="true"></i>${esc(view.players[id]?.name || 'Werewolf')}</span>`).join('')}</div>
+      ${action.consensus ? '<div class="badge green">✓ The pack agrees</div>' : hint('wolves', 'The pack kills only what it agrees on.')}
       <button class="btn mini secondary ${hasChoice && myChoice === null ? 'selected-btn' : ''}" data-action="wolf-no-kill">☾ Spare the village${hasChoice && myChoice === null ? ' ✓' : ''}</button>
       ${action.littleGirlInPlay ? `<button class="btn danger mini" data-action="little-girl-caught" ${action.littleGirlCaught ? 'disabled' : ''}>${action.littleGirlCaught ? 'The Little Girl was caught' : 'I caught the Little Girl'}</button>` : ''}`
   });
 }
 
 function renderLittleGirl(view) {
-  showSleep(view, {text: '👁 Peek if you dare — caught, you die in the victim’s place.'});
+  showSleep(view, {text: 'Peek if you dare. Caught, you die in the victim’s place.'});
 }
 
 function renderWitch(view, action) {
@@ -2008,7 +2052,7 @@ function renderVote(view, action) {
     title: action.election ? 'Choose the Sheriff' : undefined,
     rail: action.choice
       ? `<div class="badge green">✓ Sealed for ${esc(view.players[action.choice].name)}</div>`
-      : '<div class="rail-note">⚖ Tap the one you accuse. The ballot seals when the last vote falls.</div>'
+      : hint('vote', 'Tap the one you accuse. Nobody sees the tally until it seals.')
   });
 }
 
@@ -2018,8 +2062,8 @@ function renderPending(view, action) {
     title: hunter ? 'One final shot' : 'Name your successor',
     cls: hunter ? 'awake-screen awake-hunter' : 'awake-screen awake-sheriff',
     rail: hunter
-      ? '<div class="rail-note hunter-note">Tap any living soul. The shot is public at dawn.</div><button class="btn ghost mini" data-action="resolve-pending" data-id="">Lower the weapon</button>'
-      : '<img class="successor-badge" src="assets/sprites/props/badge.png" alt="Sheriff badge"><div class="rail-note">Pass the badge to one living soul.</div>',
+      ? `${hint('pending', 'Tap any living soul. The shot is public.')}<button class="btn ghost mini" data-action="resolve-pending" data-id="">Lower the weapon</button>`
+      : `<img class="successor-badge" src="assets/sprites/props/badge.png" alt="Sheriff badge">${hint('pending', 'Tap whoever should carry the badge.')}`,
     extra: hunter ? hunterCinematic() : ''
   });
 }
@@ -2088,7 +2132,7 @@ function whisperMarkup(view, {compact = false} = {}) {
   if (!whisper || view.me?.storyteller) return '';
   const open = ui.whisperOpen;
   return `<button class="whisper ${open ? 'open' : ''} ${compact ? 'compact' : ''}" data-action="toggle-whisper" aria-label="${open ? 'Hide your private whisper' : 'Read what you noticed in the night'}">
-    <span class="whisper-mark">${open ? '✦' : '✉'}</span>
+    <span class="whisper-mark">${open ? '✦' : '☾'}</span>
     <span class="whisper-copy"><strong>${open ? 'You alone remember' : 'What the night left you'}</strong>
     <span>${open ? esc(whisper) : 'For your eyes only · tap to read'}</span></span>
   </button>`;
@@ -2151,7 +2195,7 @@ function renderDayResult(view) {
 
 function renderGameOver(view) {
   const winner = view.winner || {team: 'none', title: 'The Tale Is Ended', text: ''};
-  const symbol = winner.team === 'wolves' ? '🐺' : winner.team === 'village' ? '☀' : winner.team === 'lovers' ? '♥' : '☾';
+  const symbol = winner.team === 'wolves' ? '✷' : winner.team === 'village' ? '☼' : winner.team === 'lovers' ? '♥' : '☾';
   const epilogue = winner.team === 'wolves' ? 'The last lamps gutter out. The pack owns the lanes now.'
     : winner.team === 'village' ? 'Morning holds. One by one, the boarded windows will open again.'
     : winner.team === 'lovers' ? 'Two lit windows remain, facing one another across the empty lane.'
@@ -2391,6 +2435,9 @@ function inviteQrSvg() {
 
 async function handleAction(action, element) {
   const id = element.dataset.id;
+  // Performing a mechanic retires its hint for good on this device.
+  const learned = HINT_FOR_ACTION[action];
+  if (learned) hintDone(learned);
   if (action === 'home-tab') {
     sound('tap');
     ui.homeTab = element.dataset.tab;

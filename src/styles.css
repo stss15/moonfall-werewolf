@@ -416,8 +416,24 @@ body[data-phase="night-witch"]:after{background:radial-gradient(circle at 50% 6%
   border:2px solid rgba(255,224,139,.75);box-shadow:0 0 18px rgba(255,224,139,.5),inset 0 0 14px rgba(255,224,139,.3);animation:ring-pulse 1.6s ease-in-out infinite}
 @keyframes ring-pulse{50%{box-shadow:0 0 30px rgba(255,224,139,.75),inset 0 0 20px rgba(255,224,139,.42);opacity:.75}}
 .sprite.forbidden{opacity:.25;filter:grayscale(.8)}
-.mark.paw{font-size:12px;letter-spacing:-2px;filter:drop-shadow(0 0 6px rgba(200,60,50,.8))}
-.mark.doom{color:#ff9c8a;text-shadow:0 0 10px rgba(220,70,50,.9),0 1px 3px #000;font-size:15px}
+/* The pack's tally and the night's victim are drawn, not typed. Colour
+   emoji render in the system font's own cartoon palette, which reads as a
+   sticker pasted over painted art — these keep the game's own colours. */
+.mark.paw{display:inline-flex;gap:3px;align-items:center}
+.mark.paw i{width:6px;height:9px;border-radius:60% 60% 45% 45%;background:linear-gradient(180deg,#ff8f7d,#b3242c);
+  box-shadow:0 0 7px rgba(200,60,50,.85),inset 0 -1px 1px rgba(0,0,0,.45);transform:rotate(-8deg)}
+.mark.paw i:nth-child(2){transform:rotate(0deg) translateY(-1.5px)}
+.mark.paw i:nth-child(3){transform:rotate(8deg)}
+.mark.doom{width:15px;height:15px;position:relative;filter:drop-shadow(0 0 9px rgba(220,70,50,.9))}
+.mark.doom::before,.mark.doom::after{content:'';position:absolute;inset:0 46%;border-radius:2px;background:linear-gradient(180deg,#ffb3a4,#c02a30)}
+.mark.doom::before{transform:rotate(45deg)}
+.mark.doom::after{transform:rotate(-45deg)}
+/* Pack roster chip: a claw score instead of a 🐺 emoji. */
+.claw-mark{width:11px;height:12px;position:relative;flex:none}
+.claw-mark::before,.claw-mark::after{content:'';position:absolute;top:0;bottom:0;width:2px;border-radius:2px;
+  background:linear-gradient(180deg,rgba(255,198,206,.95),rgba(167,53,70,.2))}
+.claw-mark::before{left:2px;transform:rotate(9deg)}
+.claw-mark::after{right:2px;transform:rotate(-9deg)}
 
 /* ── The stage shell ────────────────────────────────────────────────────── */
 .screen.stage-screen{width:100%;max-width:none;padding:0;height:100svh;height:100dvh;min-height:0;overflow:hidden}
@@ -443,6 +459,13 @@ body[data-phase="night-witch"]:after{background:radial-gradient(circle at 50% 6%
 .rail-chip.doomed b{color:#ff9c8a}
 .rail-chip.ghostly{border-color:rgba(150,180,255,.35)}.rail-chip.ghostly b{color:#c9d6ff}
 .rail-note{padding:9px 11px;border-radius:12px;background:rgba(6,5,12,.72);border:1px solid rgba(255,255,255,.08);color:var(--muted);font-size:10.5px;line-height:1.45}
+/* First-game training wheels. Deliberately quieter than a panel: this is a
+   whisper in the margin, and it retires itself once the mechanic is used. */
+.hint{margin:0;padding:7px 10px;border-left:2px solid rgba(223,183,85,.5);border-radius:0 8px 8px 0;
+  background:linear-gradient(90deg,rgba(223,183,85,.12),transparent);color:#e4d6bd;
+  font-family:Georgia,serif;font-style:italic;font-size:11px;line-height:1.4;
+  animation:hint-in .5s ease both}
+@keyframes hint-in{from{opacity:0;transform:translateX(-6px)}to{opacity:1;transform:none}}
 .rail-emblem{width:58px;height:58px;margin:0 auto;display:grid;place-content:center;border-radius:50%;font-size:26px;color:var(--gold-2);
   border:1px solid rgba(223,183,85,.45);background:radial-gradient(circle,rgba(83,51,99,.85),rgba(9,8,15,.9) 70%);box-shadow:0 0 26px rgba(124,74,164,.3);animation:emblem-pulse 2.4s ease-in-out infinite}
 .rail-emblem.cupid{color:#ff8eb7;border-color:rgba(229,101,147,.5);box-shadow:0 0 26px rgba(255,89,154,.3)}
@@ -504,7 +527,13 @@ body[data-phase="night-witch"]:after{background:radial-gradient(circle at 50% 6%
   radial-gradient(1.7px 1.7px at 48% 22%,#fff8,transparent 60%),radial-gradient(1.2px 1.2px at 8% 68%,#fff5,transparent 60%);
   animation:star-twinkle 4.4s ease-in-out infinite}
 @keyframes star-twinkle{50%{opacity:.55}}
-.sleep-eyes{margin-top:18px;color:var(--violet);font-size:24px;letter-spacing:.32em;padding-left:.32em;opacity:.85}
+/* Two closed lids, drawn. The old "— ◡ —" was an ASCII emoticon sitting in
+   the middle of a painted moonlit village. */
+.sleep-eyes{margin-top:22px;display:flex;gap:26px;opacity:.8}
+.sleep-eyes i{width:34px;height:15px;border-bottom:2px solid var(--violet);border-radius:0 0 40px 40px;
+  box-shadow:0 6px 16px -6px rgba(194,154,239,.7);animation:lid-settle 6s ease-in-out infinite}
+.sleep-eyes i:last-child{animation-delay:-3s}
+@keyframes lid-settle{50%{transform:scaleY(.7);opacity:.72}}
 .sleep-line{color:var(--muted);font-size:12px;line-height:1.5;margin:12px auto 0;max-width:320px}
 
 /* ── The storyteller speaks ────────────────────────────────────────────── */

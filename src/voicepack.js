@@ -82,6 +82,11 @@ export function stopVoicePack() {
 
 // Plays a clip sequence and returns its total length in milliseconds (0 when
 // the pack cannot serve it), so callers can pace the game on the spoken audio.
+//
+// `gap` is the silence between clips, in seconds. It may be a function
+// (previousId, nextId) => seconds, because a composed line is not a paragraph
+// read at constant speed: "Turn the card" lands completely differently with a
+// held beat before "The Werewolf" than it does at a uniform 240ms.
 export async function playVoicePack(context, ids, {delay = 0, gap = .3, volume = 1} = {}) {
   if (!context || !voicePackCovers(ids)) return 0;
   stopVoicePack();
@@ -92,20 +97,24 @@ export async function playVoicePack(context, ids, {delay = 0, gap = .3, volume =
   } catch {
     return 0;
   }
+  const gapBefore = index => index === 0 ? 0
+    : Math.max(0, typeof gap === 'function' ? gap(ids[index - 1], ids[index]) : gap);
   const spoken = buffers.reduce((total, buffer) => total + buffer.duration, 0);
-  const totalMs = Math.round(Math.max(0, delay) + (spoken + Math.max(0, buffers.length - 1) * gap) * 1000);
+  const silence = ids.reduce((total, _id, index) => total + gapBefore(index), 0);
+  const totalMs = Math.round(Math.max(0, delay) + (spoken + silence) * 1000);
   if (generation !== mine) return totalMs;
   const gain = context.createGain();
   gain.gain.value = volume;
   gain.connect(context.destination);
   let at = context.currentTime + Math.max(0, delay) / 1000;
-  for (const buffer of buffers) {
+  buffers.forEach((buffer, index) => {
+    at += gapBefore(index);
     const source = context.createBufferSource();
     source.buffer = buffer;
     source.connect(gain);
     source.start(at);
-    at += buffer.duration + gap;
+    at += buffer.duration;
     activeSources.push(source);
-  }
+  });
   return totalMs;
 }

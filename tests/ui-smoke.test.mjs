@@ -157,3 +157,49 @@ test('five local test agents play while the user keeps a character card and narr
     dom.window.close();
   }
 });
+
+// The screen is not allowed to keep explaining a mechanic forever: hints show
+// on a device's first couple of games and then retire themselves.
+test('on-screen hints retire once the player has used the mechanic', async () => {
+  const bundle = await bundledApp();
+  const store = new Map();
+
+  async function playToSealedCard() {
+    const dom = new JSDOM(`<!doctype html><body><main id="app"></main><div id="toast-root"></div><div id="modal-root"></div></body>`, {
+      url: 'https://moonfall.test/',
+      runScripts: 'dangerously',
+      pretendToBeVisual: true
+    });
+    // One shared localStorage across "games", the way one phone would have.
+    Object.defineProperty(dom.window, 'localStorage', {value: {
+      getItem: key => (store.has(key) ? store.get(key) : null),
+      setItem: (key, value) => store.set(key, String(value)),
+      removeItem: key => store.delete(key)
+    }});
+    dom.window.navigator.vibrate = () => true;
+    dom.window.confirm = () => true;
+    dom.window.eval(bundle);
+    await tick();
+    dom.window.document.querySelector('#create-name').value = 'Steven';
+    dom.window.document.querySelector('[data-action="start-agent-test"]').click();
+    await until(() => dom.window.document.querySelector('[data-action="flip-role"]'), 'the dealt card');
+    dom.window.document.querySelector('[data-action="flip-role"]').click();
+    await tick();
+    dom.window.document.querySelector('[data-action="seal-role"]').click();
+    await tick();
+    const html = dom.window.document.querySelector('#app').innerHTML;
+    dom.window.close();
+    return html;
+  }
+
+  const first = await playToSealedCard();
+  assert.match(first, /class="hint[^"]*" data-hint="sealed"/, 'a first-time device should be taught');
+
+  // Sealing is what retires this one, and it happens just before the rail
+  // that carries the hint is drawn — so this hint gets exactly one showing.
+  const second = await playToSealedCard();
+  assert.doesNotMatch(second, /data-hint="sealed"/, 'a device that has already sealed a card is not taught again');
+
+  await playToSealedCard();
+  assert.equal(JSON.parse(store.get('moonfall:hints')).sealed, 3, 'each use is counted on the device');
+});
