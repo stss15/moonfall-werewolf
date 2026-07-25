@@ -121,6 +121,7 @@ const ui = {
   sceneBusy: null,
   arrowSeen: false,
   arrowPlayed: false,
+  acting: false,
   wasWaiting: false,
   screenReused: false,
   busy: false
@@ -279,6 +280,30 @@ function playSceneAction(kind, target = null, duration = 1100) {
   sceneFxRoot.className = kind;
   clearTimeout(sceneFxClear);
   sceneFxClear = setTimeout(() => { sceneFxRoot.className = ''; }, duration);
+}
+
+// Your own character performs its role's act pose the moment you commit —
+// the wolf lunges, the Seer gazes, the Witch stirs. Every sheet has carried
+// that row since the art landed and nothing in the square ever played it.
+//
+// This cannot out anyone across the table: it plays only on the actor's own
+// phone, and that phone already draws its owner's true role in the crowd. It
+// is silent and it does not vibrate, so the rules in §5 of the landscape plan
+// still hold — nothing leaves the device.
+let actPoseTimer = null;
+const ACT_POSE_ACTIONS = new Set(['seer-choose', 'wolf-vote', 'submit-witch', 'submit-cupid', 'cast-vote']);
+
+function playActPose(duration = 1400) {
+  if (!currentView || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+  clearTimeout(actPoseTimer);
+  ui.acting = true;
+  lastVillageHtml = null;                 // the crowd markup changed
+  updateVillageLayer();
+  actPoseTimer = setTimeout(() => {
+    ui.acting = false;
+    lastVillageHtml = null;
+    updateVillageLayer();
+  }, duration);
 }
 
 function unlockAudio(force = false) {
@@ -2357,7 +2382,7 @@ function updateVillageLayer() {
         arrivalTimer = setTimeout(() => { lastVillageHtml = null; updateVillageLayer(); }, 2100);
       }
     }
-    html = townSquare(view, {select, arrivals});
+    html = townSquare(view, {select, arrivals, acting: ui.acting});
   }
   if (html === lastVillageHtml) return;
   lastVillageHtml = html;
@@ -2438,6 +2463,7 @@ async function handleAction(action, element) {
   // Performing a mechanic retires its hint for good on this device.
   const learned = HINT_FOR_ACTION[action];
   if (learned) hintDone(learned);
+  if (ACT_POSE_ACTIONS.has(action)) playActPose();
   if (action === 'home-tab') {
     sound('tap');
     ui.homeTab = element.dataset.tab;

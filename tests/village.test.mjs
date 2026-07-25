@@ -115,3 +115,50 @@ test('the Seer vision evolves a villager silhouette into the private true form',
   assert.match(scene, /seer-form mortal[\s\S]*sheets\/villager\.webp/);
   assert.match(scene, /seer-form true-form[\s\S]*sheets\/werewolf\.webp/);
 });
+
+test('the living crowd breathes while the dead hold still', () => {
+  const view = fakeView({
+    players: {
+      ...fakeView().players,
+      ben: {id: 'ben', name: 'Ben', alive: false, connected: true, storyteller: false, sheriff: false, role: 'seer'}
+    }
+  });
+  const square = townSquare(view);
+  // Every sheet's idle row holds four real drawings; the crowd used to be
+  // frozen on frame 0. The living now play them, staggered per character.
+  assert.equal((square.match(/ss idle-life/g) || []).length, 5, 'the five living villagers each get their own idle cycle');
+  assert.doesNotMatch(square.slice(square.indexOf('data-sprite="ben"')), /^[\s\S]{0,400}ss idle-life/, 'a ghost does not breathe');
+
+  const durations = [...square.matchAll(/--ssidle:([\d.]+)s/g)].map(match => match[1]);
+  const delays = [...square.matchAll(/--ssidledel:(-[\d.]+)s/g)].map(match => match[1]);
+  assert.equal(durations.length, 5);
+  assert.ok(new Set(durations).size > 1, 'characters must not share one cycle length');
+  assert.ok(new Set(delays).size > 1, 'characters must not flourish in unison');
+});
+
+test('the crowd stands in staggered rows with depth, not in columns', () => {
+  const square = townSquare(fakeView());
+  const lefts = [...square.matchAll(/left:([\d.]+)%/g)].map(match => Number(match[1]));
+  const front = lefts.slice(0, 3);
+  const back = lefts.slice(3);
+  for (const x of back) {
+    assert.ok(front.every(f => Math.abs(f - x) > 4), `back-row ${x}% lines up with the front row`);
+  }
+  const depths = [...square.matchAll(/--depth:([\d.]+)/g)].map(match => Number(match[1]));
+  assert.deepEqual(depths.slice(0, 3), [0, 0, 0], 'the front row is fully lit');
+  assert.ok(depths.slice(3).every(d => d > 0), 'rows further back recede');
+});
+
+test('committing an action plays your own role’s act pose, and only yours', () => {
+  const view = fakeView({me: {id: 'ada', alive: true, role: 'witch', loverId: null, visions: null, pack: null}});
+  const still = townSquare(view);
+  assert.doesNotMatch(still, /class="[^"]*acting/);
+
+  const acting = townSquare(view, {acting: true});
+  const mine = acting.split('<button').find(chunk => chunk.includes('data-sprite="ada"'));
+  assert.ok(mine, 'the viewer stands in their own square');
+  assert.match(mine, /class="[^"]*acting/);
+  assert.match(mine, /sheets\/witch\.webp/);
+  assert.match(mine, /background-position:0% 50%/, 'the act row is row 2 of 5');
+  assert.equal((acting.match(/class="[^"]*acting/g) || []).length, 1, 'nobody else in the square moves');
+});

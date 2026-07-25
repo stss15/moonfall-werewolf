@@ -37,18 +37,30 @@ export const SHEET_ROWS = {idle: 0, walk: 1, act: 2, bound: 3, death: 4};
 
 // One animated cell of a character sheet. Loops drive background-position-x
 // through the four frames with steps(); the row is fixed inline. Browsers
-// without steps(jump-none) simply hold the first frame. Idle characters hold
-// their first frame — a standing crowd must never look like it is walking in
-// place — so only walk and act rows ever cycle.
-export function sheetSprite(roleId, {anim = 'idle', loop = true, speed = null, seedText = ''} = {}) {
+// without steps(jump-none) simply hold the first frame.
+//
+// Idle is not a loop. Every sheet's idle row holds four real drawings — a
+// stance, a roar, a snarl, a hunch — and cycling them at a constant rate
+// reads as a twitch, which is why the crowd used to be frozen on frame 0
+// instead. A crowd is alive when *most* of it is still and individuals move:
+// so idle holds frame 0 for the great majority of a long cycle, then plays
+// one unhurried flourish out and back. Duration and phase are seeded per
+// character, so nineteen villagers never move together.
+export function sheetSprite(roleId, {anim = 'idle', loop = true, speed = null, seedText = '', alive = true} = {}) {
   const sheet = SPRITE_FOR[roleId] || 'villager';
   const row = SHEET_ROWS[anim] ?? 0;
   const h = hashOf(seedText + sheet);
   const duration = speed || (anim === 'walk' ? 0.62 : 1.05 + (h % 40) / 100);
-  // 'bound' is a standing pose too (the chained lovers): hold the frame.
-  const playback = anim === 'idle' || anim === 'bound' ? '' : loop ? 'loop' : 'oneshot';
-  return `<span class="ss ${playback} ${anim === 'idle' ? 'breathe' : ''}"
-    style="background-image:url('assets/sprites/sheets/${sheet}.webp');background-position:0% ${row * 25}%;--ssd:${duration.toFixed(2)}s;--ssdel:${((h >> 3) % 90) / 100}s"></span>`;
+  // The dead hold still. 'bound' is a standing pose too (the chained lovers).
+  const breathing = anim === 'idle' && alive;
+  const playback = anim === 'idle' || anim === 'bound' ? (breathing ? 'idle-life' : '') : loop ? 'loop' : 'oneshot';
+  // A negative delay drops each character at a different point in the cycle
+  // from the very first frame, rather than making them all wait then sync.
+  const idleStyle = breathing
+    ? `;--ssidle:${(8 + (h % 78) / 10).toFixed(1)}s;--ssidledel:-${((h >> 5) % 150) / 10}s`
+    : '';
+  return `<span class="ss ${playback}"
+    style="background-image:url('assets/sprites/sheets/${sheet}.webp');background-position:0% ${row * 25}%;--ssd:${duration.toFixed(2)}s;--ssdel:${((h >> 3) % 90) / 100}s${idleStyle}"></span>`;
 }
 
 // What this viewer knows this player to be.
@@ -77,7 +89,11 @@ function moodFor(view) {
 // select: {ids: Set of tappable player ids, selected: [], disabled: Set,
 //          marks: {playerId: count}, victim: playerId|null, action: string}
 // arrivals: Set of player ids that should walk in from the square's edge.
-export function townSquare(view, {select = null, arrivals = null} = {}) {
+// acting:   true while the viewer is committing their own night action, so
+//           their character plays its role's act pose — the wolf lunges, the
+//           Seer gazes, the Witch stirs. Every sheet carries that row and
+//           nothing in the square ever played it.
+export function townSquare(view, {select = null, arrivals = null, acting = false} = {}) {
   const players = Object.values(view.players || {}).filter(player => !player.storyteller);
   if (!players.length) return '';
   const me = view.me;
@@ -110,7 +126,12 @@ export function townSquare(view, {select = null, arrivals = null} = {}) {
     const t = inRow === 1 ? .5 : col / (inRow - 1);
     const lo = inRow <= 3 ? 20 : inRow <= 5 ? 14 : 9;
     const edge = row === 0 ? 12 : 8;
-    const x = Math.min(100 - edge, Math.max(edge, lo + t * (100 - lo * 2) + ((h % 5) - 2) + (row % 2 ? 2 : -2)));
+    // Rows are offset by roughly half a place, so the back row stands in the
+    // gaps of the one in front. Without this the crowd lines up into columns
+    // and reads as a spreadsheet of people rather than a gathering.
+    const step = inRow > 1 ? (100 - lo * 2) / (inRow - 1) : 0;
+    const stagger = row % 2 ? step * .42 : 0;
+    const x = Math.min(100 - edge, Math.max(edge, lo + t * (100 - lo * 2) + stagger + ((h % 5) - 2)));
     const bottom = bottoms[row];
     const scale = scales[row];
     const dead = !player.alive;
@@ -127,6 +148,7 @@ export function townSquare(view, {select = null, arrivals = null} = {}) {
       ? `<span class="marks">${player.sheriff ? '<img class="mark badge" src="assets/sprites/props/badge.png" alt="Sheriff">' : ''}${markCount ? `<span class="mark paw" role="img" aria-label="${markCount} of the pack">${'<i></i>'.repeat(Math.min(3, markCount))}</span>` : ''}${isVictim ? '<span class="mark doom" role="img" aria-label="Tonight’s victim"></span>' : ''}</span>`
       : '';
     const arriving = arrivals?.has(player.id) && player.alive;
+    const isActor = acting && player.id === me?.id && player.alive;
     const classes = [
       'sprite',
       dead ? 'ghost' : '',
@@ -137,14 +159,15 @@ export function townSquare(view, {select = null, arrivals = null} = {}) {
       picked ? 'picked' : '',
       selecting && !pickable && !picked && player.alive ? 'off' : '',
       forbidden ? 'forbidden' : '',
-      arriving ? 'arrive' : ''
+      arriving ? 'arrive' : '',
+      isActor ? 'acting' : ''
     ].filter(Boolean).join(' ');
-    const anim = dead ? 'idle' : arriving ? 'walk' : loverMark ? 'bound' : 'idle';
+    const anim = dead ? 'idle' : isActor ? 'act' : arriving ? 'walk' : loverMark ? 'bound' : 'idle';
     return `<button class="${classes}" data-sprite="${escText(player.id)}" data-id="${escText(player.id)}"
-      style="left:${x.toFixed(1)}%;bottom:${bottom}%;--s:${scale};--sway:${(3.4 + (h % 21) / 10).toFixed(1)}s;--sd:${((h >> 4) % 30) / 10}s;--fresh:${freshOrder.get(player.id) || 0};z-index:${10 - row}" ${forbidden ? 'disabled' : ''}>
+      style="left:${x.toFixed(1)}%;bottom:${bottom}%;--s:${scale};--depth:${rowCount > 1 ? (row / (rowCount - 1)).toFixed(2) : 0};--sway:${(3.4 + (h % 21) / 10).toFixed(1)}s;--sd:${((h >> 4) % 30) / 10}s;--fresh:${freshOrder.get(player.id) || 0};z-index:${10 - row}" ${forbidden ? 'disabled' : ''}>
       ${marks}
       ${picked ? '<i class="pick-ring" aria-hidden="true"></i>' : ''}
-      ${sheetSprite(knownRole(view, player), {anim, loop: !dead, seedText: seed + player.id})}
+      ${sheetSprite(knownRole(view, player), {anim, loop: !dead && !isActor, seedText: seed + player.id, alive: !dead})}
       <span class="sprite-name">${escText(player.name)}</span>
     </button>`;
   }).join('');

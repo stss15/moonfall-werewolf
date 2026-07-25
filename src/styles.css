@@ -288,6 +288,26 @@ body[data-phase="night-witch"]:after{background:radial-gradient(circle at 50% 6%
    dresses the crowd according to what its owner truly knows; ghosts stay
    where they fell. Tap a character to see their name. */
 #village{position:fixed;left:0;right:0;bottom:calc(env(safe-area-inset-bottom,0px) + 14px);height:min(64svh,460px);z-index:1;pointer-events:none}
+/* Ground mist: one soft band behind the crowd, separating the characters
+   from the plate they stand on and giving the square somewhere to recede
+   into. Deliberately not tiled — repeating a gradient leaves visible seams
+   where the tiles butt together — and half again as wide as the square, so
+   the slow drift never exposes an edge. Only painted when a crowd is
+   actually standing there. */
+#village:has(.square):before{content:"";position:absolute;left:-25%;right:-25%;
+  pointer-events:none;will-change:transform,opacity}
+#village:has(.square):before{bottom:8%;height:44%;z-index:0;
+  background:radial-gradient(ellipse 22% 62% at 14% 100%,rgba(150,170,215,.34),transparent 70%),
+    radial-gradient(ellipse 18% 54% at 41% 100%,rgba(132,152,202,.3),transparent 72%),
+    radial-gradient(ellipse 24% 58% at 67% 100%,rgba(150,170,215,.26),transparent 70%),
+    radial-gradient(ellipse 20% 50% at 88% 100%,rgba(140,160,208,.24),transparent 72%);
+  -webkit-mask-image:linear-gradient(to top,transparent,#000 26%);
+  mask-image:linear-gradient(to top,transparent,#000 26%);
+  animation:mist-far 34s ease-in-out infinite alternate}
+@keyframes mist-far{from{transform:translateX(-3.5%);opacity:.72}to{transform:translateX(3.5%);opacity:1}}
+/* Daylight burns the mist off and warms what little is left. */
+#village:has(.square[data-mood="day"]):before{opacity:.3;filter:sepia(.55) hue-rotate(-20deg)}
+#village:has(.square[data-mood="dawn"]):before{filter:sepia(.4) hue-rotate(-14deg) saturate(1.25)}
 .square{position:absolute;inset:0;opacity:0;animation:square-in 1.4s ease .1s both}
 @keyframes square-in{to{opacity:1}}
 .sprite{position:absolute;transform:translateX(-50%);border:0;padding:0;background:none;pointer-events:auto;cursor:pointer;-webkit-tap-highlight-color:transparent}
@@ -295,7 +315,8 @@ body[data-phase="night-witch"]:after{background:radial-gradient(circle at 50% 6%
   filter:drop-shadow(0 7px 13px rgba(0,0,0,.85)) drop-shadow(0 0 24px rgba(0,0,0,.5));
   animation:sprite-sway var(--sway,4s) ease-in-out var(--sd,0s) infinite alternate;transform-origin:50% 100%}
 @keyframes sprite-sway{from{transform:rotate(-.8deg)}to{transform:rotate(.8deg)}}
-.sprite:after{content:"";position:absolute;left:50%;bottom:-5px;width:76%;height:14px;transform:translateX(-50%);border-radius:50%;background:radial-gradient(ellipse,rgba(0,0,0,.55),transparent 70%);z-index:-1}
+.sprite:after{content:"";position:absolute;left:50%;bottom:calc(-5px * var(--s,1));width:calc(76% * var(--s,1));height:calc(14px * var(--s,1));transform:translateX(-50%);border-radius:50%;
+  background:radial-gradient(ellipse,rgba(0,0,0,calc(.6 - var(--depth,0)*.24)),transparent 70%);z-index:-1}
 .sprite:active img{filter:drop-shadow(0 7px 13px rgba(0,0,0,.85)) drop-shadow(0 0 26px rgba(255,224,139,.34))}
 /* name plate on tap */
 .sprite-name{position:absolute;left:50%;bottom:calc(100% + 4px);transform:translateX(-50%) translateY(5px);white-space:nowrap;padding:6px 11px;border-radius:999px;border:1px solid rgba(223,183,85,.45);background:rgba(8,6,12,.92);color:var(--gold-2);font-family:Georgia,serif;font-size:13px;opacity:0;transition:opacity .25s ease,transform .25s ease;pointer-events:none;box-shadow:0 8px 22px rgba(0,0,0,.5)}
@@ -315,7 +336,7 @@ body[data-phase="night-witch"]:after{background:radial-gradient(circle at 50% 6%
 .sprite.ghost .sprite-name{border-color:rgba(150,180,255,.4);color:#c9d6ff}
 .sprite.fresh img{filter:grayscale(.2) brightness(1.05) drop-shadow(0 0 24px rgba(200,60,50,.5))}
 /* daylight: deepen the ground shadows so the crowd anchors on a bright wash */
-.square[data-mood="day"] .sprite:after{background:radial-gradient(ellipse,rgba(20,12,4,.5),transparent 70%)}
+.square[data-mood="day"] .sprite:after{background:radial-gradient(ellipse,rgba(20,12,4,calc(.55 - var(--depth,0)*.22)),transparent 70%)}
 .dock-note{text-align:center;color:var(--gold-2);font-size:10px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;padding:0 0 8px;text-shadow:0 2px 8px #000}
 /* ── Night whispers ─────────────────────────────────────────────────────── */
 .whisper{width:100%;display:flex;gap:12px;align-items:center;text-align:left;margin:12px 0;padding:14px 15px;border:1px solid rgba(223,183,85,.34);border-radius:16px;background:linear-gradient(150deg,rgba(52,38,29,.82),rgba(15,11,14,.9) 68%);box-shadow:0 12px 34px rgba(0,0,0,.4),inset 0 1px rgba(255,236,190,.07);transition:border-color .3s ease,transform .12s ease}
@@ -377,19 +398,46 @@ body[data-phase="night-witch"]:after{background:radial-gradient(circle at 50% 6%
    Each role ships one sheet: 4 frames × 5 rows (idle, walk, act, bound,
    death). The row is fixed inline via background-position-y; loops drive
    background-position-x through the frames with steps(). */
-.ss{display:block;width:calc(var(--base,min(20svh,160px))*var(--s,1));height:calc(var(--base,min(20svh,160px))*var(--s,1));
+/* Atmospheric perspective: the back rows of the crowd sit further into the
+   painted square, so they lose contrast and colour the way real distance
+   does. --depth runs 0 (front) to 1 (furthest) and is set per sprite. Kept
+   as its own variable because every filter below has to restate the chain. */
+.ss{--dim:saturate(calc(1 - var(--depth,0)*.42)) brightness(calc(1 - var(--depth,0)*.26)) contrast(calc(1 - var(--depth,0)*.12));
+  display:block;width:calc(var(--base,min(20svh,160px))*var(--s,1));height:calc(var(--base,min(20svh,160px))*var(--s,1));
   background-repeat:no-repeat;background-size:400% 500%;pointer-events:none;transform-origin:50% 100%;
-  filter:drop-shadow(0 7px 13px rgba(0,0,0,.85)) drop-shadow(0 0 24px rgba(0,0,0,.5));
+  /* The sheets were cut from art that stood on a white ground, and a band of
+     opaque near-white pixels survives along the bottom of each cell — it
+     reads as a bright smear under every character's feet. It cannot be keyed
+     out by colour, because the wolf's teeth and claws are near-white too, so
+     the foot of the cell is masked instead. Softening where a figure meets
+     the cobbles is what a contact shadow wants anyway. */
+  -webkit-mask-image:linear-gradient(to bottom,#000 90%,rgba(0,0,0,.45) 95.5%,transparent 99%);
+  mask-image:linear-gradient(to bottom,#000 90%,rgba(0,0,0,.45) 95.5%,transparent 99%);
+  filter:var(--dim) drop-shadow(0 7px 13px rgba(0,0,0,.85)) drop-shadow(0 0 24px rgba(0,0,0,.5));
   animation:sprite-sway var(--sway,4s) ease-in-out var(--sd,0s) infinite alternate}
 .ss.loop{animation:ss-cycle var(--ssd,1.05s) steps(4,jump-none) var(--ssdel,0s) infinite,
   sprite-sway var(--sway,4s) ease-in-out var(--sd,0s) infinite alternate}
 .ss.oneshot{animation:ss-once var(--ssd,1.15s) steps(4,jump-none) both}
 @keyframes ss-cycle{from{background-position-x:0%}to{background-position-x:100%}}
 @keyframes ss-once{from{background-position-x:0%}to{background-position-x:100%}}
+/* The crowd breathes. Frame 0 is held for ~three quarters of the cycle, then
+   one flourish plays out through the idle drawings and settles back. steps(1)
+   snaps between frames — interpolating background-position would slide the
+   sheet and smear two drawings together. */
+.ss.idle-life{animation:ss-idle var(--ssidle,11s) steps(1,end) var(--ssidledel,0s) infinite,
+  sprite-sway var(--sway,4s) ease-in-out var(--sd,0s) infinite alternate}
+@keyframes ss-idle{
+  0%,73%{background-position-x:0%}
+  77%{background-position-x:33.333%}
+  81.5%{background-position-x:66.667%}
+  86%{background-position-x:100%}
+  90%{background-position-x:66.667%}
+  94.5%{background-position-x:33.333%}
+  98%,100%{background-position-x:0%}}
 .sprite.ghost .ss{opacity:.62;filter:grayscale(.4) brightness(1.14) sepia(.12) hue-rotate(180deg) saturate(.65) drop-shadow(0 0 20px rgba(150,180,255,.36));
   animation:ghost-drift 5.2s ease-in-out var(--sd,0s) infinite alternate}
 .sprite.fresh .ss{opacity:.85;filter:grayscale(.2) brightness(1.05) drop-shadow(0 0 24px rgba(200,60,50,.5));animation:ghost-drift 5.2s ease-in-out infinite alternate}
-.sprite.bound .ss{filter:drop-shadow(0 7px 13px rgba(0,0,0,.85)) drop-shadow(0 0 22px rgba(255,110,160,.42))}
+.sprite.bound .ss{filter:var(--dim) drop-shadow(0 7px 13px rgba(0,0,0,.85)) drop-shadow(0 0 22px rgba(255,110,160,.42))}
 .sprite.self:after{background:radial-gradient(ellipse,rgba(223,183,85,.42),transparent 70%)}
 /* newcomers walk in from the edge of the square */
 .sprite.arrive{animation:arrive-walk 1.9s cubic-bezier(.3,.55,.3,1) both}
@@ -408,9 +456,12 @@ body[data-phase="night-witch"]:after{background:radial-gradient(circle at 50% 6%
 .square.selecting .sprite.off{opacity:.38;filter:saturate(.35)}
 .square.selecting .sprite.off .sprite-name{opacity:.4}
 .sprite.can-pick{cursor:pointer}
-.sprite.can-pick .ss{filter:drop-shadow(0 7px 13px rgba(0,0,0,.85)) drop-shadow(0 0 18px rgba(255,224,139,.22))}
+.sprite.can-pick .ss{filter:var(--dim) drop-shadow(0 7px 13px rgba(0,0,0,.85)) drop-shadow(0 0 18px rgba(255,224,139,.22))}
 .sprite{transition:transform .25s ease}
 .sprite.picked{transform:translateX(-50%) scale(1.14);z-index:14!important}
+/* The actor steps out of the crowd for the length of their action pose. */
+.sprite.acting{z-index:16!important;transform:translateX(-50%) scale(1.09)}
+.sprite.acting .ss{filter:var(--dim) drop-shadow(0 8px 14px rgba(0,0,0,.9)) drop-shadow(0 0 22px rgba(255,224,139,.3))}
 .sprite.picked .sprite-name{border-color:rgba(255,224,139,.85);color:#fff3c4}
 .pick-ring{position:absolute;left:50%;bottom:-9px;width:96%;height:22px;transform:translateX(-50%);border-radius:50%;pointer-events:none;
   border:2px solid rgba(255,224,139,.75);box-shadow:0 0 18px rgba(255,224,139,.5),inset 0 0 14px rgba(255,224,139,.3);animation:ring-pulse 1.6s ease-in-out infinite}
