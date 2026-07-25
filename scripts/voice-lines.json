@@ -1,175 +1,132 @@
 {
   "comment": "Every pre-recorded narrator line in Moonfall. Each id maps to an array of phrasing variants; the game picks one at random per playback so no two rounds sound the same. Files are named <id>.<variant>.mp3. Regenerate with scripts/generate_voice_pack.py.",
+  "delivery": "Written for Eleven v3, which reads inline [square-bracket] audio tags as delivery direction rather than speaking them. Engines that do not understand tags have them stripped before synthesis, so every line still reads as clean prose. House style: short beats, concrete nouns, wildly uneven line lengths. The narrator sets the mood and issues the one instruction the phase needs — the screen prints nothing the voice already said.",
   "lines": {
     "preview": [
-      "The village sleeps, and the tale continues.",
-      "Hush now. The moon is listening.",
-      "Another night gathers over Moonfall."
+      "[whispers] Moonfall remembers every name."
     ],
     "nightfall": [
-      "Night falls on the village. Everyone, close your eyes.",
-      "Darkness takes the village. Close your eyes, all of you.",
-      "The moon rises over Moonfall. Sleep now, every soul."
+      "[whispers] Night comes down like a lid. Close your eyes.",
+      "The lamps go out, one by one. Close your eyes, Moonfall.",
+      "[ominous] Something is already awake. Close your eyes."
     ],
     "cue-role-reveal": [
-      "The cards have been dealt. Each player may now learn their secret fate.",
-      "Fate has chosen. Look upon your card in secret, then seal it away.",
-      "The deck has spoken. Discover who you truly are, and tell no one."
+      "The cards are dealt. Learn what you are — and never say it aloud."
     ],
     "cue-setup-thief": [
-      "The Thief wakes, looks upon the two cards left untouched, and may exchange their destiny.",
-      "Thief, open your eyes. Two spare fates lie before you. Choose, or keep your own.",
-      "The Thief stirs in the dark. Two unclaimed cards await your judgement."
+      "[whispers] Thief. Two fates went unclaimed. Take one, or keep your own."
     ],
     "cue-setup-cupid": [
-      "Cupid wakes, and chooses two souls to bind together in love.",
-      "Cupid, open your eyes. Fire your arrow, and bind two hearts as one.",
-      "Cupid stirs. Two souls will be joined, until death divides them both."
+      "Cupid, open your eyes. Choose two hearts. What you tie tonight, only death unties."
     ],
     "cue-setup-lovers": [
-      "Everyone, open your eyes. Cupid's arrow has flown. Turn over the card before you, to learn whether your heart is still your own.",
-      "Wake, all of you. The arrow has found its marks. Turn your card in secret, and discover if you are one of the chosen.",
-      "Open your eyes, village. Somewhere among you, two hearts were just bound. Turn over your card, and keep whatever you find to yourself."
+      "Open your eyes. The arrow has flown. Turn your card: is your heart still your own?"
     ],
     "cue-night-seer": [
-      "The Seer wakes, and chooses one player whose true identity they wish to know.",
-      "Seer, open your eyes. One soul's truth will be revealed to you tonight.",
-      "The Seer stirs. Point to one player, and the moon will show you their face."
+      "[whispers] Seer. One face. One truth. Choose.",
+      "Seer, open your eyes. The moon will show you a single soul, and no more."
     ],
     "cue-night-wolves": [
-      "The Werewolves wake. They recognise one another, and silently choose a victim.",
-      "The pack rises. Werewolves, find your kin, and agree upon tonight's prey.",
-      "Hungry eyes open in the dark. The Werewolves must choose who will not see the dawn."
+      "[ominous] The pack is awake. Find your kin, and agree on who does not see the morning.",
+      "[whispers] Werewolves. Open your eyes. Someone here has stopped being safe."
     ],
     "cue-night-witch": [
-      "The Witch wakes. Here is the victim chosen by the pack. Will fate be changed?",
-      "Witch, open your eyes. See what the pack has done. Your potions are waiting.",
-      "The Witch stirs over her cauldron. One life hangs in the balance tonight."
+      "Witch. Here lies tonight's work. One bottle saves. One bottle ends.",
+      "[whispers] Witch, open your eyes. See what the pack has done. Let it stand, or do not."
     ],
     "cue-sheriff-vote": [
-      "The village will now elect a Sheriff, whose vote shall carry the weight of two.",
-      "Choose your Sheriff. From this day, their voice counts twice at every judgement.",
-      "The village needs a leader. Elect a Sheriff, and give their word double weight."
+      "Choose a Sheriff. One voice here is about to weigh twice as much as yours."
     ],
     "cue-day-discussion": [
-      "The village square is yours. Speak carefully. Truth and lies wear the same face.",
-      "Debate begins. Accuse, defend, and watch every face around this table.",
-      "The square fills with voices. Somewhere among you, the pack is smiling."
+      "Talk. Accuse. Defend. [whispers] One of these faces is lying to you.",
+      "The square is yours. Somewhere in it, the pack is smiling."
     ],
     "cue-day-vote": [
-      "On my signal, cast your judgement. The accused will not see the tally until it is sealed.",
-      "The time for words is over. Cast your votes, and let the village decide.",
-      "Point your finger. Every vote is secret until the ballot is sealed."
+      "Point. There is no taking it back.",
+      "[solemn] Cast your judgement. The village does not get to be sorry afterwards."
     ],
     "cue-hunter-shot": [
-      "The Hunter has fallen, but one final shot remains. Hunter, open your eyes and choose.",
-      "Death cannot stop the Hunter's aim. One last bullet. Choose where it lands.",
-      "The Hunter falls, rifle still warm. One final shot echoes over the village."
+      "[dramatic] The Hunter falls — and the barrel comes up anyway. One shot. Choose."
     ],
     "cue-sheriff-successor": [
-      "The Sheriff has fallen. Sheriff, open your eyes and pass the badge to a living soul.",
-      "The badge must not be buried. Sheriff, name the one who will carry it on.",
-      "A Sheriff has fallen. With their final breath, they choose a successor."
+      "The Sheriff is dying. Press the badge into someone's hand."
     ],
     "sleep-setup-thief": [
-      "The Thief falls back asleep.",
-      "The Thief's choice is made. Sleep now.",
-      "The Thief returns to the dark."
+      "The Thief sleeps.",
+      "It is taken. Sleep."
     ],
     "sleep-setup-cupid": [
-      "Cupid falls back asleep.",
-      "The arrow has flown. Cupid sleeps.",
-      "Cupid's work is done for this night."
+      "Cupid sleeps.",
+      "The bow lowers. Sleep."
     ],
     "sleep-setup-lovers": [
-      "The truth is sealed. Everyone, close your eyes once more.",
-      "Every card is turned face-down again. Close your eyes, all of you.",
-      "The secret is kept. The village sleeps once more."
+      "Cards down. Eyes closed.",
+      "The secret is kept. Sleep."
     ],
     "sleep-night-seer": [
-      "The Seer closes their eyes.",
-      "The vision fades. The Seer sleeps.",
-      "The Seer returns to darkness, knowing more than before."
+      "The Seer sleeps.",
+      "The vision closes."
     ],
     "sleep-night-wolves": [
-      "The Werewolves close their eyes.",
-      "Sated, the pack melts back into the village.",
-      "The Werewolves sleep, hidden among the innocent."
+      "The pack sleeps.",
+      "The wolves fold back into the village."
     ],
     "sleep-night-witch": [
-      "The Witch closes their eyes.",
-      "The potions are stoppered. The Witch sleeps.",
-      "The Witch's work is done. Darkness returns."
+      "The Witch sleeps.",
+      "The bottles are stoppered."
     ],
     "wake-village": [
-      "Everyone, open your eyes.",
-      "Wake, all of you. The night is over.",
-      "Open your eyes, village of Moonfall."
+      "Open your eyes, Moonfall.",
+      "Morning. Open your eyes."
     ],
     "dawn-none": [
-      "The sun rises, and the village wakes to a miracle. Nobody died in the night.",
-      "Dawn breaks, and every soul still breathes. The night has taken no one.",
-      "Morning comes, and the village counts itself whole. Not one life was lost."
+      "Every door opened. Every face answered. Nobody died.",
+      "The village counts itself, and finds itself whole."
     ],
     "dawn-death": [
-      "The sun rises, and the village wakes to sorrow. The night has claimed its price.",
-      "Dawn breaks over a grieving village. The darkness did not leave empty-handed.",
-      "Morning comes, cold and quiet. Someone did not wake with the rest of you."
+      "[solemn] One door stayed shut this morning.",
+      "The night did not leave empty-handed."
     ],
     "reveal": [
-      "The card is turned. Behold.",
-      "Their true face is revealed.",
-      "The card turns over. Look."
+      "Turn the card.",
+      "[whispers] Look.",
+      "Behold."
     ],
     "another-death": [
-      "And fate is not yet finished. Another soul has fallen.",
-      "The chain of fate pulls again. Another has been taken.",
-      "But death was not done. Another falls."
+      "It was not finished.",
+      "[solemn] And another."
     ],
     "vote-tied": [
-      "The vote is tied. By the old law of the village, nobody is eliminated today.",
-      "The village cannot agree. A tie spares everyone, for now.",
-      "Split down the middle. By ancient law, no one faces judgement today."
+      "Split down the middle. Nobody hangs today."
     ],
     "vote-none": [
-      "No judgement was cast. Nobody leaves the village today.",
-      "The village stays its hand. No one is condemned.",
-      "No fingers were pointed. Everyone lives to argue another day."
+      "No one pointed. The village keeps its hands clean, for now."
     ],
     "vote-death": [
-      "The village has spoken. The condemned steps forward.",
-      "Judgement is sealed. Step forward, condemned soul.",
-      "The tally is closed, and one name stands alone."
+      "[solemn] The village has spoken. Step forward.",
+      "The tally closes, and one name stands alone."
     ],
-    "role-werewolf": ["The Werewolf.", "A Werewolf walked among you."],
-    "role-villager": ["A simple Villager.", "An innocent Villager."],
-    "role-seer": ["The Seer.", "The all-seeing Seer."],
-    "role-witch": ["The Witch.", "The keeper of potions. The Witch."],
-    "role-hunter": ["The Hunter.", "The Hunter, of the final shot."],
+    "role-werewolf": ["The Werewolf.", "[ominous] A Werewolf. Among you. All along."],
+    "role-villager": ["A simple Villager.", "[solemn] Only a Villager."],
+    "role-seer": ["The Seer.", "The Seer. Blind now."],
+    "role-witch": ["The Witch.", "The Witch, and her bottles."],
+    "role-hunter": ["The Hunter.", "The Hunter, of the last shot."],
     "role-cupid": ["Cupid.", "Cupid, the matchmaker."],
-    "role-little-girl": ["The Little Girl.", "The Little Girl, who dared to peek."],
-    "role-thief": ["The Thief.", "The Thief, of borrowed fates."],
-    "role-sheriff": ["The Sheriff.", "The village Sheriff."],
+    "role-little-girl": ["The Little Girl.", "The Little Girl. She peeked."],
+    "role-thief": ["The Thief.", "The Thief, in a stolen life."],
+    "role-sheriff": ["The Sheriff.", "The Sheriff of Moonfall."],
     "role-storyteller": ["The Storyteller.", "The keeper of the tale."],
     "win-village": [
-      "The village prevails. The last Werewolf has fallen.",
-      "Victory for the village. The pack is no more.",
-      "The final Werewolf falls, and Moonfall is free at last."
+      "[triumphant] The last wolf falls. Moonfall belongs to the living."
     ],
     "win-wolves": [
-      "The pack devours the dawn. No villager remains alive.",
-      "The Werewolves have won. The village belongs to the pack.",
-      "Silence falls forever. The wolves feast, unopposed."
+      "[ominous] No one is left to bar a door. The village belongs to the pack."
     ],
     "win-lovers": [
-      "Love conquers the moon. Two bound hearts are the last souls alive.",
-      "Against every fate, the lovers alone survive. Love has won.",
-      "The village falls away, and only the lovers remain, together."
+      "Everyone else is gone. Two hearts, still beating, still tied. Love wins."
     ],
     "win-none": [
-      "The village falls silent. No soul survived the final chain of fate.",
-      "Nothing stirs. Fate's last chain has claimed every soul.",
-      "Moonfall stands empty. Nobody survived the tale."
+      "[solemn] Nothing stirs. Not one soul survived the tale."
     ]
   }
 }

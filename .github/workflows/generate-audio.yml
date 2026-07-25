@@ -1,7 +1,24 @@
-name: Generate premium audio (one-shot, commits results)
+name: Generate premium audio (commits results)
 
 on:
   workflow_dispatch:
+    inputs:
+      force:
+        description: 'Re-render even if a narrator pack is already committed'
+        type: boolean
+        default: false
+      models:
+        description: 'Model preference chain, best first'
+        type: string
+        default: 'eleven_v3,eleven_multilingual_v2,eleven_turbo_v2_5'
+      stability:
+        description: 'Eleven v3 stability: 0.0 creative, 0.5 natural, 1.0 robust'
+        type: string
+        default: '0.5'
+      reserve:
+        description: 'Credits to leave unspent on the free tier'
+        type: string
+        default: '200'
   push:
     branches: [main]
     paths:
@@ -18,9 +35,11 @@ jobs:
   generate:
     runs-on: ubuntu-latest
     env:
-      ELEVENLABS_MODEL_ID: eleven_flash_v2_5
-      ELEVENLABS_CREDITS_PER_CHAR: "0.5"
-      ELEVENLABS_RESERVE: "1600"
+      ELEVENLABS_MODELS: ${{ inputs.models || 'eleven_v3,eleven_multilingual_v2,eleven_turbo_v2_5' }}
+      ELEVENLABS_STABILITY: ${{ inputs.stability || '0.5' }}
+      ELEVENLABS_RESERVE: ${{ inputs.reserve || '200' }}
+      # The ambience and sting packs are already committed; this workflow
+      # spends its whole budget on the narrator.
       SKIP_SFX: "1"
     steps:
       - uses: actions/checkout@v4
@@ -28,12 +47,16 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Install ffmpeg for the storyteller treatment
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
       - name: Generate narrator pack within free-tier reserve
         env:
           ELEVENLABS_API_KEY: ${{ secrets[format('ELEVEN{0}{1}', 'LABS_API_', 'KEY')] }}
+          FORCE: ${{ inputs.force }}
         run: |
-          if [ -f assets/voice/pack.json ]; then
-            echo "Narrator pack already committed; nothing to generate."
+          if [ -f assets/voice/pack.json ] && [ "$FORCE" != "true" ]; then
+            echo "Narrator pack already committed; re-run with force=true to replace it."
             exit 0
           fi
           if [ -z "$ELEVENLABS_API_KEY" ]; then
@@ -51,7 +74,7 @@ jobs:
               with urllib.request.urlopen(req, timeout=60) as response:
                   data = json.loads(response.read())
               remaining = data.get("character_limit", 0) - data.get("character_count", 0)
-              print(f"ElevenLabs authentication OK; reported remaining allowance: {remaining}")
+              print(f"ElevenLabs authentication OK; legacy character allowance: {remaining}")
           except urllib.error.HTTPError as error:
               body = error.read().decode("utf-8", "replace")
               print(f"ElevenLabs authentication failed: HTTP {error.code}")
@@ -80,6 +103,28 @@ jobs:
             exit "$status"
           fi
 
+      - name: Summarise the rendered pack
+        if: success()
+        run: |
+          test -f assets/voice/pack.json || exit 0
+          {
+            echo "### Narrator pack"
+            echo
+            python - <<'PY'
+          import json, pathlib
+          pack = json.loads(pathlib.Path("assets/voice/pack.json").read_text())
+          script = json.loads(pathlib.Path("scripts/voice-lines.json").read_text())["lines"]
+          clips = pack.get("clips", {})
+          rendered = sum(clips.values())
+          size = sum(p.stat().st_size for p in pathlib.Path("assets/voice").glob("*.mp3"))
+          print(f"- Model: `{pack.get('model') or pack.get('engine')}`")
+          print(f"- Clips: {rendered} across {len(clips)} of {len(script)} lines ({size // 1024} KiB)")
+          missing = [name for name in script if name not in clips]
+          if missing:
+              print(f"- Falling back to on-device speech: {', '.join(missing)}")
+          PY
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Commit scrubbed failure diagnostics
         if: failure()
         run: |
@@ -91,7 +136,7 @@ jobs:
           git add audio-generation-error.txt
           if ! git diff --cached --quiet; then
             git commit -m "Record premium audio generation failure"
-            git push
+            git push origin HEAD:${{ github.ref_name }}
           fi
 
       - name: Commit generated narrator pack
@@ -108,6 +153,6 @@ jobs:
           if git diff --cached --quiet; then
             echo "No narrator changes to commit."
           else
-            git commit -m "Add generated premium narrator audio"
-            git push
+            git commit -m "Re-render the narrator pack with the expressive model"
+            git push origin HEAD:${{ github.ref_name }}
           fi

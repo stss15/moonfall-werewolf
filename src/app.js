@@ -747,14 +747,14 @@ function narrationFor(view) {
   const roleAloud = roleId => ROLES[roleId]?.name || 'Villager';
   if (phase === 'dawn') {
     const deaths = view.lastDeaths || [];
-    if (!deaths.length) return 'The sun rises, and the village wakes to a miracle. Nobody died in the night.';
-    return `The sun rises. ${deaths.map(death => `${death.name} was claimed by ${death.cause}, and is revealed as the ${roleAloud(death.role)}`).join('. ')}.`;
+    if (!deaths.length) return 'Every door opened. Every face answered. Nobody died.';
+    return `One door stayed shut this morning. ${deaths.map(death => `${death.name}, taken by ${death.cause}. The ${roleAloud(death.role)}`).join('. ')}.`;
   }
   if (phase === 'day-result') {
-    if (view.lastVote?.leaders?.length > 1) return 'The vote is tied. By the old law of the village, nobody is eliminated today.';
+    if (view.lastVote?.leaders?.length > 1) return 'Split down the middle. Nobody hangs today.';
     const deaths = view.lastDeaths || [];
-    if (!deaths.length) return 'No judgement was cast. Nobody leaves the village today.';
-    return `The village has spoken. ${deaths.map(death => `${death.name} faces the judgement, and is revealed as the ${roleAloud(death.role)}`).join('. ')}.`;
+    if (!deaths.length) return 'No one pointed. The village keeps its hands clean, for now.';
+    return `The village has spoken. ${deaths.map(death => `${death.name}, condemned. The ${roleAloud(death.role)}`).join('. ')}.`;
   }
   if (phase === 'game-over') return view.winner ? `${view.winner.title}. ${view.winner.text}` : 'The tale is ended.';
   if (phase === 'resolution') return null;
@@ -786,19 +786,19 @@ function narrationIdsFor(view) {
 }
 
 const SLEEP_CUES = {
-  'setup-thief': ['sleep-setup-thief', 'The Thief falls back asleep.'],
-  'setup-cupid': ['sleep-setup-cupid', 'Cupid falls back asleep.'],
-  'setup-lovers': ['sleep-setup-lovers', 'The lovers close their eyes.'],
-  'night-seer': ['sleep-night-seer', 'The Seer closes their eyes.'],
-  'night-wolves': ['sleep-night-wolves', 'The Werewolves close their eyes.'],
-  'night-witch': ['sleep-night-witch', 'The Witch closes their eyes.']
+  'setup-thief': ['sleep-setup-thief', 'The Thief sleeps.'],
+  'setup-cupid': ['sleep-setup-cupid', 'Cupid sleeps.'],
+  'setup-lovers': ['sleep-setup-lovers', 'Cards down. Eyes closed.'],
+  'night-seer': ['sleep-night-seer', 'The Seer sleeps.'],
+  'night-wolves': ['sleep-night-wolves', 'The pack sleeps.'],
+  'night-witch': ['sleep-night-witch', 'The Witch sleeps.']
 };
 
 function openingNarration(view) {
   if (view.phase === 'resolution') {
     const pending = view.narrator?.pending;
-    if (pending?.type === 'hunter') return {ids: ['cue-hunter-shot'], text: 'The Hunter has fallen, but one final shot remains. Hunter, open your eyes and choose.'};
-    if (pending?.type === 'sheriff-successor') return {ids: ['cue-sheriff-successor'], text: 'The Sheriff has fallen. Sheriff, open your eyes and pass the badge to a living soul.'};
+    if (pending?.type === 'hunter') return {ids: ['cue-hunter-shot'], text: 'The Hunter falls — and the barrel comes up anyway. One shot. Choose.'};
+    if (pending?.type === 'sheriff-successor') return {ids: ['cue-sheriff-successor'], text: 'The Sheriff is dying. Press the badge into someone’s hand.'};
     return {ids: [], text: ''};
   }
   const enteringNight = (ui.transitionFrom === 'role-reveal' || ui.transitionFrom === 'day-result')
@@ -807,11 +807,11 @@ function openingNarration(view) {
   let text = narrationFor(view) || '';
   if (view.phase === 'dawn') {
     ids = ['wake-village', ...ids];
-    text = `Everyone, open your eyes. ${text}`;
+    text = `Open your eyes, Moonfall. ${text}`;
   }
   if (enteringNight) {
     ids = ['nightfall', ...ids];
-    text = `Night falls on the village. Everyone, close your eyes. ${text}`;
+    text = `Night comes down like a lid. Close your eyes. ${text}`;
   }
   return {ids, text};
 }

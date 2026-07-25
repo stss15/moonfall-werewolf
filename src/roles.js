@@ -128,19 +128,22 @@ export const PHASE_META = {
   'session-over': ['Legends of Moonfall', 'The table’s final scores are written.']
 };
 
+// Spoken by the on-device voice when the recorded pack has no clip for a
+// phase. Kept word-for-word in step with scripts/voice-lines.json (minus its
+// [audio tags]) so a fallback never sounds like a different narrator.
 export const STORY_CUES = {
-  'role-reveal': 'The cards have been dealt. Each player may now learn their secret fate.',
-  'setup-thief': 'The Thief wakes, looks upon the two cards left untouched, and may exchange their destiny.',
-  'setup-cupid': 'Cupid wakes and chooses two souls to bind together in love.',
-  'setup-lovers': 'Everyone, open your eyes. Cupid’s arrow has flown. Turn over the card before you to learn whether your heart is still your own.',
-  'night-seer': 'The Seer wakes and chooses one player whose true identity they wish to know.',
-  'night-wolves': 'The Werewolves wake, recognise one another, and silently choose a victim.',
-  'night-witch': 'The Witch wakes. Here is the victim chosen by the pack. Will fate be changed?',
-  dawn: 'The sun rises. Everyone wakes… everyone, perhaps, except those claimed in the night.',
-  'sheriff-vote': 'The village will now elect a Sheriff. Their vote will carry the weight of two.',
-  'day-discussion': 'The village square is yours. Speak carefully: truth and lies wear the same face.',
-  'day-vote': 'On my signal, cast your judgement. The accused will not see the tally until it is sealed.',
-  'day-result': 'The village has spoken. Turn the condemned card and remember what this judgement cost.'
+  'role-reveal': 'The cards are dealt. Learn what you are — and never say it aloud.',
+  'setup-thief': 'Thief. Two fates went unclaimed. Take one, or keep your own.',
+  'setup-cupid': 'Cupid, open your eyes. Choose two hearts. What you tie tonight, only death unties.',
+  'setup-lovers': 'Open your eyes. The arrow has flown. Turn your card: is your heart still your own?',
+  'night-seer': 'Seer. One face. One truth. Choose.',
+  'night-wolves': 'The pack is awake. Find your kin, and agree on who does not see the morning.',
+  'night-witch': 'Witch. Here lies tonight’s work. One bottle saves. One bottle ends.',
+  dawn: 'Open your eyes, Moonfall.',
+  'sheriff-vote': 'Choose a Sheriff. One voice here is about to weigh twice as much as yours.',
+  'day-discussion': 'Talk. Accuse. Defend. One of these faces is lying to you.',
+  'day-vote': 'Point. There is no taking it back.',
+  'day-result': 'The village has spoken. Step forward.'
 };
 
 export const assetForRole = roleId => ROLES[roleId]?.image || ROLES.villager.image;

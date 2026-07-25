@@ -59,12 +59,54 @@ test('a generated voice pack manifest matches the clips on disk', async t => {
   }
   for (const [id, count] of Object.entries(pack.clips)) {
     assert.ok(lines[id], `pack.json lists ${id} but it is not in voice-lines.json`);
+    assert.ok(count <= asVariants(lines[id]).length,
+      `pack.json claims ${count} variants for ${id} but the script only writes ${asVariants(lines[id]).length}`);
     for (let variant = 0; variant < count; variant += 1) {
       assert.ok(files.has(`${id}.${variant}.mp3`), `pack.json says ${id} has ${count} variants but ${id}.${variant}.mp3 is missing`);
     }
   }
-  for (const id of Object.keys(lines)) {
-    assert.ok(pack.clips[id], `voice-lines.json has ${id} but the generated pack does not`);
+
+  // No orphans: a clip on disk that the manifest does not list can never be
+  // played, and means an earlier, longer script was left behind.
+  for (const file of files) {
+    if (!file.endsWith('.mp3')) continue;
+    const [id, variant] = [file.slice(0, file.lastIndexOf('.', file.length - 5)), Number(file.split('.').at(-2))];
+    assert.ok(pack.clips[id] > variant, `${file} is on disk but pack.json does not list that variant`);
+  }
+
+  // Generation is budget-guarded on the free tier, so a partial pack is a
+  // supported state: the game falls back to on-device speech per missing
+  // line. Only report what is missing — do not fail the build for it.
+  const missing = Object.keys(lines).filter(id => !pack.clips[id]);
+  if (missing.length) t.diagnostic(`${missing.length} line(s) fall back to on-device speech: ${missing.join(', ')}`);
+});
+
+test('the on-device fallback speaks the same words as the recorded pack', async () => {
+  const {lines} = JSON.parse(await readFile(join(root, 'scripts/voice-lines.json'), 'utf8'));
+  const stripTags = text => text.replace(/\[[^\[\]]{1,48}\]\s*/g, '').trim();
+
+  // Audio tags are delivery direction for Eleven v3. Any engine without tag
+  // support has them stripped, so a tag must never carry meaning the
+  // sentence needs — every variant has to read as clean prose without it.
+  for (const [id, value] of Object.entries(lines)) {
+    for (const text of asVariants(value)) {
+      const spoken = stripTags(text);
+      assert.ok(spoken.length > 3, `line ${id} is empty once its audio tags are stripped`);
+      assert.ok(!/[[\]]/.test(spoken), `line ${id} has an unbalanced audio tag: ${text}`);
+      assert.ok(/^[A-Z“"']/.test(spoken), `line ${id} does not start a sentence once tags are stripped: ${spoken}`);
+    }
+  }
+
+  // The Web Speech fallback must not sound like a different narrator wrote it.
+  const cueFor = {'role-reveal': 'cue-role-reveal', 'setup-thief': 'cue-setup-thief', 'setup-cupid': 'cue-setup-cupid',
+    'setup-lovers': 'cue-setup-lovers', 'night-seer': 'cue-night-seer', 'night-wolves': 'cue-night-wolves',
+    'night-witch': 'cue-night-witch', 'sheriff-vote': 'cue-sheriff-vote', 'day-discussion': 'cue-day-discussion',
+    'day-vote': 'cue-day-vote'};
+  const normalise = text => text.replace(/[’']/g, "'").replace(/\s+/g, ' ').trim();
+  for (const [phase, id] of Object.entries(cueFor)) {
+    const spoken = asVariants(lines[id]).map(text => normalise(stripTags(text)));
+    assert.ok(spoken.includes(normalise(STORY_CUES[phase])),
+      `STORY_CUES['${phase}'] is not one of the recorded variants of ${id}`);
   }
 });
 
