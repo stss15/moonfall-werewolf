@@ -702,8 +702,8 @@ body[data-ballot="final"] #village .square{animation:square-in 1.4s ease .1s bot
 .cinema-deaths{position:absolute;inset:0;display:grid;place-items:center}
 /* The veil lasts the whole run of deaths, not one beat of it. */
 .cinema-deaths:before,.cinema-empty:before{content:"";position:fixed;inset:0;z-index:0;
-  background:radial-gradient(ellipse 62% 62% at 50% 52%,rgba(3,2,7,.6),rgba(3,2,7,.9) 78%);
-  backdrop-filter:blur(3px) saturate(.55) brightness(.62);-webkit-backdrop-filter:blur(3px) saturate(.55) brightness(.62);
+  background:radial-gradient(ellipse 62% 62% at 50% 52%,rgba(3,2,7,.42),rgba(3,2,7,.78) 80%);
+  backdrop-filter:blur(2.5px) saturate(.6) brightness(.72);-webkit-backdrop-filter:blur(2.5px) saturate(.6) brightness(.72);
   animation:cinema-veil calc(var(--deaths,1)*4.4s + .5s) ease both}
 @keyframes cinema-veil{0%,100%{opacity:0}7%,89%{opacity:1}}
 .cinema-death{z-index:1}
