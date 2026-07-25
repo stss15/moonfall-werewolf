@@ -124,7 +124,7 @@ export function townSquare(view, {select = null, arrivals = null} = {}) {
     // Lovers wear their bound sprite (the chained pose) instead of a floating
     // heart; the Sheriff's real badge hangs above their head for everyone.
     const marks = player.sheriff || markCount || isVictim
-      ? `<span class="marks">${player.sheriff ? '<img class="mark badge" src="assets/sprites/props/badge.png" alt="Sheriff">' : ''}${markCount ? `<span class="mark paw" aria-label="${markCount} of the pack">${'<i></i>'.repeat(Math.min(3, markCount))}</span>` : ''}${isVictim ? '<span class="mark doom" aria-label="Tonight’s victim"></span>' : ''}</span>`
+      ? `<span class="marks">${player.sheriff ? '<img class="mark badge" src="assets/sprites/props/badge.png" alt="Sheriff">' : ''}${markCount ? `<span class="mark paw" role="img" aria-label="${markCount} of the pack">${'<i></i>'.repeat(Math.min(3, markCount))}</span>` : ''}${isVictim ? '<span class="mark doom" role="img" aria-label="Tonight’s victim"></span>' : ''}</span>`
       : '';
     const arriving = arrivals?.has(player.id) && player.alive;
     const classes = [
